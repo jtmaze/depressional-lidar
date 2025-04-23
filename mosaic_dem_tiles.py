@@ -1,0 +1,84 @@
+# %% 1.0 Libaries and Directories
+
+import glob 
+import pprint as pp
+
+import rasterio as rio
+from rasterio.mask import mask
+from rasterio.merge import merge
+
+import geopandas as gpd
+
+
+dem_tile_paths = glob.glob('./raw_DEM_tiles/*.tif')
+crop_shape = gpd.read_file('./dem_clip.shp')
+with rio.open(dem_tile_paths[0]) as src:
+    target_crs = src.crs
+    pp.pp(target_crs)
+
+crop_shape_reproj = crop_shape.to_crs(target_crs)
+print(crop_shape_reproj.crs)
+
+# %% 2.0 Check that each DEM has the same crs
+
+crs_list = []
+
+for fp in dem_tile_paths:
+    with rio.open(fp) as src:
+        crs_list.append(src.crs)
+
+def check_crs_strings(crs_list):
+    check_list = all(s == crs_list[0] for s in crs_list)
+    return check_list
+
+print(f'Each tile crs is identical: {check_crs_strings(crs_list)}')
+
+# %% 3.0 Mosaic the files, which are within the crop bounds
+
+crop_geom = crop_shape_reproj.geometry
+print(crop_geom)
+
+valid_paths = []
+for fp in dem_tile_paths:
+    with rio.open(fp) as src:
+        try:
+            _ = mask(src, crop_geom, crop=True)
+            valid_paths.append(fp)
+        except ValueError as e:
+            if "not overlap" in str(e):
+                print(f"Skipped {fp}, not overlapping crop shape")
+            else:
+                raise
+
+
+src_files_to_mosaic = [rio.open(fp) for fp in valid_paths]
+
+mosaic, out_transform = merge(src_files_to_mosaic)
+with rio.open(valid_paths[0]) as src:
+    first_meta = src.meta
+
+final_meta = first_meta.copy()
+final_meta.update({
+    'height': mosaic.shape[1],
+    'width': mosaic.shape[2],
+    'transform': out_transform
+})
+
+with rio.open('./temp/dem_mosaic.tif', 'w', **final_meta) as dst:
+    dst.write(mosaic)
+
+# %% 4.0 Mask the mosaic to the crop shape
+
+with rio.open('./temp/dem_mosaic.tif') as src:
+    masked_mosaic, masked_trans = mask(src, crop_geom, crop=True)
+    out_meta = src.meta.copy()
+    out_meta.update({
+        'height': masked_mosaic.shape[1],
+        'width': masked_mosaic.shape[2],
+        'transform': masked_trans
+    })
+    
+    output_path = './out_data/dem_mosaic.tif'
+    with rio.open(output_path, 'w', **out_meta) as dst:
+        dst.write(masked_mosaic)
+# %%

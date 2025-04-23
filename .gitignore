@@ -1,0 +1,59 @@
+in_data/
+out_data/
+temp/
+
+# === Python ===
+*.pyc
+__pycache__/
+.env
+*.env
+*.log
+*.sqlite3
+*.pkl
+*.h5
+
+# === Conda ===
+.env/
+.conda/
+conda-meta/
+*.conda
+*.lock
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
+# === VS Code ===
+.vscode/
+.history/
+
+# === QGIS ===
+*.qgz
+*.qgs~
+.qgd
+.qgd~
+.qgz~
+
+# === Geospatial data ===
+data/
+*.tif
+*.tiff
+*.img
+*.vrt
+*.aux.xml
+*.ovr
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.gpkg
+*.geojson
+*.kml
+*.kmz
+
+# === Misc ===
+.DS_Store
+*.bak
+*.zip
+*.tar
+*.gz
