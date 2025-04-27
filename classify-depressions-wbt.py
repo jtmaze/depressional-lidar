@@ -7,20 +7,20 @@ import random
 
 random.seed(42)
 
-basin = "basin_3"
+basin = "all_basins"
 gaussian_sigma = 6
 off_ter_filter = 8
 off_ter_slope = 0.15
 error_range = 40
-rmse = 0.05
+rmse = 0.25
 
 proj_root = Path.cwd()                 
 
-dem    = proj_root / "out_data" / f"dem_mosaic_{basin}.tif"
+dem    = proj_root / "out_data" / f"dem_mosaic_basin_{basin}.tif"
 filled = proj_root / "temp"     / f"dem_mosaic_filled_{basin}.tif"
 off_terrain = proj_root / "temp" / f"dem_mosaic_filled_off_terrain_{basin}_filter{off_ter_filter}_slope{off_ter_slope}.tif"
 gaussian = proj_root / "temp" / f"dem_mosaic_gaussian_{basin}_sigma{gaussian_sigma}.tif"
-depresions = proj_root / "temp" / f"depression_probabilities_{basin}_sigma{gaussian_sigma}_range{error_range}_rmse.tif"
+depresions = proj_root / "temp" / f"depression_probabilities_{basin}_sigma{gaussian_sigma}_range{error_range}_rmse{rmse}.tif"
 
 wbt = whitebox.WhiteboxTools()
 wbt.verbose = True

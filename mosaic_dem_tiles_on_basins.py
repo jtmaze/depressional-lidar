@@ -17,19 +17,24 @@ import geopandas as gpd
 
 dem_tile_paths = glob.glob('./in_data/raw_DEM_tiles/*.tif')
 basin_shapes = gpd.read_file('./in_data/Final_Basins/Final_Basins.shp')
-unique_basin_ids = basin_shapes['Basin_Name'].unique()
-
+unique_basin_ids = basin_shapes['Basin_Name'].unique().tolist()
+unique_basin_ids = unique_basin_ids.append('all_basins')
+unique_basin_ids = ['all_basins'] 
 # %% Run the code for each basin
 
 # Crop the DEM for each basin
 for basin_id in unique_basin_ids:
-    crop_shape = basin_shapes[basin_shapes['Basin_Name'] == basin_id]
-    crop_shape = crop_shape.reset_index(drop=True)
+    print(f"Processing basin: {basin_id}")
+    if basin_id == 'all_basins':
+        # For the combined DEM, use the union of all basin geometries
+        crop_shape = gpd.GeoDataFrame(geometry=[basin_shapes.unary_union], crs=basin_shapes.crs)
+    else:
+        crop_shape = basin_shapes[basin_shapes['Basin_Name'] == basin_id]
+        crop_shape = crop_shape.reset_index(drop=True)
 
     # 1.1 Check the DEM tile paths
     with rio.open(dem_tile_paths[0]) as src:
         target_crs = src.crs
-        pp.pp(target_crs)
 
     crop_shape_reproj = crop_shape.to_crs(target_crs)
     print(crop_shape_reproj.crs)
