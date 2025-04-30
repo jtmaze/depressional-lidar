@@ -11,7 +11,7 @@ import pprint as pp
 well_pts = gpd.read_file('./out_data/wetland_well_points_vRTK.shp')
 pp.pp(well_pts.crs)
 
-dem_path = './out_data/dem_mosaic.tif'
+dem_path = './temp/dem_mosaic_gaussian_all_basins_sigma6.tif'
 
 with rio.open(dem_path) as src:
     target_crs = src.crs

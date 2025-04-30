@@ -18,7 +18,7 @@ target_basin_ids = {
 }
 
 well_basins_path = './out_data/well_delineations.shp'
-mosaic_dem_path = './out_data/dem_mosaic.tif'
+mosaic_dem_path = './temp/dem_mosaic_gaussian_all_basins_sigma6.tif'
 
 # 2.0 Select basins of interest reproject the shape file into the DEM's crs
 with rio.open(mosaic_dem_path) as src:
@@ -61,7 +61,8 @@ for idx, row in target_basins.iterrows():
             'transform': out_trans
         })
 
-        out_path = f'./out_data/basin_clipped_DEMs/{well_id}_basin_dem.tif'
+        # NOTE: Uncomment to write the basin's clipped DEM to disk
+        # out_path = f'./out_data/basin_clipped_DEMs/{well_id}_basin_dem.tif'
         # with rio.open(out_path, 'w', **out_meta) as dst:
         #     dst.write(out_img)
 
@@ -162,15 +163,17 @@ plt.figure(figsize=(10, 6))
 
 for idx, row in combined_df.iterrows():
     well_id = row['well_id']
+    if well_id != '14_500':
+        continue
     area = row['area'] * 100 # convert to percentage
     stage = row['stage_from_lowest'] * 0.3048 # convert to meters
 
-    plt.plot(area, stage, label=well_id)
+    plt.plot(stage, area, label=well_id)
 
-plt.xlabel('Inundated Area (%) of Total Basin Area')
-plt.ylabel('Stage (meters from basin lowest elevation)')
-plt.ylim(0, 1.75)
-plt.title('Bathymetric Curves for Intensive Basins')
+plt.ylabel('Inundated Area (%) of Total Basin Area')
+plt.xlabel('Stage (meters from basin lowest elevation)')
+plt.xlim(0, 0.9)
+plt.title('Bathymetric Curves for 14_500')
 plt.legend()
 plt.tight_layout()
 plt.show()
@@ -188,7 +191,7 @@ for idx, row in combined_df.iterrows():
 
 plt.xlabel('Volume (m3) - log scale')
 plt.ylabel('Stage (meters from basin lowest elevation)')
-plt.ylim(0, 1.55)
+plt.ylim(0, 0.9)
 plt.xscale('log')
 plt.title('Stage-Volume Curves for Intensive Basins')
 plt.legend()
