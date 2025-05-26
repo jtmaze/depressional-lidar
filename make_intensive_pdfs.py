@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-stage_data = pd.read_csv('./stage_data/waterlevel_offsets_tracked.csv', low_memory=False)
+stage_data = pd.read_csv('./in_data/stage_data/waterlevel_offsets_tracked.csv', low_memory=False)
 
 # %% Trim the stage data for relevant sites
 
@@ -153,19 +153,13 @@ for site in stage_data['Site_ID'].unique():
 merged_df = pd.concat(result_dfs, ignore_index=True)
 
 # %% Plot the merged data
-# test_site = '13_267'
-# plot_data = merged_df[merged_df['Site_ID'] == test_site]
-# plt.figure(figsize=(8, 6))
-# plt.hist(plot_data['area'].dropna(), bins=30, color='skyblue', edgecolor='black')
-# plt.xlabel('Area')
-# plt.ylabel('Frequency')
-# plt.title('Histogram of Area for merged_df')
-# plt.tight_layout()
-# plt.show()
+
+
 merged_df['area'] = merged_df['area'] * 100
+plot_df = merged_df[merged_df['Site_ID'] == '13_267'].copy()
 plt.figure(figsize=(10, 6))
 sns.kdeplot(
-    data=merged_df, 
+    data=plot_df, 
     x='area', 
     hue='Site_ID',
     palette=color_dict,
