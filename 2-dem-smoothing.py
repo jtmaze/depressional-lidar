@@ -23,14 +23,14 @@ off_terrain_filter = 12 # Number of cells
 off_terrain_slope = 0.25 # Max slope to smooth 
 gaussian_sigma = 3
 
-basin = '3'
+basin = 'all_basins'
 
 # %% 3.0 Directories for reading and writing files
 
 dem = proj_root / "out_data" / "basin_clipped_DEMs" / f"dem_mosaic_basin_{basin}.tif"
 filled = proj_root / "temp" / f"dem_mosaic_filled_{basin}.tif"
 veg_off = proj_root / "temp" / f"dem_mosaic_filled_off_terrain_{basin}_filter{off_terrain_filter}_slope{off_terrain_slope}.tif"
-gaussian = proj_root / "temp" / f"dem_smoothed_{basin}.tif"
+gaussian = proj_root / "out_data" / "smoothed_dems" / f"dem_smoothed_{basin}.tif"
 
 # %% 4.0 Fill the single cell pits
 

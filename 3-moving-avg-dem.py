@@ -13,7 +13,7 @@ import os
 from scipy.ndimage import generic_filter 
 from scipy.ndimage import zoom
 
-detrend_window = 1000
+avg_window = 5000
 mosaic_dem_path = './temp/dem_mosaic_basin_all_basins.tif'
 basin_shapes = gpd.read_file('./in_data/Final_Basins/Final_Basins.shp')
 bradford_shape = gpd.GeoDataFrame(geometry=[basin_shapes.union_all()], crs=basin_shapes.crs)
@@ -35,11 +35,11 @@ with rio.open(mosaic_dem_path) as src:
             return np.nan
 
     # Downsample the DEM, to make computation reasonably fast
-    scale_factor = 0.1 
+    scale_factor = 0.05 
     # NOTE: Downsampled DEM for averaging, because computation was so slow.
     # order = 1 means bilinear interpolation
     dem_upsampled = zoom(dem.filled(np.nan), scale_factor, order=1, mode='nearest') 
-    small_window = max(int(detrend_window * scale_factor), 3)
+    small_window = max(int(avg_window * scale_factor), 3)
 
     # Take the spatial average of the down-sampled pixels
     averaged_upsampled = generic_filter(
@@ -55,7 +55,7 @@ with rio.open(mosaic_dem_path) as src:
     # Update profile and save
     profile.update(dtype='float32', nodata=profile.get('nodata', None))
     
-    temp_path = f'temp/dem_trend_{detrend_window}.tif'
+    temp_path = f'temp/dem_averaged_{avg_window}.tif'
     with rio.open(temp_path, 'w', **profile) as dst:
         dst.write(averaged_dem.astype('float32'), 1)
 
@@ -66,17 +66,17 @@ with rio.open(mosaic_dem_path) as src:
     crop_shape = bradford_shape.to_crs(target_crs).geometry
 
     with rio.open(temp_path) as src2:
-        masked_detrend, masked_trans = mask(src2, crop_shape, crop=True)
+        masked_averaged, masked_trans = mask(src2, crop_shape, crop=True)
         out_meta = src2.meta.copy()
         out_meta.update({
-            'height': masked_detrend.shape[1],
-            'width': masked_detrend.shape[2],
+            'height': masked_averaged.shape[1],
+            'width': masked_averaged.shape[2],
             'transform': masked_trans
         })
 
-        output_path = f'./out_data/dem_detrended_{detrend_window}.tif'
+        output_path = f'./out_data/dem_averaged_{avg_window}.tif'
         with rio.open(output_path, 'w', **out_meta) as dst:
-            dst.write(masked_detrend)
+            dst.write(masked_averaged)
 
     # Clean up the disk
     os.remove(temp_path)
