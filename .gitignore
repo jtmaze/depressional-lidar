@@ -1,6 +1,8 @@
 in_data/
 out_data/
 temp/
+delmarva/
+bradford/
 
 # === Python ===
 *.pyc

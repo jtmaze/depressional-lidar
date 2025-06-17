@@ -3,7 +3,9 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-df = pd.read_csv('./out_data/region_props_on_depressions.csv')
+site_name = 'bradford'
+
+df = pd.read_csv(f'./{site_name}/out_data/bradford_region_props_on_depressions.csv')
 print(df.columns)
 
 # %% 2.0 Some quick exploratory plots
@@ -17,19 +19,18 @@ plt.show()
 # %% 7.1
 
 plt.figure(figsize=(7, 7))
-plt.plot(df['threshold'], df['mean_feature_area_m2'], marker='o', label='Mean Pond Area')
+plt.plot(df['threshold'], df['median_feature_area_m2'], marker='o', label='Median Pond Area')
 plt.xlabel('Relative Groundwater Depth (m)')
 #plt.xlim(-1.5, 0.0)
-plt.ylabel('Mean Pond Area (m²)')
+plt.ylabel('Median Pond Area (m²)')
 plt.show()
 
 # %%
 plt.figure(figsize=(7, 7))
-plt.plot(df['threshold'], df['mean_feature_area_m2'], marker='o', label='Mean Pond Area')
+plt.plot(df['threshold'], df['median_feature_area_m2'], marker='o', label='Median Pond Area')
 plt.xlabel('Relative Groundwater Depth (m)')
 plt.xlim(-1.5, 0.0)
-plt.ylim(0, 100_000)
-plt.ylabel('Mean Pond Area (m²)')
+plt.ylabel('Median Pond Area (m²)')
 plt.show()
 
 # %% Total perimeter

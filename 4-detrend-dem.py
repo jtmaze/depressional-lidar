@@ -3,10 +3,11 @@
 import rasterio as rio
 import numpy as np
 
+site_name = 'bradford'
 basin = 'all_basins'
 
-dem_moving_avg = f'./out_data/dem_averaged_5000.tif'
-dem_smoothed = f'./out_data/smoothed_dems/dem_smoothed_{basin}.tif'
+dem_moving_avg = f'./{site_name}/out_data/dem_averaged_5000.tif'
+dem_smoothed = f'./{site_name}/out_data/smoothed_dems/dem_smoothed_all_basins.tif'
 
 # %% 2.0 De-trend the original DEM by subtracting by the moving average
 
@@ -19,7 +20,7 @@ with rio.open(dem_smoothed) as src1, rio.open(dem_moving_avg) as src2:
     nodata_val = src1.meta.get('nodata')
     detrended_dem_filled = detrended_dem.filled(nodata_val)
     
-    out_path = f'./out_data/detrended_dem_{basin}.tif'
+    out_path = f'./{site_name}/out_data/detrended_dem_{basin}.tif'
     out_meta = src1.meta.copy()
     out_meta.update(dtype='float32', nodata=nodata_val)
 

@@ -12,38 +12,39 @@ from multiprocessing import shared_memory
 import time
 from tqdm import tqdm # Optional, for progress bars
 
-detrend_path = f'./out_data/detrended_dem_all_basins.tif'
+site_name = 'bradford'
+detrend_path = f'./{site_name}/out_data/detrended_dem_all_basins.tif'
 
 # %% 2.0 Get summary stats for elevation and make a histogram
 
-# with rio.open(detrend_path) as src:
-#     data = src.read(1, masked=True)
-#     data = data * 0.3048 # Convert feet to meters
-#     flat = data.compressed()  
+with rio.open(detrend_path) as src:
+    data = src.read(1, masked=True)
+    data = data * 0.3048 # Convert feet to meters
+    flat = data.compressed()  
 
-#     total_pix = len(flat)
-#     below_neg_3 = (np.sum(flat < -3) / total_pix * 100)
-#     above_3 = (np.sum(flat > 3) / total_pix * 100)
-#     below_neg_1 = (np.sum(flat < -1) / total_pix * 100)
-#     above_1 = (np.sum(flat > 1) / total_pix * 100)
-#     below_0 = (np.sum(flat < 0) / total_pix * 100)
-#     print(f'{below_neg_3:.2f} % of pixels below -3 meters')
-#     print(f'{above_3:.2f} % of pixels above 3 meters')
-#     print(f'{below_neg_1:.2f} % of pixels below -1 meters')
-#     print(f'{above_1:.2f} % of pixels above 1 meters')
-#     print(f'{below_0:.2f} % of pixels below 0 meters')
+    total_pix = len(flat)
+    below_neg_3 = (np.sum(flat < -3) / total_pix * 100)
+    above_3 = (np.sum(flat > 3) / total_pix * 100)
+    below_neg_1 = (np.sum(flat < -1) / total_pix * 100)
+    above_1 = (np.sum(flat > 1) / total_pix * 100)
+    below_0 = (np.sum(flat < 0) / total_pix * 100)
+    print(f'{below_neg_3:.2f} % of pixels below -3 meters')
+    print(f'{above_3:.2f} % of pixels above 3 meters')
+    print(f'{below_neg_1:.2f} % of pixels below -1 meters')
+    print(f'{above_1:.2f} % of pixels above 1 meters')
+    print(f'{below_0:.2f} % of pixels below 0 meters')
 
-#     # Trim the data to only include elevations between -3 and 3
-#     trimmed = flat[(flat >= -3) & (flat <= 3)]
+    # Trim the data to only include elevations between -3 and 3
+    trimmed = flat[(flat >= -3) & (flat <= 3)]
 
-#     # Create the histogram using the trimmed data
-#     plt.hist(trimmed, bins=100, color='blue', edgecolor='black')
-#     plt.title("Histogram of Detrended DEM Elevations")
-#     plt.xlabel("Elevation (meters)")
-#     plt.xlim(-3, 3)
-#     plt
-#     plt.ylabel("Frequency")
-#     plt.show()
+    # Create the histogram using the trimmed data
+    plt.hist(trimmed, bins=100, color='blue', edgecolor='black')
+    plt.title("Histogram of Detrended DEM Elevations")
+    plt.xlabel("Elevation (meters)")
+    plt.xlim(-3, 3)
+    plt
+    plt.ylabel("Frequency")
+    plt.show()
 
 # %% 3.0 Prep the DEM in shared memory for multiprocessing
 
@@ -76,6 +77,7 @@ def analyze_threshold(t):
         total_perimeter=np.sum(perimeter),
         total_perimeter_crofton=np.sum(perimeter_crofton),
         mean_feature_pix=np.mean(pixels),
+        median_feature_pix=np.median(pixels),
         std_feature_pix=np.std(pixels),
     )
 
@@ -115,6 +117,7 @@ out_df = pd.DataFrame(results)
 out_df['inundated_frac'] = out_df['total_inundated_pix'] / total_pix * 100
 out_df['inundated_area_m2'] = out_df['total_inundated_pix'] * (2.5 * .3048)**2 
 out_df['mean_feature_area_m2'] = out_df['mean_feature_pix'] * (2.5 * 0.3048)**2  
+out_df['median_feature_area_m2'] = out_df['median_feature_pix'] * (2.5 * 0.3048)**2
 out_df['std_feature_area_m2'] = out_df['std_feature_pix'] * (2.5 * 0.3048)**2  
 out_df['total_perimeter_m'] = out_df['total_perimeter'] * 2.5 * 0.3048  # Convert pixels to feet to meters
 out_df['total_perimeter_crofton_m'] = out_df['total_perimeter_crofton'] * 2.5 * 0.3048  # Convert pixels to feet to meters
@@ -125,7 +128,7 @@ out_df.drop(columns=
         inplace=True
 )
 
-out_df.to_csv('./out_data/region_props_on_depressions.csv', index=False)
+out_df.to_csv(f'./{site_name}/out_data/{site_name}_region_props_on_depressions.csv', index=False)
 
 # %% Write binary rasters for a few thresholds
 def write_binary_inundation_raster(
@@ -148,7 +151,7 @@ def write_binary_inundation_raster(
 
 # %%
 write_thresholds = [-1, -0.75, -0.5, -0.25, -0.1, 0.25]
-out_dir = './out_data/modeled_inundations/'
+out_dir = f'./{site_name}/out_data/modeled_inundations/'
 
 with rio.open(detrend_path) as src:
     dem = src.read(1, masked=True) * 0.3048  # Convert feet to meters

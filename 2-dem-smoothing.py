@@ -13,7 +13,7 @@ wbt.verbose = True
 wbt.set_whitebox_dir(os.path.join(os.environ['CONDA_PREFIX'], 'bin'))
 wbt.set_working_dir(str(proj_root))
 
-# %% 2.0 Set the smoothing parameters
+# %% 2.0 Set the smoothing parameters designate sites and basins
 
 """
 NOTE: Don't waist too much time fiddling with these. Here's general observations:
@@ -21,16 +21,17 @@ NOTE: Don't waist too much time fiddling with these. Here's general observations
 """
 off_terrain_filter = 12 # Number of cells
 off_terrain_slope = 0.25 # Max slope to smooth 
-gaussian_sigma = 3
+gaussian_sigma = 3 # lager sigma creates more smoothing
 
+site_name = 'bradford'
 basin = 'all_basins'
 
 # %% 3.0 Directories for reading and writing files
 
-dem = proj_root / "out_data" / "basin_clipped_DEMs" / f"dem_mosaic_basin_{basin}.tif"
-filled = proj_root / "temp" / f"dem_mosaic_filled_{basin}.tif"
-veg_off = proj_root / "temp" / f"dem_mosaic_filled_off_terrain_{basin}_filter{off_terrain_filter}_slope{off_terrain_slope}.tif"
-gaussian = proj_root / "out_data" / "smoothed_dems" / f"dem_smoothed_{basin}.tif"
+dem = proj_root / site_name / "out_data" / "basin_clipped_DEMs" / f"dem_mosaic_basin_{basin}.tif"
+filled = proj_root / site_name / "temp" / f"dem_mosaic_filled_{basin}.tif"
+veg_off = proj_root / site_name / "temp" / f"dem_mosaic_filled_off_terrain_{basin}.tif"
+gaussian = proj_root / site_name / "out_data" / "smoothed_dems" / f"dem_smoothed_{basin}.tif"
 
 # %% 4.0 Fill the single cell pits
 
@@ -55,5 +56,10 @@ wbt.gaussian_filter(
     sigma=gaussian_sigma
 )
 
-# %% Clean up
+# %% 7.0 Clean up workspace
 
+os.remove(filled)
+os.remove(veg_off)
+
+
+# %%

@@ -13,10 +13,13 @@ from rasterio.merge import merge
 
 import geopandas as gpd
 
-dem_tile_paths = glob.glob('./in_data/raw_DEM_tiles/*.tif')
-basin_shapes = gpd.read_file('./in_data/Final_Basins/Final_Basins.shp')
+site_name = 'bradford' # Or Delmarva
+
+dem_tile_paths = glob.glob(f'./{site_name}/in_data/raw_DEM_tiles/*.tif')
+basin_shapes = gpd.read_file(f'./{site_name}/in_data/Final_Basins/Final_Basins.shp')
 unique_basin_ids = basin_shapes['Basin_Name'].unique().tolist()
 unique_basin_ids.append('all_basins')
+
 unique_basin_ids = ['all_basins']
 
 # %% Run the code for each basin
@@ -53,7 +56,7 @@ for basin_id in unique_basin_ids:
 
     print(f'Each tile crs is identical: {check_crs_strings(crs_list)}')
 
-    # 3.0 Check if DEM files are within crop bounds. Keep in mosaic list
+    # 2.0 Check if DEM files are within crop bounds. If within bounds, keep in mosaic list
     crop_geom = crop_shape_reproj.geometry
 
     valid_paths = []
@@ -68,7 +71,7 @@ for basin_id in unique_basin_ids:
                 else:
                     raise
 
-    # 4.0 Mosaic the files within the crop bounds
+    # 3.0 Mosaic the files within the crop bounds
     src_files_to_mosaic = [rio.open(fp) for fp in valid_paths]
 
     mosaic, out_transform = merge(src_files_to_mosaic)
@@ -82,13 +85,13 @@ for basin_id in unique_basin_ids:
         'transform': out_transform
     })
     
-    mosaic_fp = f'./temp/dem_mosaic_basin_{basin_id}.tif'
+    mosaic_fp = f'./{site_name}/temp/dem_mosaic_basin_{basin_id}.tif'
     with rio.open(mosaic_fp, 'w', **final_meta) as dst:
         dst.write(mosaic)
 
-    # 5.0 Mask the mosaic'd DEM to the crop shape and write to out_data
+    # 4.0 Mask the mosaic'd DEM to the crop shape and write to out_data
 
-    with rio.open(f'./temp/dem_mosaic_basin_{basin_id}.tif') as src:
+    with rio.open(f'./{site_name}/temp/dem_mosaic_basin_{basin_id}.tif') as src:
         masked_mosaic, masked_trans = mask(src, crop_geom, crop=True)
         out_meta = src.meta.copy()
         out_meta.update({
@@ -97,7 +100,7 @@ for basin_id in unique_basin_ids:
             'transform': masked_trans
         })
         
-        output_path = f'./out_data/basin_clipped_DEMs/dem_mosaic_basin_{basin_id}.tif'
+        output_path = f'./{site_name}/out_data/basin_clipped_DEMs/dem_mosaic_basin_{basin_id}.tif'
         with rio.open(output_path, 'w', **out_meta) as dst:
             dst.write(masked_mosaic)
 
