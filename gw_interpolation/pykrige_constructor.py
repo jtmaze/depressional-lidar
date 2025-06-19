@@ -2,7 +2,10 @@ import pandas as pd
 from pandas import DataFrame
 import geopandas as gpd
 from geopandas import GeoDataFrame
+import numpy as np
 from datetime import datetime
+import matplotlib.pyplot as plt
+import pykrige as pkr
 
 class WellsWaterLevel:
     """
@@ -58,7 +61,7 @@ class WellsWaterLevel:
         if wl_points.crs != 'EPSG:26917':
             wl_points.to_crs('EPSG:26917', inplace=True)
 
-            return wl_points
+        return wl_points
         
 class InterpolationResult:
     """
@@ -68,11 +71,57 @@ class InterpolationResult:
     def __init__(
             self,
             wl_points: GeoDataFrame, # In projected coords
+            boundary: GeoDataFrame, #
     ):
         
         self.x_samples = wl_points.geometry.x.to_numpy()
         self.y_samples = wl_points.geometry.y.to_numpy()
         self.z_samples = wl_points['WaterLevel'].to_numpy()
 
+        # Make bounding box to run interpolation over
+        # NOTE: grid resolution is an open question right now
+        if boundary.crs != 'EPSG:26917':
+            boundary.to_crs('EPSG:26917', inplace=True)
+        bbox = boundary.total_bounds
+        minx, miny, maxx, maxy = bbox
+
+        self.x_grid = np.linspace(minx, maxx, 100)
+        self.y_grid = np.linspace(miny, maxy, 100)
+
+    def ordinary_kriging(
+            self,
+            variogram_model: str, 
+            nlags: int,
+            plot_variogram: bool
+    ):
+        """
+        Interpolates the GW surface using ordinary kriging
+        """
+        ok = pkr.ok.OrdinaryKriging(
+            self.x_samples,
+            self.y_samples,
+            self.z_samples,
+            variogram_model=variogram_model,
+            nlags=nlags,
+            enable_plotting=plot_variogram
+        )
+
+        z_result, sigma_squared = ok.execute(
+            "grid", 
+            self.x_grid, 
+            self.y_grid
+        ) # NOTE: Could implement the 'mask' option later to only evaluate certian cells.
+
+        self.z_result = z_result 
+
+    def plot_interpolation_result(
+            self
+    ):
+        
+        fig, ax = plt.figure(figsize=(7, 7))
+        cf = ax.contourf(self.x_grid, self.y_grid, self.z_result, cmap='viridis')
+        plt.colorbar(cf, ax=ax, label='Interpolated GW')
+        ax.scatter(self.x_samples, self.y_samples, s=50)
+        plt.show()
 
 
