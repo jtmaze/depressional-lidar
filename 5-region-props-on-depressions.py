@@ -10,7 +10,6 @@ from skimage import measure, morphology
 from joblib import Parallel, delayed
 from multiprocessing import shared_memory
 import time
-from tqdm import tqdm # Optional, for progress bars
 
 site_name = 'bradford'
 detrend_path = f'./{site_name}/out_data/detrended_dem_all_basins.tif'
@@ -18,6 +17,7 @@ detrend_path = f'./{site_name}/out_data/detrended_dem_all_basins.tif'
 # %% 2.0 Get summary stats for elevation and make a histogram
 
 with rio.open(detrend_path) as src:
+    print(src.meta)
     data = src.read(1, masked=True)
     data = data * 0.3048 # Convert feet to meters
     flat = data.compressed()  
@@ -83,7 +83,7 @@ def analyze_threshold(t):
 
 # %% 5.0 Run the analysis in parallel
 
-thresholds = np.arange(-1.5, 0.5, 0.1)
+thresholds = np.arange(-1.5, 1.5, 0.1)
 batch_size = 4
 
 results = []
@@ -115,7 +115,7 @@ shm.unlink()
 total_pix = 170773718 # NOTE: this number was taken from code chunk 2.0
 out_df = pd.DataFrame(results)
 out_df['inundated_frac'] = out_df['total_inundated_pix'] / total_pix * 100
-out_df['inundated_area_m2'] = out_df['total_inundated_pix'] * (2.5 * .3048)**2 
+out_df['inundated_area_m2'] = out_df['total_inundated_pix'] * (2.5 * 0.3048)**2  
 out_df['mean_feature_area_m2'] = out_df['mean_feature_pix'] * (2.5 * 0.3048)**2  
 out_df['median_feature_area_m2'] = out_df['median_feature_pix'] * (2.5 * 0.3048)**2
 out_df['std_feature_area_m2'] = out_df['std_feature_pix'] * (2.5 * 0.3048)**2  

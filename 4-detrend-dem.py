@@ -6,7 +6,8 @@ import numpy as np
 site_name = 'bradford'
 basin = 'all_basins'
 
-dem_moving_avg = f'./{site_name}/out_data/dem_averaged_5000.tif'
+# NOTE: Use 1000 LXW grid cells for the smoothed DEM
+dem_moving_avg = f'./{site_name}/out_data/dem_averaged_1000.tif'
 dem_smoothed = f'./{site_name}/out_data/smoothed_dems/dem_smoothed_all_basins.tif'
 
 # %% 2.0 De-trend the original DEM by subtracting by the moving average

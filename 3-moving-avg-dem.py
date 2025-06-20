@@ -15,7 +15,7 @@ from scipy.ndimage import zoom
 
 site_name = 'bradford'
 basin = 'all_basins'
-avg_window = 5000
+avg_window = 1000 #NOTE: Larger windows tend to cause issues. Worth exploring later...
 mosaic_dem_path = f'./{site_name}/temp/dem_mosaic_basin_all_basins.tif'
 basin_shapes = gpd.read_file(f'./{site_name}/in_data/Final_Basins/Final_Basins.shp')
 bradford_shape = gpd.GeoDataFrame(geometry=[basin_shapes.union_all()], crs=basin_shapes.crs)
