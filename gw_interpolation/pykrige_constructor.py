@@ -29,7 +29,7 @@ class WellsWaterLevel:
         self.unique_wells = df_clean['SiteID'].unique()
         self.well_count = len(self.unique_wells)
         self.wl_mean = df_clean.groupby('SiteID').agg({
-            'WaterLevel': 'mean'
+            'waterLevel': 'mean'
         }).reset_index()
 
     def merge_well_coords(
@@ -44,7 +44,7 @@ class WellsWaterLevel:
         """
         wl_summary = self.wl_mean
         merged = wl_summary.merge(
-            well_coords[['SiteID', lat_col, lon_col]],
+            well_coords[['SiteID', lat_col, lon_col, 'Elevation']],
             on='SiteID',
             how='left'
         )
@@ -55,6 +55,8 @@ class WellsWaterLevel:
             crs=epsg_code
         )
         wl_points = GeoDataFrame(merged, geometry='geom')
+
+        wl_points['relative_wl'] = wl_points['waterLevel'] + wl_points['Elevation']
 
         # NOTE: Will need to modify this code when interpolating Bradford wells
         # Keeping it simple for Delmarva
@@ -76,12 +78,14 @@ class InterpolationResult:
         
         self.x_samples = wl_points.geometry.x.to_numpy()
         self.y_samples = wl_points.geometry.y.to_numpy()
-        self.z_samples = wl_points['WaterLevel'].to_numpy()
+        self.z_samples = wl_points['relative_wl'].to_numpy()
 
         # Make bounding box to run interpolation over
         # NOTE: grid resolution is an open question right now
         if boundary.crs != 'EPSG:26917':
             boundary.to_crs('EPSG:26917', inplace=True)
+            
+        self.boundary = boundary
         bbox = boundary.total_bounds
         minx, miny, maxx, maxy = bbox
 
@@ -112,16 +116,25 @@ class InterpolationResult:
             self.y_grid
         ) # NOTE: Could implement the 'mask' option later to only evaluate certian cells.
 
-        self.z_result = z_result 
+        self.z_result = z_result
+        self.sigma_squared = sigma_squared 
 
     def plot_interpolation_result(
             self
     ):
         
-        fig, ax = plt.figure(figsize=(7, 7))
+        fig, ax = plt.subplots(figsize=(7, 7))
         cf = ax.contourf(self.x_grid, self.y_grid, self.z_result, cmap='viridis')
         plt.colorbar(cf, ax=ax, label='Interpolated GW')
-        ax.scatter(self.x_samples, self.y_samples, s=50)
+        ax.scatter(self.x_samples, self.y_samples, color='red', s=50)
+        plt.show()
+
+    def plot_sigma_squared(self):
+        fig, ax = plt.subplots(figsize=(7, 7))
+        cf = ax.contourf(self.x_grid, self.y_grid, self.sigma_squared, cmap='Reds')
+        plt.colorbar(cf, ax=ax, label='Kriging Uncertainty (σ²)')
+        ax.scatter(self.x_samples, self.y_samples, color='blue', s=50)
+        ax.set_title('Kriging Uncertainty')
         plt.show()
 
 
