@@ -64,8 +64,8 @@ catchment_boundary = gpd.read_file('./delmarva/site_boundries/JL_toy_bounds.shp'
 
 summary_wl = pykrige_constructor.WellsWaterLevel(
     df=well_timeseries,
-    begin_obs='2021-03-01',
-    end_obs='2021-03-30'
+    begin_obs='2021-07-04',
+    end_obs='2021-07-06'
 )
 
 print(f'{summary_wl.well_count} wells avaible for Kriging')

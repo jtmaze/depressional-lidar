@@ -6,6 +6,7 @@ import numpy as np
 from datetime import datetime
 import matplotlib.pyplot as plt
 import pykrige as pkr
+from matplotlib.colors import LogNorm
 
 class WellsWaterLevel:
     """
@@ -78,7 +79,7 @@ class InterpolationResult:
         
         self.x_samples = wl_points.geometry.x.to_numpy()
         self.y_samples = wl_points.geometry.y.to_numpy()
-        self.z_samples = wl_points['relative_wl'].to_numpy()
+        self.z_samples = wl_points['relative_wl'].to_numpy() / 100 # NOTE converting cm to meters
 
         # Make bounding box to run interpolation over
         # NOTE: grid resolution is an open question right now
@@ -89,8 +90,8 @@ class InterpolationResult:
         bbox = boundary.total_bounds
         minx, miny, maxx, maxy = bbox
 
-        self.x_grid = np.linspace(minx, maxx, 100)
-        self.y_grid = np.linspace(miny, maxy, 100)
+        self.x_grid = np.linspace(minx, maxx, 1000)
+        self.y_grid = np.linspace(miny, maxy, 1000)
 
     def ordinary_kriging(
             self,
@@ -125,15 +126,18 @@ class InterpolationResult:
         
         fig, ax = plt.subplots(figsize=(7, 7))
         cf = ax.contourf(self.x_grid, self.y_grid, self.z_result, cmap='viridis')
-        plt.colorbar(cf, ax=ax, label='Interpolated GW')
+        plt.colorbar(cf, ax=ax, label='Interpolated GW (meters relative to lowest wetland bottom)')
         ax.scatter(self.x_samples, self.y_samples, color='red', s=50)
+        self.boundary.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=2)
         plt.show()
 
     def plot_sigma_squared(self):
+        
         fig, ax = plt.subplots(figsize=(7, 7))
-        cf = ax.contourf(self.x_grid, self.y_grid, self.sigma_squared, cmap='Reds')
-        plt.colorbar(cf, ax=ax, label='Kriging Uncertainty (σ²)')
+        cf = ax.contourf(self.x_grid, self.y_grid, self.sigma_squared**(0.5), cmap='Reds')
+        plt.colorbar(cf, ax=ax, label='Kriging Uncertainty (m) - Log Scale')
         ax.scatter(self.x_samples, self.y_samples, color='blue', s=50)
+        self.boundary.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=2)
         ax.set_title('Kriging Uncertainty')
         plt.show()
 
