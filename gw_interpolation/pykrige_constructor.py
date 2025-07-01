@@ -16,11 +16,24 @@ class WellsWaterLevel:
             self, 
             df: DataFrame, 
             begin_obs: datetime, 
-            end_obs: datetime):
+            end_obs: datetime, 
+            well_type: str = None
+        ):
 
+        # Filter by well type if specified
+        if well_type is None:
+            filtered_df = df
+        elif well_type == 'UW':
+            filtered_df = df[df['SiteID'].str.contains('UW')]
+        elif well_type == 'UW_CH':
+            filtered_df = df[df['SiteID'].str.contains('UW') | df['SiteID'].str.contains('CH')]
+        else:
+            raise ValueError(f"Invalid well_type: {well_type}. Supported types are None, 'UW', or 'UW_CH'")
+
+        # Clean and process the filtered dataframe
         # 1) Filter timeframe of interest
-        df_clean = df[(df['Date'] >= begin_obs) & 
-                (df['Date'] <= end_obs)].copy()
+        df_clean = filtered_df[(filtered_df['Date'] >= begin_obs) & 
+                (filtered_df['Date'] <= end_obs)].copy()
         # 2) Drop flagged observations
         df_clean = df_clean[df_clean['Flag'] == 0]
         # 3) Drop NaNs

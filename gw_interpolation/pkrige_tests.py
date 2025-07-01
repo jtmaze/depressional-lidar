@@ -9,6 +9,8 @@ from gw_interpolation import pykrige_constructor
 
 os.chdir('/Users/jmaze/Documents/projects/depressional_lidar/')
 
+catchment = 'JL'
+
 # %%
 
 well_timeseries = pd.read_csv('./delmarva/waterlevel_data/output_JM_2019_2022.csv').rename(
@@ -16,27 +18,13 @@ well_timeseries = pd.read_csv('./delmarva/waterlevel_data/output_JM_2019_2022.cs
 )
 # Convert Date column to datetime
 well_timeseries['Date'] = pd.to_datetime(well_timeseries['Date'])
+
 jl_sites = [
     'TS-CH', 'ND-UW3', 'ND-SW', 'DK-SW', 'DK-UW1', 'BD-CH', 'BD-SW',
     'DK-CH', 'DK-UW2', 'ND-UW1', 'ND-UW2', 'TS-SW', 'TS-UW1'
 ]
-well_timeseries = well_timeseries[well_timeseries['SiteID'].isin(jl_sites)]
-well_timeseries = well_timeseries[['SiteID', 'Flag', 'Date', 'waterLevel']]
 
-# %%
-well_coords = gpd.read_file('./delmarva/trimble_well_pts.shp').rename(
-    columns={'Descriptio': 'SiteID'}
-)
-well_coords = well_coords[['SiteID', 'geometry']]
-# Clean up SiteID by removing "well" and "WELL" suffixes
-well_coords['SiteID'] = well_coords['SiteID'].str.replace(' well', '', case=False)
-well_coords['SiteID'] = well_coords['SiteID'].str.replace(' WELL', '', case=False)
-
-well_coords.to_crs('EPSG:4326', inplace=True)
-well_coords['latitude'] = well_coords.geometry.y
-well_coords['longitude'] = well_coords.geometry.x
-
-elevation_dict = {
+jl_elevation_dict = {
     'TS-UW1': 194.5,
     'TS-SW': 72.5,
     'TS-CH': 101.5,
@@ -52,20 +40,67 @@ elevation_dict = {
     'DK-SW': 0
 }
 
+jr_sites = [
+    'OB-UW1', 'MB-SW', 'MB-CH', 'XB-UW1', 'XB-SW', 'XB-CH',
+    'HB-OT', 'HB-SW', 'HB-UW1', 'HB-CH', 'TP-CH', 'OB-SW',
+    'OB-CH', 'MB-UW1'
+]
+
+jr_elevation_dict = {
+    'OB-UW1': 144.5,
+    'OB-SW': 11.5,
+    'OB-CH': 56.5,
+    'MB-UW1': 130.5,
+    'MB-SW': -40.5,
+    'MB-CH': 50.5,
+    'XB-UW1': 175.5,
+    'XB-SW': 18.5,
+    'XB-CH': 56.5,
+    'HB-SW': -42,
+    'HB-UW1': 103,
+    'HB-CH': 19,
+    'TP-CH': 0
+}
+
+
+if catchment == 'JL':
+    sites = jl_sites
+    boundary_path = './delmarva/site_boundries/JL_toy_bounds.shp'
+    elevation_dict = jl_elevation_dict
+else:
+    sites = jr_sites
+    boundary_path = './delmarva/site_boundries/JR_toy_bounds.shp'
+    elevation_dict = jr_elevation_dict
+
+well_timeseries = well_timeseries[well_timeseries['SiteID'].isin(sites)]
+well_timeseries = well_timeseries[['SiteID', 'Flag', 'Date', 'waterLevel']]
+
+# %%
+well_coords = gpd.read_file('./delmarva/trimble_well_pts.shp').rename(
+    columns={'Descriptio': 'SiteID'}
+)
+well_coords = well_coords[['SiteID', 'geometry']]
+# Clean up SiteID by removing "well" and "WELL" suffixes
+well_coords['SiteID'] = well_coords['SiteID'].str.replace(' well', '', case=False)
+well_coords['SiteID'] = well_coords['SiteID'].str.replace(' WELL', '', case=False)
+
+well_coords.to_crs('EPSG:4326', inplace=True)
+well_coords['latitude'] = well_coords.geometry.y
+well_coords['longitude'] = well_coords.geometry.x
+
 # Add elevation to well_coords
 well_coords['Elevation'] = well_coords['SiteID'].map(elevation_dict)
 
-
 # %%
 
-catchment_boundary = gpd.read_file('./delmarva/site_boundries/JL_toy_bounds.shp')
+catchment_boundary = gpd.read_file(boundary_path)
 
 # %% Generate well points for interpolation
 
 summary_wl = pykrige_constructor.WellsWaterLevel(
     df=well_timeseries,
-    begin_obs='2021-07-04',
-    end_obs='2021-07-06'
+    begin_obs='2021-10-05',
+    end_obs='2021-10-20',
 )
 
 print(f'{summary_wl.well_count} wells avaible for Kriging')
