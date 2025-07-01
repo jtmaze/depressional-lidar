@@ -83,7 +83,7 @@ def analyze_threshold(t):
 
 # %% 5.0 Run the analysis in parallel
 
-thresholds = np.arange(-1.5, 1.5, 0.1)
+thresholds = np.arange(-1.5, 1.5, 0.02)
 batch_size = 4
 
 results = []
@@ -128,7 +128,7 @@ out_df.drop(columns=
         inplace=True
 )
 
-out_df.to_csv(f'./{site_name}/out_data/{site_name}_region_props_on_depressions.csv', index=False)
+out_df.to_csv(f'./{site_name}/out_data/{site_name}_region_props_on_depressions_002.csv', index=False)
 
 # %% Write binary rasters for a few thresholds
 def write_binary_inundation_raster(

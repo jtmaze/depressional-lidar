@@ -6,7 +6,7 @@ import numpy as np
 from datetime import datetime
 import matplotlib.pyplot as plt
 import pykrige as pkr
-from matplotlib.colors import LogNorm
+
 
 class WellsWaterLevel:
     """
@@ -92,8 +92,8 @@ class InterpolationResult:
         
         self.x_samples = wl_points.geometry.x.to_numpy()
         self.y_samples = wl_points.geometry.y.to_numpy()
-        self.z_samples = wl_points['relative_wl'].to_numpy() / 100 # NOTE converting cm to meters
-
+        self.z_samples = wl_points['relative_wl'].to_numpy() / 100 
+        print(self.z_samples)
         # Make bounding box to run interpolation over
         # NOTE: grid resolution is an open question right now
         if boundary.crs != 'EPSG:26917':
@@ -128,12 +128,12 @@ class InterpolationResult:
             "grid", 
             self.x_grid, 
             self.y_grid
-        ) # NOTE: Could implement the 'mask' option later to only evaluate certian cells.
+        ) # NOTE: Could implement the 'mask' option later to only evaluate certian cells, think sigma_squared.
 
         self.z_result = z_result
         self.sigma_squared = sigma_squared 
 
-    def plot_interpolation_result(
+    def plot_interpolation_result_contour(
             self
     ):
         
@@ -144,14 +144,27 @@ class InterpolationResult:
         self.boundary.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=2)
         plt.show()
 
+    def plot_interpolation_result(
+            self
+    ):
+        
+        fig, ax = plt.subplots(figsize=(7, 7))
+        im = ax.imshow(self.z_result, extent=[self.x_grid.min(), self.x_grid.max(), 
+                                             self.y_grid.min(), self.y_grid.max()], 
+                       origin='lower', cmap='viridis', aspect='auto')
+        plt.colorbar(im, ax=ax, label='Interpolated GW (meters relative to lowest wetland bottom)')
+        ax.scatter(self.x_samples, self.y_samples, color='red', s=50)
+        self.boundary.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=2)
+        plt.show()
+
     def plot_sigma_squared(self):
         
         fig, ax = plt.subplots(figsize=(7, 7))
         cf = ax.contourf(self.x_grid, self.y_grid, self.sigma_squared**(0.5), cmap='Reds')
-        plt.colorbar(cf, ax=ax, label='Kriging Uncertainty (m) - Log Scale')
+        plt.colorbar(cf, ax=ax, label='Kriging Uncertainty (m)')
         ax.scatter(self.x_samples, self.y_samples, color='blue', s=50)
         self.boundary.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=2)
-        ax.set_title('Kriging Uncertainty')
+        ax.set_title('Kriging Uncertainty (prediction variance)')
         plt.show()
 
 

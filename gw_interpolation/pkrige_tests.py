@@ -94,13 +94,15 @@ well_coords['Elevation'] = well_coords['SiteID'].map(elevation_dict)
 # %%
 
 catchment_boundary = gpd.read_file(boundary_path)
+print(catchment_boundary.crs)
 
 # %% Generate well points for interpolation
 
 summary_wl = pykrige_constructor.WellsWaterLevel(
     df=well_timeseries,
-    begin_obs='2021-10-05',
-    end_obs='2021-10-20',
+    begin_obs='2022-3-5',
+    end_obs='2022-3-20',
+    well_type='UW_CH'
 )
 
 print(f'{summary_wl.well_count} wells avaible for Kriging')

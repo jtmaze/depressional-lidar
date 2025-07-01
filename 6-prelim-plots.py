@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 site_name = 'bradford'
 
-df = pd.read_csv(f'./{site_name}/out_data/bradford_region_props_on_depressions.csv')
+df = pd.read_csv(f'./{site_name}/out_data/bradford_region_props_on_depressions_002.csv')
 print(df.columns)
 
 # %% 2.0 Some quick exploratory plots
@@ -46,14 +46,17 @@ plt.show()
 # %% Calculate dA/dS max with central difference
 # Calculate the central difference for dA/dS
 # Formula: f'(x) = (f(x+h) - f(x-h)) / (2h) where h is the step size
-step_size = 0.1
-forward_area = df['inundated_area_m2'].shift(-1) / 1_000_000  # f(x+h)
-backward_area = df['inundated_area_m2'].shift(1) / 1_000_000  # f(x-h)
+step_size = 0.02
+step_size_km = step_size * 1_000_000
+forward_area = df['inundated_area_m2'].shift(-1)  # f(x+h) 
+backward_area = df['inundated_area_m2'].shift(1)  # f(x-h) 
 central_difference = (forward_area - backward_area) / (2 * step_size)
 
 # Assign the result to the dataframe
-df['dA/dS'] = central_difference
-df['dA/dS_lambda'] = df['dA/dS'] * 12
+df['dA/dS'] = central_difference / 1_000 # Convert meters to kilometers
+
+
+df['dA/dS_lambda'] = df['dA/dS'] * 62
 
 
 # Create a figure with four y-axes
@@ -63,15 +66,15 @@ fig, ax1 = plt.subplots(figsize=(12, 7))  # Increased width to accommodate legen
 color1 = 'tab:blue'
 ax1.set_xlabel('Relative Groundwater Depth (m)')
 ax1.set_ylabel('dA/dS (perimeter proxy)', color=color1)
-ax1.plot(df['threshold'], df['dA/dS_lambda'], marker='o', color=color1, label='dA/dS (perimeter proxy)')
+ax1.plot(df['threshold'], df['dA/dS'], marker='o', color=color1, label='dA/dS (perimeter proxy)')
 ax1.tick_params(axis='y', labelcolor=color1)
 
 # Create second y-axis for perimeter
 ax2 = ax1.twinx()
 color2 = 'tab:red'
 ax2.set_ylabel('Summed Perimeter (kilometers)', color=color2)
-ax2.plot(df['threshold'], df['total_perimeter_m'] / 1000, marker='x', color=color2, label='Summed Perimeter (scikit-image, km)')
-ax2.plot(df['threshold'], df['total_perimeter_crofton_m'] / 1000, marker='+', color='tab:orange', label='Summed Perimeter (Crofton, km)')
+ax2.plot(df['threshold'], df['total_perimeter_m'] / 1_000, marker='x', color=color2, label='Summed Perimeter (scikit-image, km)')
+ax2.plot(df['threshold'], df['total_perimeter_crofton_m'] / 1_000, marker='+', color='tab:orange', label='Summed Perimeter (Crofton, km)')
 ax2.tick_params(axis='y', labelcolor=color2)
 
 # Create third y-axis for inundated area
@@ -81,8 +84,8 @@ ax3 = ax1.twinx()
 # Move the third axis to the right
 ax3.spines['right'].set_position(('outward', 60))
 color3 = 'tab:green'
-ax3.set_ylabel('Inundated Area (m²)', color=color3)
-ax3.plot(df['threshold'], df['inundated_area_m2'] , marker='^', color=color3, label='Inundated Area (m²)')
+ax3.set_ylabel('Inundated Area (km²)', color=color3)
+ax3.plot(df['threshold'], df['inundated_area_m2'] / 1_000_000 , marker='^', color=color3, label='Inundated Area (km²)')
 ax3.tick_params(axis='y', labelcolor=color3)
 
 # Add legend with all lines
