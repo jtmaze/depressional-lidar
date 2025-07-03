@@ -62,7 +62,7 @@ def analyze_threshold(t):
     Analyze the DEM for depressions below a given elevation threshold.
     """
     binary = np.logical_and(dem < t, dem > -9000)
-    binary = morphology.remove_small_objects(binary, min_size=300, connectivity=2)  # Used more relaxed connectivity
+    binary = morphology.remove_small_objects(binary, min_size=300, connectivity=1)  # Used more strict
     labels = measure.label(binary, connectivity=2)
     props_table = measure.regionprops_table(labels, properties=['num_pixels', 'perimeter', 'perimeter_crofton'])
 
@@ -112,15 +112,19 @@ shm.unlink()
 
 # %% 6.0 Create a DataFrame with the results
 
-total_pix = 170773718 # NOTE: this number was taken from code chunk 2.0
+US_SURVEY_FOOT_TO_METER = 0.304800609601219
+pixel_size_m = 2.5 * US_SURVEY_FOOT_TO_METER
+pixel_area_m2 = pixel_size_m**2
+
+total_pix = 170773718
 out_df = pd.DataFrame(results)
 out_df['inundated_frac'] = out_df['total_inundated_pix'] / total_pix * 100
-out_df['inundated_area_m2'] = out_df['total_inundated_pix'] * (2.5 * 0.3048)**2  
-out_df['mean_feature_area_m2'] = out_df['mean_feature_pix'] * (2.5 * 0.3048)**2  
-out_df['median_feature_area_m2'] = out_df['median_feature_pix'] * (2.5 * 0.3048)**2
-out_df['std_feature_area_m2'] = out_df['std_feature_pix'] * (2.5 * 0.3048)**2  
-out_df['total_perimeter_m'] = out_df['total_perimeter'] * 2.5 * 0.3048  # Convert pixels to feet to meters
-out_df['total_perimeter_crofton_m'] = out_df['total_perimeter_crofton'] * 2.5 * 0.3048  # Convert pixels to feet to meters
+out_df['inundated_area_m2'] = out_df['total_inundated_pix'] * pixel_area_m2
+out_df['mean_feature_area_m2'] = out_df['mean_feature_pix'] * pixel_area_m2
+out_df['median_feature_area_m2'] = out_df['median_feature_pix'] * pixel_area_m2
+out_df['std_feature_area_m2'] = out_df['std_feature_pix'] * pixel_area_m2
+out_df['total_perimeter_m'] = out_df['total_perimeter'] * pixel_size_m
+out_df['total_perimeter_crofton_m'] = out_df['total_perimeter_crofton'] * pixel_size_m
 
 out_df.drop(columns=
             ['total_inundated_pix', 'mean_feature_pix', 'std_feature_pix',
@@ -128,7 +132,7 @@ out_df.drop(columns=
         inplace=True
 )
 
-out_df.to_csv(f'./{site_name}/out_data/{site_name}_region_props_on_depressions_002.csv', index=False)
+out_df.to_csv(f'./{site_name}/out_data/{site_name}_region_props_on_depressions_002_con8.csv', index=False)
 
 # %% Write binary rasters for a few thresholds
 def write_binary_inundation_raster(
