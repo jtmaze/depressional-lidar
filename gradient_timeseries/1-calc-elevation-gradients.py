@@ -1,4 +1,5 @@
 # %% 1.0 Libraries and file paths
+
 import os
 from itertools import combinations
 import pandas as pd
@@ -24,6 +25,7 @@ well_pts.rename(
 print(well_pts.columns)
 well_pts['Site_Name'] = well_pts['Site_Name'].str.replace('well', '', case=False)
 well_pts['Site_Name'] = well_pts['Site_Name'].str.replace(r'\s+', '', regex=True)
+
 # %% 2.0  Generate well combinations and prep elevation data
 
 # %% 2.1 Generate sets with each possible combination of site pairs
@@ -138,3 +140,5 @@ plt.tight_layout()
 
 bc_elevation_gradients.to_csv('./delmarva/out_data/bc_elevation_gradients.csv', index=False)
 jl_elevation_gradients.to_csv('./delmarva/out_data/jl_elevation_gradients.csv', index=False)
+z_points.to_file('./delmarva/out_data/well_pts_clean.shp')
+# %%
