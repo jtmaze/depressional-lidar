@@ -30,23 +30,32 @@ well_pts['Site_Name'] = well_pts['Site_Name'].str.replace(r'\s+', '', regex=True
 
 # %% 2.1 Generate sets with each possible combination of site pairs
 elevations = elevations[~elevations['Site_Name'].str.contains('high')]
-jl_wells = elevations[elevations['Catchment'] == 'Jackson']['Site_Name']
-bc_wells = elevations[elevations['Catchment'] == 'Baltimore']['Site_Name']
 
-jl_pairs = list(combinations(jl_wells, 2))
+jl_wells = (
+    elevations[elevations['Catchment'] == 'Jackson'][['Site_Name', 'Elevation']]
+).sort_values(
+    by='Elevation',
+    ascending=False
+)
+jl_pairs = list(combinations(jl_wells['Site_Name'], 2))
 jl_elevation_gradients = pd.DataFrame({
     'well_pair': [f'{pair[0]}__to__{pair[1]}' for pair in jl_pairs],
     'well0': [pair[0] for pair in jl_pairs],
     'well1': [pair[1] for pair in jl_pairs]
 })
 
-bc_pairs = list(combinations(bc_wells, 2))
+bc_wells = (
+    elevations[elevations['Catchment'] == 'Baltimore'][['Site_Name', 'Elevation']]
+).sort_values(
+    by='Elevation',
+    ascending=False
+)
+bc_pairs = list(combinations(bc_wells['Site_Name'], 2))
 bc_elevation_gradients = pd.DataFrame({
     'well_pair': [f'{pair[0]}__to__{pair[1]}' for pair in bc_pairs],
     'well0': [pair[0] for pair in bc_pairs],
     'well1': [pair[1] for pair in bc_pairs]
 })
-
 
 # %% 2.2 Join the elevation data to the well point geometries
 
@@ -99,25 +108,25 @@ jl_elevation_gradients = assign_elevation_gradients(jl_elevation_gradients, z_po
 bc_elevation_gradients = assign_elevation_gradients(bc_elevation_gradients, z_points)
 
 # %%
-
 # Create a figure with two subplots
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5), sharey=True, sharex=True)
 
-# Get the absolute values of elevation gradients
-jl_abs_gradients = abs(jl_elevation_gradients['elevation_gradient_cm_m'])
-bc_abs_gradients = abs(bc_elevation_gradients['elevation_gradient_cm_m'])
+# Use the original elevation gradients without taking absolute values
+jl_gradients = jl_elevation_gradients['elevation_gradient_cm_m']
+bc_gradients = bc_elevation_gradients['elevation_gradient_cm_m']
 
 # Calculate means
-jl_mean = jl_abs_gradients.mean()
-bc_mean = bc_abs_gradients.mean()
+jl_mean = jl_gradients.mean()
+bc_mean = bc_gradients.mean()
 
-# Find the maximum value for consistent bin ranges
-max_gradient = max(jl_abs_gradients.max(), bc_abs_gradients.max())
+# Find the common range for both histograms
+min_gradient = min(jl_gradients.min(), bc_gradients.min())
+max_gradient = max(jl_gradients.max(), bc_gradients.max())
 bins = 20
 
 # Plot histograms
-ax1.hist(jl_abs_gradients, bins=bins, color='blue', edgecolor='black', alpha=0.7, range=(0, max_gradient))
-ax2.hist(bc_abs_gradients, bins=bins, color='green', edgecolor='black', alpha=0.7, range=(0, max_gradient))
+ax1.hist(jl_gradients, bins=bins, color='blue', edgecolor='black', alpha=0.7, range=(min_gradient, max_gradient))
+ax2.hist(bc_gradients, bins=bins, color='green', edgecolor='black', alpha=0.7, range=(min_gradient, max_gradient))
 
 # Add mean lines
 ax1.axvline(jl_mean, color='red', linestyle='dashed', linewidth=2, label=f'Mean: {jl_mean:.3f} cm/m')
@@ -130,13 +139,13 @@ ax2.legend()
 # Add titles and labels
 ax1.set_title('Jackson Lane Elevation Gradients')
 ax2.set_title('Baltimore Corner Elevation Gradients')
-ax1.set_xlabel('Absolute Elevation Gradient (cm/m)')
-ax2.set_xlabel('Absolute Elevation Gradient (cm/m)')
+ax1.set_xlabel('Elevation Gradient (cm/m)')
+ax2.set_xlabel('Elevation Gradient (cm/m)')
 ax1.set_ylabel('Frequency (n well pairs)')
 
 plt.tight_layout()
 
-# %%
+# %% Write the output
 
 bc_elevation_gradients.to_csv('./delmarva/out_data/bc_elevation_gradients.csv', index=False)
 jl_elevation_gradients.to_csv('./delmarva/out_data/jl_elevation_gradients.csv', index=False)

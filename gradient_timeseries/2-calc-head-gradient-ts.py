@@ -5,7 +5,7 @@ import pandas as pd
 import geopandas as gpd
 
 os.chdir('/Users/jmaze/Documents/projects/depressional_lidar/')
-catchment = 'jl'
+catchment = 'bc'
 
 z_points = gpd.read_file('./delmarva/out_data/well_pts_clean.shp')
 elevation_gradients = pd.read_csv(f'./delmarva/out_data/{catchment}_elevation_gradients.csv')
@@ -35,7 +35,7 @@ wl_daily['Date'] = pd.to_datetime(wl_daily['Date'])
 
 wl_daily = pd.merge(wl_daily, z_points[['Elevation', 'Site_Name']], how='left', on='Site_Name')
 wl_daily['Elevation_m'] = wl_daily['Elevation'] / 100
-wl_daily['rel_wl'] = wl_daily['waterLevel'] - wl_daily['Elevation_m']
+wl_daily['rel_wl'] = wl_daily['waterLevel'] + wl_daily['Elevation_m']
 
 # %% 3.0 Make a gradients dataframe to hold timeseries
 
@@ -88,7 +88,32 @@ gradient_ts['dh'] = gradient_ts['rel_wl0'] - gradient_ts['rel_wl1']
 gradient_ts['head_gradient_cm_m'] = gradient_ts['dh'] / gradient_ts['well_dist_m'] * 100
 gradient_ts['adj_gradient'] = gradient_ts['head_gradient_cm_m'] / gradient_ts['elevation_gradient_cm_m']
 
-# %% 4.0 Write output to csv
+# %% 5.0 Classify the well pair relationships
+
+def classify_well_pairs(row):
+    w0 = row['well0']
+    w1 = row['well1']
+
+    def find_well_type(well: str):
+        # Use 'in' operator for string pattern matching
+        if '-UW' in well:
+            return 'UW'
+        elif '-CH' in well:
+            return 'CH'
+        elif '-SW' in well:
+            return 'SW'
+        else:
+            return 'Unknown'
+        
+    w0_type = find_well_type(w0)
+    w1_type = find_well_type(w1)
+
+    return f'{w0_type}__to__{w1_type}'
+
+gradient_ts['pair_type'] = gradient_ts.apply(classify_well_pairs, axis=1)
+
+
+# %% 6.0 Write output to csv
 
 gradient_ts.to_csv(f'./delmarva/out_data/{catchment}_gradient_timeseries.csv', index=False)
 
