@@ -9,7 +9,7 @@ from gw_interpolation import pykrige_constructor
 
 os.chdir('/Users/jmaze/Documents/projects/depressional_lidar/')
 
-catchment = 'JL'
+catchment = 'BC'
 
 # %%
 
@@ -74,7 +74,6 @@ else:
 
 well_timeseries = well_timeseries[well_timeseries['SiteID'].isin(sites)]
 well_timeseries = well_timeseries[['SiteID', 'Flag', 'Date', 'waterLevel']]
-
 # %%
 well_coords = gpd.read_file('./delmarva/trimble_well_pts.shp').rename(
     columns={'Descriptio': 'SiteID'}
@@ -101,7 +100,7 @@ print(catchment_boundary.crs)
 summary_wl = pykrige_constructor.WellsWaterLevel(
     df=well_timeseries,
     begin_obs='2022-3-5',
-    end_obs='2022-3-20',
+    end_obs='2022-4-20',
     well_type='UW_CH'
 )
 
@@ -126,7 +125,7 @@ gridded_samples = pykrige_constructor.InterpolationResult(
 
 gridded_samples.ordinary_kriging(
     variogram_model='linear',
-    nlags=8,
+    nlags=4,
     plot_variogram=True
 )
 
@@ -134,5 +133,6 @@ gridded_samples.ordinary_kriging(
 
 gridded_samples.plot_interpolation_result()
 gridded_samples.plot_sigma_squared()
+gridded_samples.plot_masked_result(sigma_squared_threshold=0.5)
 
 # %%

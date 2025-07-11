@@ -160,11 +160,34 @@ class InterpolationResult:
     def plot_sigma_squared(self):
         
         fig, ax = plt.subplots(figsize=(7, 7))
-        cf = ax.contourf(self.x_grid, self.y_grid, self.sigma_squared**(0.5), cmap='Reds')
-        plt.colorbar(cf, ax=ax, label='Kriging Uncertainty (m)')
+        im = ax.imshow(self.sigma_squared**(0.5), 
+                       extent=[self.x_grid.min(), self.x_grid.max(), 
+                              self.y_grid.min(), self.y_grid.max()], 
+                       origin='lower', cmap='Reds', aspect='auto')
+        plt.colorbar(im, ax=ax, label='Kriging Uncertainty (m)')
         ax.scatter(self.x_samples, self.y_samples, color='blue', s=50)
         self.boundary.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=2)
         ax.set_title('Kriging Uncertainty (prediction variance)')
+        plt.show()
+
+
+    def plot_masked_result(
+            self,
+            sigma_squared_threshold: float, 
+    ):
+        sigma_squared_mask = (self.sigma_squared**(0.5) <= sigma_squared_threshold)
+        masked_result = np.where(sigma_squared_mask, self.z_result, np.nan)
+
+        fig, ax = plt.subplots(figsize=(7, 7))
+
+        im = ax.imshow(masked_result, extent=[self.x_grid.min(), self.x_grid.max(), 
+                                         self.y_grid.min(), self.y_grid.max()], 
+                   origin='lower', cmap='viridis', aspect='auto')
+        # Fix missing closing quote
+        plt.colorbar(im, ax=ax, label=f'Interpolated GW (meters relative to lowest wetland bottom)')
+        ax.scatter(self.x_samples, self.y_samples, color='red', s=50)
+        self.boundary.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=2)
+        ax.set_title(f'Kriging Result (masked where uncertainty > {sigma_squared_threshold}m)')
         plt.show()
 
 
