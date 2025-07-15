@@ -6,7 +6,7 @@ import pandas as pd
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from gradient_timeseries import gradient_viz
 
-os.chdir('/Users/jmaze/Documents/projects/depressional_lidar/')
+os.chdir('D:/depressional_lidar/')
 catchment = 'jl'
 gradients_path = f'./delmarva/out_data/{catchment}_gradient_timeseries.csv'
 gradient_ts = pd.read_csv(gradients_path)

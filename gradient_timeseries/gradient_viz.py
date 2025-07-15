@@ -135,6 +135,13 @@ def summary_correlations_plot(
     clean['mean_head_gradient']
     )
 
+    r = stats.linregress(
+        clean['elevation_gradient'],
+        clean['mean_head_gradient']
+    )
+
+    slope = r[0]
+
     # Create a scatter plot with points colored by pair_type
     plt.figure(figsize=(12, 8))
     g = sns.scatterplot(x='elevation_gradient', y='mean_head_gradient', 
@@ -158,7 +165,8 @@ def summary_correlations_plot(
                 fontsize=8, alpha=0.7)
 
     plt.title(f'Elevation Gradient vs. Head Gradient\nPearson r: {pearson_corr:.3f} (p={p_value:.4f})\n' +
-        f'Spearman ρ: {spearman_corr:.3f} (p={sp_p_value:.4f})', 
+        f'Spearman ρ: {spearman_corr:.3f} (p={sp_p_value:.4f})\n' +
+        f'Slope: {slope:.3f}', 
         fontsize=14)
     plt.xlabel('Elevation Gradient (cm/m)', fontsize=12)
     plt.ylabel('Mean Head Gradient (cm/m)', fontsize=12)
