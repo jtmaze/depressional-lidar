@@ -2,14 +2,14 @@
 
 import os
 import pandas as pd
-import geopandas as gpd
 
-os.chdir('/Users/jmaze/Documents/projects/depressional_lidar/')
-catchment = 'bc'
 
-z_points = gpd.read_file('./delmarva/out_data/well_pts_clean.shp')
+os.chdir('D:/depressional_lidar/')
+catchment = 'jl'
+
 elevation_gradients = pd.read_csv(f'./delmarva/out_data/{catchment}_elevation_gradients.csv')
-wl_path = './delmarva/waterlevel_data/output_JM_2019_2022.csv'
+
+wl_path = './delmarva/waterlevel_data/combined_output.csv'
 # Get unique wells from both columns
 gradient_wells = list(
     set(
@@ -18,36 +18,47 @@ gradient_wells = list(
     )
 )
 
+well0_elevations = elevation_gradients[['well0', 'z0']].rename(
+    columns={'well0': 'well_id', 'z0': 'elevation'}
+).drop_duplicates()
+
+well1_elevations = elevation_gradients[['well1', 'z1']].rename(
+    columns={'well1': 'well_id', 'z1': 'elevation'}
+).drop_duplicates()
+
+z_points = pd.concat([well0_elevations, well1_elevations]).drop_duplicates()
+
+
 # %% 2.0 Read, filter sites and aggregate to daily, adjust for well elevation
 
 wl = pd.read_csv(wl_path)
-wl = wl[wl['Site_Name'].isin(gradient_wells)]
+wl = wl[wl['well_id'].isin(gradient_wells)]
 wl['Timestamp'] = pd.to_datetime(wl['Timestamp'])
 wl['Date'] = wl['Timestamp'].dt.date
 
-wl_daily = wl.groupby(['Site_Name', 'Date']).agg({
-    'waterLevel': 'mean',
+wl_daily = wl.groupby(['well_id', 'Date']).agg({
+    'water_level': 'mean',
     'Flag': 'first',
-    'Notes': 'first'
 }).reset_index()
 
 wl_daily['Date'] = pd.to_datetime(wl_daily['Date'])
 
-wl_daily = pd.merge(wl_daily, z_points[['Elevation', 'Site_Name']], how='left', on='Site_Name')
-wl_daily['Elevation_m'] = wl_daily['Elevation'] / 100
-wl_daily['rel_wl'] = wl_daily['waterLevel'] + wl_daily['Elevation_m']
+wl_daily = pd.merge(wl_daily, z_points[['elevation', 'well_id']], how='left', on='well_id')
+wl_daily['elevation_m'] = wl_daily['elevation'] / 100
+wl_daily['rel_wl'] = wl_daily['water_level'] + wl_daily['elevation_m']
 
 # %% 3.0 Make a gradients dataframe to hold timeseries
 
-if catchment == 'bc':
-    start_dt = '2021-03-10'
-    end_dt = '2022-10-07'
+"""
+Not bothering with date filtering
+"""
+start_dt = wl_daily['Date'].min()
+end_dt = wl_daily['Date'].max()
 
-elif catchment == 'jl':
-    start_dt = '2021-03-02'
-    end_dt = '2022-10-07'
+print(f"Start date: {start_dt}, End date: {end_dt}")
 
 date_range = pd.date_range(start_dt, end_dt, freq='D')
+
 well_pairs = elevation_gradients['well_pair'].unique()
 
 gradient_ts = pd.DataFrame(
@@ -62,26 +73,26 @@ gradient_ts = pd.merge(gradient_ts, elevation_gradients, how='left', on='well_pa
 gradient_ts = (
     pd.merge(
         gradient_ts,
-        wl_daily[['rel_wl', 'Site_Name', 'Date']],
+        wl_daily[['rel_wl', 'well_id', 'Date']],
         how='left',
         left_on=['well0', 'Date'],
-        right_on=['Site_Name', 'Date']
+        right_on=['well_id', 'Date']
     )
     .rename(columns={'rel_wl': 'rel_wl0'})
-    .drop(columns='Site_Name')
+    .drop(columns='well_id')
 )
 
 # Merging wl timeseries for w1
 gradient_ts = (
     pd.merge(
         gradient_ts,
-        wl_daily[['rel_wl', 'Site_Name', 'Date']],
+        wl_daily[['rel_wl', 'well_id', 'Date']],
         how='left',
         left_on=['well1', 'Date'],
-        right_on=['Site_Name', 'Date']
+        right_on=['well_id', 'Date']
     )
     .rename(columns={'rel_wl': 'rel_wl1'})
-    .drop(columns='Site_Name')
+    .drop(columns='well_id')
 )
 
 gradient_ts['dh'] = gradient_ts['rel_wl0'] - gradient_ts['rel_wl1']
@@ -115,6 +126,7 @@ gradient_ts['pair_type'] = gradient_ts.apply(classify_well_pairs, axis=1)
 
 # %% 6.0 Write output to csv
 
-gradient_ts.to_csv(f'./delmarva/out_data/{catchment}_gradient_timeseries.csv', index=False)
+output_path = f'./delmarva/out_data/{catchment}_gradient_timeseries.csv'
+gradient_ts.to_csv(output_path, index=False)
 
 # %%

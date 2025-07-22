@@ -118,6 +118,7 @@ def gradient_ts_plot(
 def summary_correlations_plot(
     summary_df: pd.DataFrame,
     pair_type_filter: list,
+    line_color: str
 ):
     
     clean = summary_df.dropna(subset=['elevation_gradient', 'mean_head_gradient'])
@@ -154,8 +155,10 @@ def summary_correlations_plot(
                 elinewidth=1, capsize=3, alpha=0.5)
 
     # Add regression line for all points
+    if line_color is None:
+        line_color = 'red'
     sns.regplot(x='elevation_gradient', y='mean_head_gradient', data=clean,
-        scatter=False, color='red', line_kws={'linestyle': '--'})
+        scatter=False, color=line_color, line_kws={'linestyle': '--'})
 
     # Add labels for each point
     for idx, row in clean.iterrows():
