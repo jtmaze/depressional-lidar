@@ -13,7 +13,7 @@ from rasterio.merge import merge
 
 import geopandas as gpd
 
-site_name = 'osbs' # bradford or osbs
+site_name = 'bradford' # bradford or osbs
 lidar_data = 'neon_apr2019' # multiple neon flights at OSBS, tbd which on works best
 
 os.chdir('D:/depressional_lidar/data/')
@@ -32,14 +32,14 @@ elif site_name == 'osbs':
     basin_shapes['Basin_Name'] = 'all_basins'
 
 # NOTE: Just processing the union of 'all_basins' 
-unique_basin_ids = ['all_basins']
+unique_basin_ids = ['slow_test2']
 
 # Convert basin shapes to UTM coordinate system
 basin_shapes_utm = basin_shapes.estimate_utm_crs(datum_name='WGS 84')
 basin_shapes = basin_shapes.to_crs(basin_shapes_utm)
 
 # Buffer/dilate the basin shapes by 500 meters
-basin_shapes['geometry'] = basin_shapes.geometry.buffer(500)
+basin_shapes['geometry'] = basin_shapes.geometry.buffer(50)
 
 
 # %% Run the DEM cropping code for each basin
