@@ -168,7 +168,3 @@ with rio.open(wbt_off_terrain_path) as src:
             dst_sm.write(lowered.astype('float32'), 1, window=win)
 
 # %%
-
-
-
-# %%

@@ -59,3 +59,4 @@ data/
 *.zip
 *.tar
 *.gz
+.Rproj.user
