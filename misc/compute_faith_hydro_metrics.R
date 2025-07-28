@@ -40,7 +40,7 @@ soil_core_summary <- soil_core %>%
   filter(!is.na(soil_core_id))
 
 
-# 3.0 Functions ----------------------------------------------
+# 3.0 Functions for basic core info ----------------------------------------------
 
 calculate_stage_comp <- function(elevation_temp, stage_temp, core_well_elevation_diff){
   # Helper function for fetch_core_info()
@@ -123,12 +123,10 @@ fetch_core_info <- function(stage_df, elevation_df, target_well_id, core_id){
     stage_comp = stage_comp
   ))
 }
-  
 
+# ...3.1 Get basic core info and hydrograph ----------------------------------------------
 
-# 3.0 Testing ----------------------------------------------
-
-soil_core_summary_test <- soil_core_summary %>% 
+soil_core_summary <- soil_core_summary %>% 
   rowwise() %>% 
   mutate(
     basic_core_info = list(fetch_core_info(daily_stage, soil_core, well_id, soil_core_id)),
@@ -139,23 +137,202 @@ soil_core_summary_test <- soil_core_summary %>%
   select(-c(basic_core_info)) %>% 
   unnest_wider(stage_comp)
 
+# ...3.2 Ensure stage measurements match ----------------------------------------------
+
+plot_df <- soil_core_summary %>% 
+  filter(well_id != 'West Ford')
+
+p <- ggplot(plot_df,
+            aes(x=soil_core_id,
+                y=stage_discrepancy,
+                fill=well_id)) +    
+  geom_col(position="dodge") +   
+  labs(
+    x="Soil Core ID",
+    y="Stage discrepancy (well logger - core) (m)",
+    fill="Well ID",
+    title="Stage discrepancy on sample date between well logger (elevation adjusted) and field measurement @core"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+print(p)
+
+# 4.0 Calculate the core's hydrograph metrics ----------------------------------------------
+
+calc_hydrograph_stats <- function(hydrograph, var_name="core_stage_m") {
+  
+  hg <- hydrograph[[var_name]] # Note var_name is dynamic for depth incrmentn metrics later
+  stats <- tibble(
+    mean_stage=mean(hg, na.rm=TRUE), 
+    median_stage=median(hg, na.rm=TRUE),
+    sd_stage=sd(hg, na.rm=TRUE),
+    p20_stage=quantile(hg, 0.2, na.rm=TRUE, names=FALSE),
+    p80_stage=quantile(hg, 0.8, na.rm=TRUE, names=FALSE)
+  )
+  
+  return(stats)
+}
+
+soil_core_summary <- soil_core_summary %>% 
+  mutate(
+    hydrograph_stats = map(core_hydrograph,
+                           ~ calc_hydrograph_stats(.x, var_name = "core_stage_m"))
+  ) %>% 
+  unnest_wider(hydrograph_stats)
+
+# 5.0 Functions for binary hydrometrics ----------------------------------------------
+
+inundated_durations <- function(binary) {
+  r <- rle(binary)
+  # Subset to only the runs with value == 1
+  flooded_lengths <- r$lengths[ r$values == 1L ]
+  
+  if (length(flooded_lengths) == 0L) {
+    return(tibble(
+      max_inundated    = 0,
+      min_inundated    = 0,
+      median_inundated = 0,
+      mean_inundated   = 0
+    ))
+  }
+  # otherwise, return metrics on inundation
+  max_inundated <- max(flooded_lengths)
+  min_inundated <- min(flooded_lengths)
+  median_inundated <- median(flooded_lengths)
+  mean_inundated <- mean(flooded_lengths)
+  
+  durrations <- tibble(
+    max_inundated=max_inundated,
+    min_inundated=min_inundated,
+    median_inundated=median_inundated,
+    mean_inundated=mean_inundated
+  )
+  
+  return(durrations)
+  
+}
+
+wet_dry_events <- function(binary, wet_dry) {
+  if (wet_dry == 'wet') {
+    events = sum(diff(c(0L, binary)) == 1L, na.rm = TRUE)
+  } else if (wet_dry == 'dry') {
+    events = sum(diff(c(0L, binary)) == -1L, na.rm = TRUE)
+  } else {
+    events = -9999 # catch bad function call
+  }
+  return(events)
+}
+
+compute_binary_metrics <- function(hydrograph) {
+ 
+ # Remove any na observations to ensure they aren't counted
+ binary <- hydrograph %>% 
+   drop_na(core_stage_m) %>% 
+   distinct(day, .keep_all=TRUE) %>% 
+   arrange(day) %>% 
+   transmute(day, inundated=as.integer(core_stage_m >= 0))
+ 
+ 
+ durations <- inundated_durations(binary$inundated)
+ wet_events = wet_dry_events(binary$inundated, 'wet')
+ dry_events = wet_dry_events(binary$inundated, 'dry')
+ 
+ binary_metrics = tibble(
+   max_inundated_durration = durations$max_inundated,
+   min_inundated_durration = durations$min_inundated,
+   median_inundated_durration = durations$median_inundated,
+   mean_inundated_durration = durations$mean_inundated,
+   wetup_event_count = wet_events,
+   dry_event_count = dry_events
+ )
+
+ return(binary_metrics)
+ 
+}
+
+# ... 5.1 Calculate binary metrics ----------------------------------------------
+
+soil_core_summary <- soil_core_summary %>% 
+  rowwise() %>% 
+  mutate(
+    binary_metrics = compute_binary_metrics(core_hydrograph)
+  ) %>% 
+  ungroup() %>% 
+  unnest_wider(binary_metrics)
+
+# 6.0 Functions for sample date metrics ----------------------------------------
+
+get_prior_hydrograph_mean <- function(hg, sample_date, look_back){
+  
+  # Help func for calc_sample_date_info()
+  
+  # returns the hydrograph mean for the prior number of days (look_back)
+  window_start <- sample_date - days(look_back)
+  
+  prior_avg <- hg %>%
+    filter(day >= window_start, day < sample_date) %>%
+    pull(core_stage_m) %>%
+    mean(na.rm = TRUE)
+  
+  return(prior_avg)
+  
+}
+
+calc_sample_date_info <- function(hydrograph, sample_date) {
+  
+  last_date <- max(hydrograph$day)
+  
+  # Bail-out early if sample date is beynd the hydrograph's last date
+  if (last_date < sample_date) {
+    return(tibble(
+      mean_30d_stage=NA_real_, 
+      mean_60d_stage=NA_real_,
+      mean_90d_stage=NA_real_,
+      stage_60d_deviation=NA_real_
+    ))
+  }
+  
+  mean_30 <- get_prior_hydrograph_mean(hydrograph, sample_date, 30)
+  mean_60 <- get_prior_hydrograph_mean(hydrograph, sample_date, 60)
+  mean_90 <- get_prior_hydrograph_mean(hydrograph, sample_date, 90)
+  
+  sample_date_stage <- hydrograph %>% 
+    filter(day == sample_date) %>% 
+    pull()
+  
+  stage_60d_deviation = sample_date_stage - mean_60
+  
+  sample_date_info = tibble(
+    mean_30d_stage = mean_30,
+    mean_60d_stage = mean_60,
+    mean_90d_stage = mean_90,
+    stage_60d_deviation = stage_60d_deviation
+  )
+  
+  return(sample_date_info)
+}
 
 
+# ... 6.1 Calculate sample date metrics ----------------------------------------
 
-# compute_percent_days_inundated <- function(hydrograph, stage_var) {
-#   
-#   # Allow bare name or string
-#   stage_sym <- rlang::ensym(stage_var)
-#   
-#   hydrograph %>%
-#     filter(!is.na(!!stage_sym))
-#   
-#   valid_days <- length(hydrograph)
-#   inundated_days <- length(hydrograph %>% filter(!!stage_sm > 0))
-#   pct <- valid_days / inundated_days * 100
-#   
-#   return(pct)
-# }
+soil_core_summary <- soil_core_summary %>% 
+  rowwise() %>% 
+  mutate(
+    date_metrics = calc_sample_date_info(core_hydrograph, sample_date)
+  ) %>% 
+  ungroup() %>% 
+  unnest_wider(date_metrics)
 
+
+# 7.0 Write soil core summary --------------------------------------------
+output <- soil_core_summary %>% 
+  select(-c('core_hydrograph'))
+
+out_path <- "D:/depressional_lidar/data/osbs/out_data/hydrometrics_at_Faith_cores_relative_groundsurface.csv"
+
+write_csv(output, out_path)
 
 
