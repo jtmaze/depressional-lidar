@@ -1,5 +1,5 @@
 # %% 1.0 Libraries and filepaths
-
+import os
 import pandas as pd
 import numpy as np
 import rasterio as rio
@@ -11,15 +11,30 @@ from joblib import Parallel, delayed
 from multiprocessing import shared_memory
 import time
 
+os.chdir('D:/depressional_lidar/data/')
+
 site_name = 'bradford'
-detrend_path = f'./{site_name}/out_data/detrended_dem_all_basins.tif'
+basin = 'all_basins'
+smoothing_window = 1000
+resampling_resolution = 'native' # TODO: Add other options after writing resampling script
+
+thresholds = np.arange(-1.5, 1.5, 0.02)
+batch_size = 1
+# BUG: will need to dynamically adjust this to match the raster resolution.
+min_feature_size = 300 # cell will need to adjust to resolution
+
+if resampling_resolution != 'native':
+    detrend_path = f'./{site_name}/in_data/detrended_dem_{basin}_reasampled{resampling_resolution}_size{smoothing_window}.tif'
+else:
+    detrend_path = f'./{site_name}/in_data/detrended_dem_{basin}_size{smoothing_window}.tif'
+
 
 # %% 2.0 Get summary stats for elevation and make a histogram
 
 with rio.open(detrend_path) as src:
     print(src.meta)
     data = src.read(1, masked=True)
-    data = data * 0.3048 # Convert feet to meters
+    data = data * 0.3048 # Convert feet to meters in elevation data
     flat = data.compressed()  
 
     total_pix = len(flat)
@@ -46,6 +61,8 @@ with rio.open(detrend_path) as src:
     plt.ylabel("Frequency")
     plt.show()
 
+    # Write a csv with da/dz for the DEM
+
 # %% 3.0 Prep the DEM in shared memory for multiprocessing
 
 with rio.open(detrend_path) as src:
@@ -57,13 +74,13 @@ dem[:] = dem_local[:]
 
 # %% 4.0 Worker function to process each elevation threshold
 
-def analyze_threshold(t):
+def analyze_threshold(t, min_feature_size):
     """
     Analyze the DEM for depressions below a given elevation threshold.
     """
     binary = np.logical_and(dem < t, dem > -9000)
-    binary = morphology.remove_small_objects(binary, min_size=300, connectivity=1)  # Used more strict
-    labels = measure.label(binary, connectivity=2)
+    binary = morphology.remove_small_objects(binary, min_size=min_feature_size, connectivity=1)  # Used more strict connectivity for less funky shapes
+    labels = measure.label(binary, connectivity=1) # NOTE: changed from 2 -> 1??
     props_table = measure.regionprops_table(labels, properties=['num_pixels', 'perimeter', 'perimeter_crofton'])
 
     pixels = props_table['num_pixels'] # NOTE: using num_pixels and scaling to meters outside of this function
@@ -83,9 +100,6 @@ def analyze_threshold(t):
 
 # %% 5.0 Run the analysis in parallel
 
-thresholds = np.arange(-1.5, 1.5, 0.02)
-batch_size = 4
-
 results = []
 start_time = time.time()
 
@@ -96,7 +110,7 @@ for i in range(0, len(thresholds), batch_size):
         n_jobs=batch_size, 
         backend='loky', # Bypasses the GIL for CPU-bound tasks
         prefer='processes')( # Processes forks the subprocesses, becuse workload is CPU heavy. Would use threads for IO heavy tasks (e.g., file reads)
-            delayed(analyze_threshold)(t) for t in batch)
+            delayed(analyze_threshold)(t, min_feature_size) for t in batch)
     
     results.extend(r)
     batch_elapsed = time.time() - batch_start
@@ -132,7 +146,7 @@ out_df.drop(columns=
         inplace=True
 )
 
-out_df.to_csv(f'./{site_name}/out_data/{site_name}_region_props_on_depressions_002_con8.csv', index=False)
+out_df.to_csv(f'./{site_name}/out_data/{site_name}_region_props_on_depressions_{resampling_resolution}.csv', index=False)
 
 # %% Write binary rasters for a few thresholds
 def write_binary_inundation_raster(
@@ -163,7 +177,7 @@ with rio.open(detrend_path) as src:
 
 for t in write_thresholds:
     mask = dem < t
-    out_path = f'{out_dir}inundation_mask_{t:.2f}m.tif'
+    out_path = f'{out_dir}inundation_mask_smoothed{smoothing_window}_resampled{resampling_resolution}_{t:.2f}m.tif'
     write_binary_inundation_raster(mask, out_path, profile)
     print(f'Wrote {out_path}')
 

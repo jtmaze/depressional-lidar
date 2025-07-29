@@ -1,14 +1,15 @@
 # %% 1.0 Libraries and file paths
-
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
-site_name = 'bradford'
+os.chdir('D:/depressional_lidar/data/')
+site = 'bradford'
 
-temp = pd.read_csv(f'./{site_name}/simple_inundated_area.csv')
-df = pd.read_csv(f'./{site_name}/out_data/bradford_region_props_on_depressions_002.csv')
+#da_dz = pd.read_csv(f'./{site}/simple_inundated_area.csv')
+results = pd.read_csv(f'./{site}/out_data/bradford_region_props_on_depressions_native.csv')
 
-df = pd.merge(df, temp, on='threshold') # merge on 'threshold' column
+df = results
 print(df.columns)
 
 # %% 2.0 Some quick exploratory plots
@@ -17,23 +18,6 @@ plt.figure(figsize=(7, 7))
 plt.plot(df['threshold'], df['n_ponds'], marker='o', label='Number of Depressions')
 plt.xlabel('Relative Groundwater Depth (m)')
 plt.ylabel('Number of Depressions')
-plt.show()
-
-# %% 7.1
-
-plt.figure(figsize=(7, 7))
-plt.plot(df['threshold'], df['median_feature_area_m2'], marker='o', label='Median Pond Area')
-plt.xlabel('Relative Groundwater Depth (m)')
-#plt.xlim(-1.5, 0.0)
-plt.ylabel('Median Pond Area (m²)')
-plt.show()
-
-# %%
-plt.figure(figsize=(7, 7))
-plt.plot(df['threshold'], df['median_feature_area_m2'], marker='o', label='Median Pond Area')
-plt.xlabel('Relative Groundwater Depth (m)')
-plt.xlim(-1.5, 0.0)
-plt.ylabel('Median Pond Area (m²)')
 plt.show()
 
 # %% Total perimeter
@@ -51,15 +35,12 @@ plt.show()
 # Formula: f'(x) = (f(x+h) - f(x-h)) / (2h) where h is the step size
 step_size = 0.02
 step_size_km = step_size * 1_000
-forward_area = df['flooded_area_m2'].shift(-1) / 1_000_000  # f(x+h) 
-backward_area = df['flooded_area_m2'].shift(1) / 1_000_000  # f(x-h) 
+forward_area = df['inundated_area_m2'].shift(-1) / 1_000_000  # f(x+h) 
+backward_area = df['inundated_area_m2'].shift(1) / 1_000_000  # f(x-h) 
 central_difference = (forward_area - backward_area) / (2 * step_size)
 
 # Assign the result to the dataframe
 df['dA/dS'] = central_difference
-
-
-df['dA/dS_lambda'] = df['dA/dS'] * 62
 
 # %%
 fig, ax1 = plt.subplots(figsize=(12, 7))
@@ -75,6 +56,8 @@ color2 = 'tab:orange'
 ax2.set_ylabel('Summed Perimeter (kilometers)', color=color2)
 ax2.plot(df['threshold'], df['total_perimeter_crofton_m'] / 1_000, marker='+',
          color='tab:orange', label='Summed Perimeter (Crofton, km)')
+ax2.plot(df['threshold'], df['total_perimeter_m'] / 1_000, marker='x',
+         color='red', label='Summed Perimeter (m, km)')
 ax2.tick_params(axis='y', labelcolor=color2)
 
 fig.subplots_adjust(right=0.65)

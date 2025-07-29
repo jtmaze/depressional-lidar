@@ -13,17 +13,19 @@ import os
 from scipy.ndimage import generic_filter 
 from scipy.ndimage import zoom
 
-site_name = 'bradford'
+site = 'bradford'
 basin = 'all_basins'
-avg_window = 1000 #NOTE: Larger windows tend to cause issues. Worth exploring later...
-mosaic_dem_path = f'./{site_name}/temp/dem_mosaic_basin_all_basins.tif'
-basin_shapes = gpd.read_file(f'./{site_name}/in_data/Final_Basins/Final_Basins.shp')
+avg_window = 500 #NOTE: Larger windows tend to cause issues. Worth exploring later... might be fixed with larger DEM shape
+os.chdir('D:/depressional_lidar/data/')
+mosaic_dem_path = f'./{site}/in_data/dem_mosaic_basin_all_basins.tif'
+basin_shapes = gpd.read_file(f'./{site}/in_data/original_basins/watershed_delineations.shp')
 bradford_shape = gpd.GeoDataFrame(geometry=[basin_shapes.union_all()], crs=basin_shapes.crs)
 
+# D:\depressional_lidar\data\bradford\in_data
 # %% Spatially average the DEM and crop it to the geometry for all basins
 
 with rio.open(mosaic_dem_path) as src:
-    
+     
     dem = src.read(1, masked=True)
     target_crs = src.crs
     profile = src.profile
@@ -57,7 +59,7 @@ with rio.open(mosaic_dem_path) as src:
     # Update profile and save
     profile.update(dtype='float32', nodata=profile.get('nodata', None))
     
-    temp_path = f'./{site_name}/temp/dem_averaged_{avg_window}.tif'
+    temp_path = f'./{site}/temp/uncropped.tif'
     with rio.open(temp_path, 'w', **profile) as dst:
         dst.write(averaged_dem.astype('float32'), 1)
 
@@ -76,7 +78,7 @@ with rio.open(mosaic_dem_path) as src:
             'transform': masked_trans
         })
 
-        output_path = f'./{site_name}/out_data/dem_averaged_{avg_window}.tif'
+        output_path = f'./{site}/in_data/dem_averaged_{avg_window}.tif'
         with rio.open(output_path, 'w', **out_meta) as dst:
             dst.write(masked_averaged)
 
