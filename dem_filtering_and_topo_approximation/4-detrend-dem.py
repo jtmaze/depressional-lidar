@@ -1,14 +1,13 @@
 # %% 1.0 Libraries and packages
 import os
 import rasterio as rio
-import numpy as np
 
-site = 'bradford'
+site = 'osbs'
 basin = 'all_basins'
-smoothing_window = 500
+smoothing_window = 2000 # NOTE: Use 1000 LXW grid cells for the smoothed DEM in main workflow
 
 os.chdir('D:/depressional_lidar/data/')
-# NOTE: Use 1000 LXW grid cells for the smoothed DEM
+
 dem_moving_avg = f'./{site}/in_data/dem_averaged_{smoothing_window}.tif'
 dem_no_veg = f'./{site}/in_data/{site}_DEM_cleaned_veg.tif'
 

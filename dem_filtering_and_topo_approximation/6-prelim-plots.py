@@ -5,9 +5,10 @@ import matplotlib.pyplot as plt
 
 os.chdir('D:/depressional_lidar/data/')
 site = 'bradford'
+resample_factor = 50
 
 #da_dz = pd.read_csv(f'./{site}/simple_inundated_area.csv')
-results = pd.read_csv(f'./{site}/out_data/bradford_region_props_on_depressions_native.csv')
+results = pd.read_csv(f'./{site}/out_data/bradford_region_props_on_depressions_{resample_factor}.csv')
 
 df = results
 print(df.columns)

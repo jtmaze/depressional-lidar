@@ -16,15 +16,21 @@ os.chdir('D:/depressional_lidar/data/')
 site_name = 'bradford'
 basin = 'all_basins'
 smoothing_window = 1000
-resampling_resolution = 'native' # TODO: Add other options after writing resampling script
+
+# So far resampling resolutions are 'native', 2, 5, 8, 10, 12, 15, 20, 25, 30, 40, 50
+resampling_resolution = 50
 
 thresholds = np.arange(-1.5, 1.5, 0.02)
 batch_size = 1
-# BUG: will need to dynamically adjust this to match the raster resolution.
-min_feature_size = 300 # cell will need to adjust to resolution
+min_feature_size = 300
 
 if resampling_resolution != 'native':
-    detrend_path = f'./{site_name}/in_data/detrended_dem_{basin}_reasampled{resampling_resolution}_size{smoothing_window}.tif'
+    min_feature_size = max(1, int(round(300 / resampling_resolution**2)))  # ensure at least 1 pixel minimum size
+
+print(min_feature_size)
+
+if resampling_resolution != 'native':
+    detrend_path = f'./{site_name}/in_data/resampled_DEMs/detrended_dem_{basin}_resampled{resampling_resolution}_size{smoothing_window}.tif'
 else:
     detrend_path = f'./{site_name}/in_data/detrended_dem_{basin}_size{smoothing_window}.tif'
 
@@ -127,10 +133,9 @@ shm.unlink()
 # %% 6.0 Create a DataFrame with the results
 
 US_SURVEY_FOOT_TO_METER = 0.304800609601219
-pixel_size_m = 2.5 * US_SURVEY_FOOT_TO_METER
+pixel_size_m = 2.5 * US_SURVEY_FOOT_TO_METER * resampling_resolution
 pixel_area_m2 = pixel_size_m**2
 
-total_pix = 170773718
 out_df = pd.DataFrame(results)
 out_df['inundated_frac'] = out_df['total_inundated_pix'] / total_pix * 100
 out_df['inundated_area_m2'] = out_df['total_inundated_pix'] * pixel_area_m2
@@ -146,39 +151,7 @@ out_df.drop(columns=
         inplace=True
 )
 
+# TODO: change this to dynamically accomodate different smoothing windows???
 out_df.to_csv(f'./{site_name}/out_data/{site_name}_region_props_on_depressions_{resampling_resolution}.csv', index=False)
-
-# %% Write binary rasters for a few thresholds
-def write_binary_inundation_raster(
-    bool_mask: np.array,
-    out_path: str, 
-    src_profile: dict
-):
-    """
-    Write a binary raster mask to disk.
-    """
-    prof = src_profile.copy()
-    prof.update({
-        'dtype': 'uint8', 
-        'count': 1,
-        'nodata': 0,
-    })
-
-    with rio.open(out_path, 'w', **prof) as dst:
-        dst.write(bool_mask.astype(np.uint8), 1)
-
-# %%
-write_thresholds = [-1, -0.75, -0.5, -0.25, -0.1, 0.25]
-out_dir = f'./{site_name}/out_data/modeled_inundations/'
-
-with rio.open(detrend_path) as src:
-    dem = src.read(1, masked=True) * 0.3048  # Convert feet to meters
-    profile = src.profile
-
-for t in write_thresholds:
-    mask = dem < t
-    out_path = f'{out_dir}inundation_mask_smoothed{smoothing_window}_resampled{resampling_resolution}_{t:.2f}m.tif'
-    write_binary_inundation_raster(mask, out_path, profile)
-    print(f'Wrote {out_path}')
 
 # %%

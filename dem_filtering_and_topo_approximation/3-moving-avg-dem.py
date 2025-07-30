@@ -1,8 +1,7 @@
 # %% 1.0 Libraries and file paths
-
 """
 Experiementing with options to calculate the smoothed landscape relief
-Will be important for tracking depressions across water levels
+This will be important for tracking depressions across water levels
 """
 
 import rasterio as rio
@@ -13,13 +12,20 @@ import os
 from scipy.ndimage import generic_filter 
 from scipy.ndimage import zoom
 
-site = 'bradford'
+site = 'osbs'
 basin = 'all_basins'
-avg_window = 500 #NOTE: Larger windows tend to cause issues. Worth exploring later... might be fixed with larger DEM shape
+avg_window = 2000 #NOTE: Larger windows tend to cause issues. Worth exploring later... might be fixed with larger DEM shape
 os.chdir('D:/depressional_lidar/data/')
-mosaic_dem_path = f'./{site}/in_data/dem_mosaic_basin_all_basins.tif'
-basin_shapes = gpd.read_file(f'./{site}/in_data/original_basins/watershed_delineations.shp')
-bradford_shape = gpd.GeoDataFrame(geometry=[basin_shapes.union_all()], crs=basin_shapes.crs)
+
+if site == 'bradford':
+    basin_shapes_path = f'./{site}/in_data/original_basins/watershed_delineations.shp'
+    mosaic_dem_path = f'./{site}/in_data/dem_mosaic_basin_all_basins.tif'
+elif site == 'osbs':
+    basin_shapes_path = f'./{site}/in_data/OSBS_boundary.shp'
+    mosaic_dem_path = f'./{site}/in_data/dem_mosaic_basin_all_basins_neon_sep2016.tif'
+
+basin_shapes = gpd.read_file(basin_shapes_path)
+site_shape = gpd.GeoDataFrame(geometry=[basin_shapes.union_all()], crs=basin_shapes.crs)
 
 # D:\depressional_lidar\data\bradford\in_data
 # %% Spatially average the DEM and crop it to the geometry for all basins
@@ -67,7 +73,7 @@ with rio.open(mosaic_dem_path) as src:
     Re-read the averaged DEM and crop it to the basin shapes. 
     """
 
-    crop_shape = bradford_shape.to_crs(target_crs).geometry
+    crop_shape = site_shape.to_crs(target_crs).geometry
 
     with rio.open(temp_path) as src2:
         masked_averaged, masked_trans = mask(src2, crop_shape, crop=True)

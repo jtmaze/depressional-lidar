@@ -13,9 +13,15 @@ from rasterio.mask import mask
 
 wbe = wbw.WbEnvironment()
 
-site = 'bradford'
+site = 'osbs'
+lidar_data = 'neon_sep2016.tif' # NOTE: 2016 DEM at OSBS has lowest water levels. Still lots of flooding. 
 os.chdir(f'D:/depressional_lidar/data/{site}/')
-src_path = './in_data/dem_mosaic_basin_all_basins.tif'
+
+if site == 'bradford':
+    src_path = './in_data/dem_mosaic_basin_all_basins.tif'
+elif site == 'osbs': 
+    src_path = f'./in_data/dem_mosaic_basin_all_basins_{lidar_data}'
+
 processing_dir = r'C:\Users\jtmaz\Documents\temp'
 
 wbe.working_directory = processing_dir
@@ -29,13 +35,17 @@ base_name = os.path.basename(src_path)
 temp_file_path = os.path.join(processing_dir, f'./{base_name}')
 
 wbt_off_terrain_path = os.path.join(processing_dir, f'{site}_DEM_wbt_off_terrain.tif')
-final_out_path = os.path.join(processing_dir, f'{site}_DEM_.tif')
+final_out_path = os.path.join(processing_dir, f'{site}_DEM_cleaned_veg.tif')
 
 # %% 3.0 Crop the DEM to immediate watershed areas instead of buffered. Imporves processing speeds
 # Get boundary
-boundary_path = f'D:/depressional_lidar/data/{site}/in_data/original_basins/watershed_delineations.shp'
+if site == 'bradford':
+    boundary_path = f'D:/depressional_lidar/data/{site}/in_data/original_basins/watershed_delineations.shp'
+elif site == 'osbs':
+    boundary_path = f'D:/depressional_lidar/data/{site}/in_data/OSBS_boundary.shp'
+
 boundary = gpd.read_file(boundary_path)
-boundary_union = gpd.GeoDataFrame(geometry=[boundary.unary_union], crs=boundary.crs)
+boundary_union = gpd.GeoDataFrame(geometry=[boundary.union_all()], crs=boundary.crs)
 
 # Read the DEM to get its CRS
 with rio.open(temp_file_path) as dem_src:
@@ -129,7 +139,7 @@ def focal_percentile(arr, nodata, win_size, pct_thresh):
 # %% 8.0 Run the functions for local minima filter. 
 
 with rio.open(wbt_off_terrain_path) as src:
-
+    print(src.crs)
     sm_profile = src.profile.copy()
     nodata  = sm_profile.get("nodata", None)
     sm_profile.update(dtype='float32')

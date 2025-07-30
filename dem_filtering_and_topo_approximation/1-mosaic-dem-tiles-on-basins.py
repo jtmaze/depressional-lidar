@@ -13,8 +13,8 @@ from rasterio.merge import merge
 
 import geopandas as gpd
 
-site_name = 'bradford' # bradford or osbs
-lidar_data = 'neon_apr2019' # multiple neon flights at OSBS, tbd which on works best
+site_name = 'osbs' # bradford or osbs
+lidar_data = 'neon_may2025' # multiple neon flights at OSBS (e.g., sep2016), tbd which on works best
 
 os.chdir('D:/depressional_lidar/data/')
 
@@ -27,19 +27,19 @@ if site_name == 'bradford':
 
 elif site_name == 'osbs':
     dem_tile_paths = glob.glob(f'./{site_name}/in_data/raw_DEM_tiles/{lidar_data}/*.tif')
-    basin_shapes_path = f'./{site_name}/in_data/test_boundary.shp'
+    basin_shapes_path = f'./{site_name}/in_data/OSBS_boundary.shp'
     basin_shapes = gpd.read_file(basin_shapes_path)
     basin_shapes['Basin_Name'] = 'all_basins'
 
 # NOTE: Just processing the union of 'all_basins' 
-unique_basin_ids = ['slow_test2']
+unique_basin_ids = ['all_basins']
 
 # Convert basin shapes to UTM coordinate system
 basin_shapes_utm = basin_shapes.estimate_utm_crs(datum_name='WGS 84')
 basin_shapes = basin_shapes.to_crs(basin_shapes_utm)
 
 # Buffer/dilate the basin shapes by 500 meters
-basin_shapes['geometry'] = basin_shapes.geometry.buffer(50)
+basin_shapes['geometry'] = basin_shapes.geometry.buffer(1_000)
 
 
 # %% Run the DEM cropping code for each basin
@@ -121,6 +121,10 @@ for basin_id in unique_basin_ids:
         })
         
         output_path = f'./{site_name}/in_data/dem_mosaic_basin_{basin_id}.tif'
+
+        # Accomodating multiple flights into osbs file name. 
+        if site_name == 'osbs':
+            output_path = f'./{site_name}/in_data/dem_mosaic_basin_{basin_id}_{lidar_data}.tif'
         with rio.open(output_path, 'w', **out_meta) as dst:
             dst.write(masked_mosaic)
 
