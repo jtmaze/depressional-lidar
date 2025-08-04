@@ -18,7 +18,7 @@ basin = 'all_basins'
 smoothing_window = 1000
 
 # So far resampling resolutions are 'native', 2, 5, 8, 10, 12, 15, 20, 25, 30, 40, 50
-resampling_resolution = 50
+resampling_resolution = 2
 
 thresholds = np.arange(-1.5, 1.5, 0.02)
 batch_size = 1

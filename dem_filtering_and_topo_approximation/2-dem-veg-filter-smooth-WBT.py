@@ -13,7 +13,7 @@ from rasterio.mask import mask
 
 wbe = wbw.WbEnvironment()
 
-site = 'osbs'
+site = 'bradford'
 lidar_data = 'neon_sep2016.tif' # NOTE: 2016 DEM at OSBS has lowest water levels. Still lots of flooding. 
 os.chdir(f'D:/depressional_lidar/data/{site}/')
 
@@ -139,7 +139,7 @@ def focal_percentile(arr, nodata, win_size, pct_thresh):
 # %% 8.0 Run the functions for local minima filter. 
 
 with rio.open(wbt_off_terrain_path) as src:
-    print(src.crs)
+    print(src.profile)
     sm_profile = src.profile.copy()
     nodata  = sm_profile.get("nodata", None)
     sm_profile.update(dtype='float32')
