@@ -17,7 +17,7 @@ min_feature_size = 300
 if resampling_resolution != 'native':
     detrend_path = f'./{site_name}/in_data/resampled_DEMs/detrended_dem_{basin}_resampled{resampling_resolution}_size{smoothing_window}.tif'
 else:
-    detrend_path = f'./{site_name}/in_data/detrended_dem_{basin}_size{smoothing_window}.tif'
+    detrend_path = f'./{site_name}/in_data/detrended_dems/detrended_dem_{basin}_size{smoothing_window}.tif'
 
 # %% Function to write the binary raster at defined thresholds
 
@@ -59,11 +59,11 @@ def write_inundated_polygons(
 
 # %% 
 
-write_thresholds = [-1, -0.75, -0.5, -0.25, -0.1, 0.25]
+write_thresholds = [-0.80, -0.20]
 out_dir = f'./{site_name}/out_data/modeled_inundations/'
 
 with rio.open(detrend_path) as src:
-    dem = src.read(1, masked=True) * 0.3048  # Convert feet to meters
+    dem = src.read(1, masked=True)
     profile = src.profile
     out_crs = profile.crs
     transform = profile.transform

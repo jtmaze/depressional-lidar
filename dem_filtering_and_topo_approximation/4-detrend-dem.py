@@ -2,16 +2,16 @@
 import os
 import rasterio as rio
 
-site = 'osbs'
+site = 'bradford'
 basin = 'all_basins'
 smoothing_window = 2000 # NOTE: Use 1000 LXW grid cells for the smoothed DEM in main workflow
 
 os.chdir('D:/depressional_lidar/data/')
 
-dem_moving_avg = f'./{site}/in_data/dem_averaged_{smoothing_window}.tif'
+dem_moving_avg = f'./{site}/in_data/mean_topo_dems/dem_averaged_{smoothing_window}.tif'
 dem_no_veg = f'./{site}/in_data/{site}_DEM_cleaned_veg.tif'
 
-# %% 2.0 De-trend the original DEM by subtracting by the moving average
+# %% 2.0 De-trend the original DEM by subtracting by the moving average DEM
 
 with rio.open(dem_no_veg) as src1, rio.open(dem_moving_avg) as src2:
 
@@ -22,7 +22,7 @@ with rio.open(dem_no_veg) as src1, rio.open(dem_moving_avg) as src2:
     nodata_val = src1.meta.get('nodata')
     detrended_dem_filled = detrended_dem.filled(nodata_val)
     
-    out_path = f'./{site}/in_data/detrended_dem_{basin}_size{smoothing_window}.tif'
+    out_path = f'./{site}/in_data/detrended_dems/detrended_dem_{basin}_size{smoothing_window}.tif'
     out_meta = src1.meta.copy()
     out_meta.update(dtype='float32', nodata=nodata_val)
 

@@ -13,14 +13,14 @@ import time
 
 os.chdir('D:/depressional_lidar/data/')
 
-site_name = 'bradford'
+site_name = 'osbs'
 basin = 'all_basins'
-smoothing_window = 1000
+smoothing_window = 500
 
 # So far resampling resolutions are 'native', 2, 5, 8, 10, 12, 15, 20, 25, 30, 40, 50
 resampling_resolution = 2
 
-thresholds = np.arange(-1.5, 1.5, 0.02)
+thresholds = np.arange(-6, 3, 0.02)
 batch_size = 1
 min_feature_size = 300
 
@@ -30,7 +30,7 @@ if resampling_resolution != 'native':
 print(min_feature_size)
 
 if resampling_resolution != 'native':
-    detrend_path = f'./{site_name}/in_data/resampled_DEMs/detrended_dem_{basin}_resampled{resampling_resolution}_size{smoothing_window}.tif'
+    detrend_path = f'./{site_name}/in_data/resampled_detrended_DEMs/detrended_dem_{basin}_resampled{resampling_resolution}_size{smoothing_window}.tif'
 else:
     detrend_path = f'./{site_name}/in_data/detrended_dem_{basin}_size{smoothing_window}.tif'
 
@@ -40,7 +40,6 @@ else:
 with rio.open(detrend_path) as src:
     print(src.meta)
     data = src.read(1, masked=True)
-    data = data * 0.3048 # Convert feet to meters in elevation data
     flat = data.compressed()  
 
     total_pix = len(flat)
@@ -55,15 +54,14 @@ with rio.open(detrend_path) as src:
     print(f'{above_1:.2f} % of pixels above 1 meters')
     print(f'{below_0:.2f} % of pixels below 0 meters')
 
-    # Trim the data to only include elevations between -3 and 3
-    trimmed = flat[(flat >= -3) & (flat <= 3)]
+    # Trim the data to only include elevations between -6 and 3
+    trimmed = flat[(flat >= -9) & (flat <= 9)]
 
     # Create the histogram using the trimmed data
     plt.hist(trimmed, bins=100, color='blue', edgecolor='black')
-    plt.title("Histogram of Detrended DEM Elevations")
+    plt.title(f"Histogram of Detrended DEM Elevations at {smoothing_window} m smoothing window")
     plt.xlabel("Elevation (meters)")
-    plt.xlim(-3, 3)
-    plt
+    plt.xlim(-9, 9)
     plt.ylabel("Frequency")
     plt.show()
 

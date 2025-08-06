@@ -12,9 +12,9 @@ import os
 from scipy.ndimage import generic_filter 
 from scipy.ndimage import zoom
 
-site = 'osbs'
+site = 'bradford'
 basin = 'all_basins'
-avg_window = 2000 #NOTE: Larger windows tend to cause issues. Worth exploring later... might be fixed with larger DEM shape
+avg_window = 1500
 os.chdir('D:/depressional_lidar/data/')
 
 if site == 'bradford':
@@ -27,7 +27,6 @@ elif site == 'osbs':
 basin_shapes = gpd.read_file(basin_shapes_path)
 site_shape = gpd.GeoDataFrame(geometry=[basin_shapes.union_all()], crs=basin_shapes.crs)
 
-# D:\depressional_lidar\data\bradford\in_data
 # %% Spatially average the DEM and crop it to the geometry for all basins
 
 with rio.open(mosaic_dem_path) as src:
@@ -84,7 +83,7 @@ with rio.open(mosaic_dem_path) as src:
             'transform': masked_trans
         })
 
-        output_path = f'./{site}/in_data/dem_averaged_{avg_window}.tif'
+        output_path = f'./{site}/in_data/mean_topo_dems/dem_averaged_{avg_window}.tif'
         with rio.open(output_path, 'w', **out_meta) as dst:
             dst.write(masked_averaged)
 

@@ -13,7 +13,7 @@ from rasterio.mask import mask
 
 wbe = wbw.WbEnvironment()
 
-site = 'bradford'
+site = 'osbs'
 lidar_data = 'neon_sep2016' # NOTE: 2016 DEM at OSBS has lowest water levels. Still some flooding. 
 os.chdir(f'D:/depressional_lidar/data/{site}/')
 
@@ -37,7 +37,9 @@ temp_file_path = os.path.join(processing_dir, f'./{base_name}')
 wbt_off_terrain_path = os.path.join(processing_dir, f'{site}_DEM_wbt_off_terrain.tif')
 final_out_path = os.path.join(processing_dir, f'{site}_DEM_cleaned_veg.tif')
 
-# %% 3.0 Crop the DEM to immediate watershed areas instead of buffered. Imporves processing speeds
+# %% 3.0 Crop the DEM to immediate watershed areas instead of buffered. Imporves processing speeds.
+# Plus, we don't need filtering on the buffered DEM for now. 
+
 # Get boundary
 if site == 'bradford':
     boundary_path = f'D:/depressional_lidar/data/{site}/in_data/original_basins/watershed_delineations.shp'
