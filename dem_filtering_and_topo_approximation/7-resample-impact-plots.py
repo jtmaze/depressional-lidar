@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 import matplotlib.cm as cm
 
-site = 'osbs'
+site = 'bradford'
 
 if site == 'bradford':
     min_z = -2
@@ -368,9 +368,4 @@ plt.grid(True)
 plt.tight_layout()
 plt.show()
 
-# %%
-
-reference_domain = (min(results['threshold']), max(results['threshold']))
-reference_z = np.arange(reference_domain[0], reference_domain[1], 0.02)
-print(reference_z)
 # %%
