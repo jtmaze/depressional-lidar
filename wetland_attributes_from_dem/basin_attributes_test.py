@@ -33,6 +33,8 @@ if __name__ == "__main__":
     
     deepest_point = basin.find_deepest_point()
     print(f"Deepest point found at: {deepest_point.location} depth is {deepest_point.elevation} meters")
-    basin.establish_well_point(basin.well_point_info)
-    basin.visualize_shape(show_deepest=True, show_centroid=True, show_well=True)
-    basin.plot_basin_hypsometry()
+    #basin.establish_well_point(basin.well_point_info)
+    #basin.visualize_shape(show_deepest=True, show_centroid=True, show_well=True)
+    #basin.plot_basin_hypsometry(plot_points=True)
+    basin.radial_transects_map()
+   
