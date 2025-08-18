@@ -139,8 +139,7 @@ soil_core_summary <- soil_core_summary %>%
 
 # ...3.2 Ensure stage measurements match ----------------------------------------------
 
-plot_df <- soil_core_summary %>% 
-  filter(well_id != 'West Ford')
+plot_df <- soil_core_summary 
 
 p <- ggplot(plot_df,
             aes(x=soil_core_id,

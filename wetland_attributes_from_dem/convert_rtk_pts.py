@@ -205,11 +205,41 @@ plt.ylabel('Observations')
 plt.legend()
 plt.show()
 
-# %% Best Possible RTK Elevation Difference
+# %% ..
 
-plot_df = combined_gdf[combined_gdf['type']
+combined_gdf['abs_dem_diff'] = abs(combined_gdf['rtk_dem_diff'])
+combined_gdf = combined_gdf[combined_gdf['abs_dem_diff'] < 2]
+combined_gdf['rtk_dem_diff'] = combined_gdf['rtk_dem_diff'].astype(float)
+combined_gdf.to_file('rtk_pts_with_dem_elevations.shp')
 
 
-plt.figure(figsize=(10, 6))
+
+# %% 
+
+def plot_well_elevations(
+    gdf: gpd.GeoDataFrame,
+    tgt_well: str
+):
+    well_data = gdf[gdf['nearest_well_id'] == tgt_well]
+    well_data['observation_index'] = well_data['nearest_well_id'].astype(str) + '_' + well_data['type'] + '_' + well_data['location']
+    well_data = well_data.sort_values(by='rtk_elevation')
+    if well_data.empty:
+        print(f"No data found for well: {tgt_well}")
+        return
+
+    plt.figure(figsize=(10, 6))
+    x_positions = range(len(well_data))
+    plt.scatter(x_positions, well_data['elevation_dem_single'], label='Approx DEM Elevation (Single Cell)', color='blue')
+    plt.scatter(x_positions, well_data['elevation_dem_windowed'], label='Approx DEM Elevation (Windowed 3x3)', color='green')
+    plt.scatter(x_positions, well_data['rtk_elevation'], label='RTK Elevation', color='red')
+    plt.xticks(x_positions, well_data['observation_index'], rotation=45, ha='right')
+    plt.title(f'Elevation Comparison for Well: {tgt_well}')
+    plt.ylabel('Elevation (m)')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
 
+# %%
+plot_df = combined_gdf[combined_gdf['type'] == 'soil_moisture_sensor']
+plot_well_elevations(plot_df, tgt_well='')

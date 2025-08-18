@@ -5,7 +5,7 @@ import rasterio as rio
 from rasterio.features import shapes
 import geopandas as gpd
 from skimage import morphology
-from shapely.geometry import Polygon
+
 
 os.chdir('D:/depressional_lidar/data/')
 
@@ -24,13 +24,15 @@ else:
 
 def write_binary_inundation_raster(
     bool_mask: np.array,
+    original_mask: np.array,
     out_path: str, 
-    src_profile: dict
+    src_profile: dict, 
 ):
     """
     Write a binary raster mask to disk.
     """
     prof = src_profile.copy()
+    print(prof.get('nodata'))
     prof.update({
         'dtype': 'uint8', 
         'count': 1,
@@ -40,9 +42,15 @@ def write_binary_inundation_raster(
     with rio.open(f'{out_path}.tif', 'w', **prof) as dst:
         dst.write(bool_mask.astype(np.uint8), 1)
     print(f'Wrote inundation mask to {out_path}.tif')
+    # Handle nodata values
+    nodata_value = prof.get('nodata')
+    arr = bool_mask.astype(np.uint8)
+    # wherever the DEM was masked, put back the original nodata value
+    arr = np.where(original_mask, nodata_value, arr)
+
     np.savetxt(
         f'{out_path}.csv', 
-        bool_mask.astype(np.uint8), 
+        arr, 
         delimiter=',',
         fmt='%d'
     )
@@ -75,6 +83,7 @@ out_dir = f'./{site_name}/out_data/modeled_inundations/'
 
 with rio.open(detrend_path) as src:
     dem = src.read(1, masked=True)
+    dem_masked = dem.mask
     profile = src.profile
     out_crs = profile.get('crs')
     transform = profile.get('transform')
@@ -83,7 +92,7 @@ for t in write_thresholds:
     mask = dem < t
     mask_cleaned = morphology.remove_small_objects(mask, min_size=min_feature_size, connectivity=1)
     out_path_raster = f'{out_dir}inundation_mask_smoothed{smoothing_window}_resampled{resampling_resolution}_{t:.2f}m'
-    write_binary_inundation_raster(mask_cleaned, out_path_raster, profile)
+    write_binary_inundation_raster(mask_cleaned, dem_masked, out_path_raster, profile)
     out_path_polygon = f'{out_dir}inundation_polygons_smoothed{smoothing_window}_resampled{resampling_resolution}_{t:.2f}m'
     write_inundated_polygons(mask_cleaned, transform, out_path_polygon, out_crs)
     
