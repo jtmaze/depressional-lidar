@@ -1,5 +1,6 @@
 
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Optional
 
 import matplotlib.pyplot as plt
@@ -25,7 +26,7 @@ class ClippedDEM:
 
 @dataclass
 class DeepestPoint:
-    depth: float
+    elevation: float
     location: gpd.GeoSeries
 
 @dataclass
@@ -57,11 +58,17 @@ class WetlandBasin:
     wetland_id: str
     source_dem_path: str
     footprint: gpd.GeoDataFrame
+    well_point_info: gpd.GeoDataFrame
+
+    @cached_property
+    def deepest_point(self) -> DeepestPoint:
+        return self.find_deepest_point()
 
     def visualize_shape(
             self, 
             show_deepest: bool = False,
-            show_centroid: bool = False
+            show_centroid: bool = False,
+            show_well: bool = False
         ):
 
         # Create bounding box
@@ -84,22 +91,31 @@ class WetlandBasin:
         self.footprint.plot(ax=ax, facecolor='none', edgecolor='red')
         
         if show_deepest:
-            deepest = self.find_deepest_point()
+            deepest = self.deepest_point
             deepest.location.plot(ax=ax, color='blue', marker='*', markersize=100)
-            ax.annotate(f"Deepest: {deepest.depth:.2f}m", 
+            ax.annotate(f"Deepest: {deepest.elevation:.2f}m", 
                         xy=(deepest.location.x.values[0], deepest.location.y.values[0]),
                         xytext=(10, 10), textcoords='offset points',
                         color='white', fontweight='bold')
             
         if show_centroid:
             centroid = self.footprint.geometry.centroid
-            centroid_depth = self._find_point_elevation(centroid)
+            centroid_elevation = self._find_point_elevation(centroid)
             centroid.plot(ax=ax, color='orange', marker='*', markersize=100)
-            ax.annotate(f"Centroid: {centroid_depth:.2f}m", 
+            ax.annotate(f"Centroid: {centroid_elevation:.2f}m", 
                         xy=(centroid.x.values[0], centroid.y.values[0]),
                         xytext=(10, 10), textcoords='offset points',
                         color='white', fontweight='bold')
-        
+            
+        if show_well:
+            WellPoint = self.establish_well_point(self.well_point_info)
+            if WellPoint:
+                WellPoint.location.plot(ax=ax, color='violet', marker='o', markersize=100)
+                ax.annotate(f"DEM {WellPoint.elevation_dem:.2f}m -- RTK {WellPoint.elevation_rtk:.2f}m", 
+                            xy=(WellPoint.location.x.values[0], WellPoint.location.y.values[0]),
+                            xytext=(10, 10), textcoords='offset points',
+                            color='white', fontweight='bold')
+
         plt.title(f"Wetland Basin: {self.wetland_id}")
         plt.xlabel("x (meters)")
         plt.ylabel("y (meters)")
@@ -147,8 +163,8 @@ class WetlandBasin:
         # return as GeoSeries in the DEM/footprint CRS
         pt = gpd.GeoSeries([Point(x, y)], crs=clipped.crs)
 
-        return DeepestPoint(depth=min_val, location=pt)
-    
+        return DeepestPoint(elevation=min_val, location=pt)
+
     def _find_point_elevation(self, point: gpd.GeoSeries) -> float:
 
         clipped = self.get_clipped_dem()
@@ -169,13 +185,18 @@ class WetlandBasin:
             print("Warning: Well point CRS does not match footprint CRS. Reprojecting...")
             well_point_info = well_point_info.to_crs(self.footprint.crs)
 
-        # TODO: code to establish values for WellPoint
-        # return WellPoint(
-        #     elevation_dem='TBD'
-        #     elevation_rtk='TBD',
-        #     depth='TBD'
-        #     location='TBD'
-        # )
+        elevation_dem = self._find_point_elevation(well_point_info.geometry)
+
+        basin_low = self.deepest_point.elevation
+        depth = elevation_dem - basin_low
+        rtk = float(well_point_info['rtk_elevation'].values[0])
+
+        return WellPoint(
+            elevation_dem=elevation_dem,
+            elevation_rtk=rtk,
+            depth=depth,
+            location=well_point_info.geometry
+        )
     
     def calculate_hypsometry(self):
         pass
