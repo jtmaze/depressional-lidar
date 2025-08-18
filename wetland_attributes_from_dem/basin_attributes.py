@@ -148,34 +148,73 @@ class WetlandBasin:
     
     def find_deepest_point(self) -> DeepestPoint:
         """
-        Find the minimum DEM value within the footprint and return its location.
+        Find the minimum DEM value within the footprint based on a 3x3 cell average.
+        Returns the location of the minimum 3x3 average with its actual elevation.
         """
         clipped = self.clipped_dem
         dem_data = clipped.dem
-
-        # min value and its (row, col) index
-        min_val = float(np.nanmin(dem_data))
-        row, col = np.unravel_index(np.nanargmin(dem_data), dem_data.shape)
-
-        # convert (row, col) to map x,y using the clipped transform
+        
+        # Create an output array for the 3x3 averages
+        dem_avg = np.zeros_like(dem_data)
+        dem_avg.fill(np.nan)
+        
+        # Calculate 3x3 averages
+        rows, cols = dem_data.shape
+        for i in range(1, rows-1):
+            for j in range(1, cols-1):
+                # Extract 3x3 window
+                window = dem_data[i-1:i+2, j-1:j+2]
+                # Calculate average ignoring NaNs
+                if not np.all(np.isnan(window)):
+                    dem_avg[i, j] = np.nanmean(window)
+        
+        # Find the minimum value and its location in the averaged DEM
+        row, col = np.unravel_index(np.nanargmin(dem_avg), dem_avg.shape)
+        
+        # Get the actual elevation from the original DEM at this location
+        min_val = float(dem_data[row, col])
+        
+        # Convert (row, col) to map x,y using the clipped transform
         x, y = rio.transform.xy(clipped.transform, row, col, offset="center")
-
+        
         # return as GeoSeries in the DEM/footprint CRS
         pt = gpd.GeoSeries([Point(x, y)], crs=clipped.crs)
 
         return DeepestPoint(elevation=min_val, location=pt)
 
     def _find_point_elevation(self, point: gpd.GeoSeries) -> float:
-
+        """
+        Find the elevation at a specific point using the clipped DEM.
+        # BUG some of our wells are outside the basins
+        """
         clipped = self.clipped_dem
         dem_data = clipped.dem
-        # Get the elevation value at the point location
+        # Get the point location
         x, y = point.geometry.x.values[0], point.geometry.y.values[0]
         row, col = rio.transform.rowcol(clipped.transform, x, y)
 
-        pt_elevation = dem_data[row, col]
+        # Check if the point is within the DEM bounds
+        rows, cols = dem_data.shape
+        if 0 <= row < rows and 0 <= col < cols:
+            # Calculate window boundaries (handle edge cases)
+            row_start = max(0, row-1)
+            row_end = min(rows, row+2)
+            col_start = max(0, col-1)
+            col_end = min(cols, col+2)
+            
+            # Extract 3x3 window (or smaller if near edge)
+            window = dem_data[row_start:row_end, col_start:col_end]
+            
+            # Calculate average ignoring NaNs
+            if not np.all(np.isnan(window)):
+                pt_elevation = np.nanmean(window)
+            else:
+                pt_elevation = np.nan
+        else:
+            # Point is outside DEM bounds
+            pt_elevation = np.nan
 
-        return float(pt_elevation) if pt_elevation != clipped.nodata else np.nan
+        return float(pt_elevation) if not np.isnan(pt_elevation) and pt_elevation != clipped.nodata else np.nan
 
     def establish_well_point(self, well_point_info: gpd.GeoSeries) -> WellPoint:
         """
