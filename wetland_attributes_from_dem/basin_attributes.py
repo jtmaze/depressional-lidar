@@ -63,6 +63,9 @@ class WetlandBasin:
     @cached_property
     def deepest_point(self) -> DeepestPoint:
         return self.find_deepest_point()
+    @cached_property
+    def clipped_dem(self) -> ClippedDEM:
+        return self.get_clipped_dem()
 
     def visualize_shape(
             self, 
@@ -87,34 +90,36 @@ class WetlandBasin:
             dem_transform = rio.windows.transform(window, dem.transform)
         
         fig, ax = plt.subplots(figsize=(10, 8))
-        show(dem_data, transform=dem_transform, ax=ax, cmap='viridis')
+        ax = show(dem_data, transform=dem_transform, ax=ax, cmap='viridis')
+        if ax.images:
+            plt.colorbar(ax.images[0], ax=ax, label='Elevation (m)')
         self.footprint.plot(ax=ax, facecolor='none', edgecolor='red')
-        
+            
         if show_deepest:
             deepest = self.deepest_point
             deepest.location.plot(ax=ax, color='blue', marker='*', markersize=100)
             ax.annotate(f"Deepest: {deepest.elevation:.2f}m", 
-                        xy=(deepest.location.x.values[0], deepest.location.y.values[0]),
-                        xytext=(10, 10), textcoords='offset points',
-                        color='white', fontweight='bold')
+                xy=(deepest.location.x.values[0], deepest.location.y.values[0]),
+                xytext=(10, 10), textcoords='offset points',
+                color='white', fontweight='bold')
             
         if show_centroid:
             centroid = self.footprint.geometry.centroid
             centroid_elevation = self._find_point_elevation(centroid)
             centroid.plot(ax=ax, color='orange', marker='*', markersize=100)
             ax.annotate(f"Centroid: {centroid_elevation:.2f}m", 
-                        xy=(centroid.x.values[0], centroid.y.values[0]),
-                        xytext=(10, 10), textcoords='offset points',
-                        color='white', fontweight='bold')
+                xy=(centroid.x.values[0], centroid.y.values[0]),
+                xytext=(10, 10), textcoords='offset points',
+                color='white', fontweight='bold')
             
         if show_well:
             WellPoint = self.establish_well_point(self.well_point_info)
             if WellPoint:
                 WellPoint.location.plot(ax=ax, color='violet', marker='o', markersize=100)
                 ax.annotate(f"DEM {WellPoint.elevation_dem:.2f}m -- RTK {WellPoint.elevation_rtk:.2f}m", 
-                            xy=(WellPoint.location.x.values[0], WellPoint.location.y.values[0]),
-                            xytext=(10, 10), textcoords='offset points',
-                            color='white', fontweight='bold')
+                        xy=(WellPoint.location.x.values[0], WellPoint.location.y.values[0]),
+                        xytext=(10, 10), textcoords='offset points',
+                        color='white', fontweight='bold')
 
         plt.title(f"Wetland Basin: {self.wetland_id}")
         plt.xlabel("x (meters)")
@@ -150,7 +155,7 @@ class WetlandBasin:
         """
         Find the minimum DEM value within the footprint and return its location.
         """
-        clipped = self.get_clipped_dem()
+        clipped = self.clipped_dem
         dem_data = clipped.dem
 
         # min value and its (row, col) index
@@ -167,7 +172,7 @@ class WetlandBasin:
 
     def _find_point_elevation(self, point: gpd.GeoSeries) -> float:
 
-        clipped = self.get_clipped_dem()
+        clipped = self.clipped_dem
         dem_data = clipped.dem
         # Get the elevation value at the point location
         x, y = point.geometry.x.values[0], point.geometry.y.values[0]
@@ -197,12 +202,51 @@ class WetlandBasin:
             depth=depth,
             location=well_point_info.geometry
         )
-    
-    def calculate_hypsometry(self):
-        pass
+
+    def calculate_hypsometry(self, method: str = "total"):
+        step = 0.02 # NOTE: Hardcoded this for now
+        dem_data = self.clipped_dem.dem
+        total_area = self.footprint.area
+        min_elevation = np.nanmin(dem_data)
+        max_elevation = np.nanmax(dem_data)
+
+        if method == "total":
+
+            flat_dem = dem_data.flatten()
+            bins = np.arange(min_elevation, max_elevation + step, step)
+            hist, bin_edges = np.histogram(flat_dem, bins=bins)
+            cum_area = np.cumsum(hist)  # BUG: Assumes cells are 1x1m
+            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+            return cum_area, bin_centers
+        else:
+            print(f"Method '{method}' not implemented for hypsometry calculation.")
+            return None, None
 
     def plot_basin_hypsometry(self):
-        pass
+
+        cum_area, bin_centers = self.calculate_hypsometry()
+        plt.figure(figsize=(10, 6))
+        plt.plot(bin_centers, cum_area, label="Cumulative Area", color="blue")
+        
+        # Add well point elevations if available
+        well_point = self.establish_well_point(self.well_point_info)
+        
+        # Interpolate cumulative area at well point elevations
+        dem_area = np.interp(well_point.elevation_dem, bin_centers, cum_area)
+        rtk_area = np.interp(well_point.elevation_rtk, bin_centers, cum_area)
+        
+        plt.plot(well_point.elevation_dem, dem_area, 'ro', markersize=8, 
+                        label=f"Well DEM Elevation ({well_point.elevation_dem:.2f}m, {dem_area:.2f}m^2)")
+        plt.plot(well_point.elevation_rtk, rtk_area, 'go', markersize=8,
+                label=f"Well RTK Elevation ({well_point.elevation_rtk:.2f}m, {rtk_area:.2f}m^2)")
+        
+        plt.xlabel("Elevation (m)")
+        plt.ylabel("Cumulative Area (m²)")
+        plt.title(f"{self.wetland_id} Hypsometry")
+        plt.grid()
+        plt.legend()
+        plt.show()
 
     def establish_radial_transects(self):
         pass
