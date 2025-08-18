@@ -61,6 +61,9 @@ class WetlandBasin:
             n=self.transect_n,
             buffer_distance=self.transect_buffer
         )
+    @cached_property
+    def transect_profiles(self) -> pd.DataFrame:
+        pass
 
     def visualize_shape(
             self, 
@@ -185,7 +188,7 @@ class WetlandBasin:
     def _find_point_elevation(self, point: gpd.GeoSeries) -> float:
         """
         Find the elevation at a specific point using the clipped DEM.
-        # BUG some of our wells are outside the basins
+        # BUG some of our wetland wells are outside the basins
         """
         clipped = self.clipped_dem
         dem_data = clipped.dem
@@ -357,19 +360,23 @@ class WetlandBasin:
 
         radial_transects = self.radial_transects
         fig, ax = plt.subplots(figsize=(10, 8))
-        ax = show(dem_data, transform=dem_transform, ax=ax, cmap='viridis')
+        ax = show(dem_data, transform=dem_transform, ax=ax, cmap='gray')  # Changed colormap to 'gray'
         if ax.images:
             plt.colorbar(ax.images[0], ax=ax, label='Elevation (m)')
         self.footprint.boundary.plot(ax=ax, color='blue', linewidth=2, label='Basin Boundary')
 
-        # Plot each transect line
+        # Create a colormap for the transects
+        num_transects = len(radial_transects)
+        cmap = plt.cm.get_cmap('tab20' if num_transects <= 20 else 'viridis', num_transects)
+        
+        # Plot each transect line with a different color based on index
         for i, line in enumerate(radial_transects.geometry):
             x, y = line.xy
-            ax.plot(x, y, color='red', linewidth=1.5)
+            color = cmap(i)
+            ax.plot(x, y, color=color, linewidth=1.5)
 
-        if len(radial_transects.geometry) > 0:
-            center_x, center_y = radial_transects.geometry[0].xy[0][0], radial_transects.geometry[0].xy[1][0]
-            ax.plot(center_x, center_y, 'yo', markersize=8)
+        center_x, center_y = radial_transects.geometry[0].xy[0][0], radial_transects.geometry[0].xy[1][0]
+        ax.plot(center_x, center_y, 'yo', markersize=8, label='Center Point')
 
         plt.title("Radial Transects")
         plt.xlabel("x (meters)")
@@ -377,5 +384,86 @@ class WetlandBasin:
         plt.legend()
         plt.show()
 
+    def sample_transect_dem_vals(
+        self,
+        line: LineString,
+        step: float
+    ) -> pd.DataFrame:
+        
+        if step is None:
+            print('tbd figure this out later')
+
+        # Generate Points along the line
+        total_length = line.length
+        distances = np.arange(0, total_length + step, step)
+        points = [line.interpolate(d) for d in distances]
+        coords = [(p.x, p.y) for p in points]
+
+        dem_data = self.clipped_dem.dem
+        transform = self.clipped_dem.transform
+
+        rows, cols = rio.transform.rowcol(
+            transform, 
+            [p[0] for p in coords], 
+            [p[1] for p in coords]
+        )
+
+        dem_rows, dem_cols = dem_data.shape
+        elevations = []
+        for r, c in zip(rows, cols):
+            if 0 <= r < dem_rows and 0 <= c < dem_cols:
+                row_start = max(0, r-1)
+                row_end = min(dem_rows, r+2)
+                col_start = max(0, c-1)
+                col_end = min(dem_cols, c+2)
+                window = dem_data[row_start:row_end, col_start:col_end]
+                
+                if not np.all(np.isnan(window)):
+                    elev = np.nanmean(window)
+                else:
+                    elev = np.nan
+                
+                # Store list of elevations
+                elevations.append(elev)
+
+        return pd.DataFrame({
+            'distance_m': distances,
+            'dem_elevation': elevations
+        })
+            
+    def find_radial_transects_vals(self):
+        """
+        Find the elevation values along the radial transects.
+        """
+        transects = self.radial_transects
+        dfs = []
+        for idx, row in transects.iterrows():
+            profile = self.sample_transect_dem_vals(
+                row['geometry'], 
+                step=1.0  # 1 meter step
+            )
+            profile['angle_rad'] = row['angle_rad']
+            profile['trans_idx'] = idx
+            profile['length_m'] = row['length_m']
+            dfs.append(profile)
+
+        return pd.concat(dfs, ignore_index=True)
+
     def plot_radial_transects(self):
-        pass
+        
+        transects = self.find_radial_transects_vals()
+
+        indexes = transects['trans_idx'].unique()
+
+        num_transects = len(indexes)
+        cmap = plt.cm.get_cmap('tab20' if num_transects <= 20 else 'viridis', num_transects)
+
+        for i in indexes:
+            subset = transects[transects['trans_idx'] == i]
+            plt.plot(subset['distance_m'], subset['dem_elevation'], label=f'Transect {i}', color=cmap(i))
+
+        plt.xlabel("Distance (m)")
+        plt.ylabel("Elevation (m)")
+        plt.title("Radial Transects")
+        plt.legend()
+        plt.show()
