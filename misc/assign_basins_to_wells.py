@@ -1,4 +1,4 @@
-# %% 2.0 Libraries and file paths
+# %% 1.0 Libraries and file paths
 
 import os
 import geopandas as gpd
@@ -74,3 +74,5 @@ out_depressions = out_depressions[['wetland_id', 'geometry']]
 
 out_depressions.to_file(out_path)
 
+
+# %%

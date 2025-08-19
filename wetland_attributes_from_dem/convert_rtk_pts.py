@@ -149,6 +149,8 @@ combined_gdf = pd.concat([bradford_gdf, osbs_gdf], ignore_index=True)
 combined_gdf = gpd.GeoDataFrame(combined_gdf, crs='EPSG:26917')
 combined_gdf['rtk_dem_diff'] = combined_gdf['elevation_dem_single'] - combined_gdf['rtk_elevation']
 
+combined_gdf.to_file('rtk_pts_with_dem_elevations.shp')
+
 # %%
 """
 Plots to explore RTK and DEM efficacy
@@ -210,7 +212,7 @@ plt.show()
 combined_gdf['abs_dem_diff'] = abs(combined_gdf['rtk_dem_diff'])
 combined_gdf = combined_gdf[combined_gdf['abs_dem_diff'] < 2]
 combined_gdf['rtk_dem_diff'] = combined_gdf['rtk_dem_diff'].astype(float)
-combined_gdf.to_file('rtk_pts_with_dem_elevations.shp')
+
 
 
 

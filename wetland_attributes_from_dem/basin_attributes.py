@@ -63,7 +63,7 @@ class WetlandBasin:
         )
     @cached_property
     def transect_profiles(self) -> pd.DataFrame:
-        pass
+        return self.find_radial_transects_vals()
 
     def visualize_shape(
             self, 
@@ -75,10 +75,10 @@ class WetlandBasin:
         # Create bounding box
         bounds = self.footprint.total_bounds
         buffer_bounds = [
-            bounds[0] - 50,  # minx
-            bounds[1] - 50,  # miny
-            bounds[2] + 50,  # maxx
-            bounds[3] + 50   # maxy
+            bounds[0] - 25,  # minx
+            bounds[1] - 25,  # miny
+            bounds[2] + 25,  # maxx
+            bounds[3] + 25   # maxy
         ]
         
         with rio.open(self.source_dem_path) as dem:
@@ -92,7 +92,10 @@ class WetlandBasin:
         if ax.images:
             plt.colorbar(ax.images[0], ax=ax, label='Elevation (m)')
         self.footprint.plot(ax=ax, facecolor='none', edgecolor='red')
-            
+
+        if self.transect_buffer != 0:
+            self.footprint.geometry.buffer(self.transect_buffer).plot(ax=ax, facecolor='none', edgecolor='red', linestyle='--')
+
         if show_deepest:
             deepest = self.deepest_point
             deepest.location.plot(ax=ax, color='blue', marker='*', markersize=100)
@@ -126,7 +129,10 @@ class WetlandBasin:
 
     def get_clipped_dem(self) -> ClippedDEM:
 
-        shape = [self.footprint.geometry.values[0]]
+        if self.transect_buffer != 0:
+            shape = [self.footprint.geometry.buffer(self.transect_buffer).values[0]]
+        else:   
+            shape = [self.footprint.geometry.values[0]]
         with rio.open(self.source_dem_path) as dem:
             data, out_transform = rio_mask(
                 dem,
@@ -243,13 +249,10 @@ class WetlandBasin:
     def calculate_hypsometry(self, method: str = "total"):
         step = 0.02 # NOTE: Hardcoded this for now
         dem_data = self.clipped_dem.dem
-        total_area = self.footprint.area.values[0]  # area in square meters
-        print(total_area)
         min_elevation = np.nanmin(dem_data)
         max_elevation = np.nanmax(dem_data)
 
         if method == "total":
-
             flat_dem = dem_data.flatten()
             bins = np.arange(min_elevation, max_elevation + step, step)
             hist, bin_edges = np.histogram(flat_dem, bins=bins)
@@ -281,8 +284,11 @@ class WetlandBasin:
 
             plt.plot(well_point.elevation_dem, dem_area, 'ro', markersize=8,
                      label=f"Well DEM Elevation ({well_point.elevation_dem:.2f}m, {dem_area:.2f}m^2)")
-            plt.plot(well_point.elevation_rtk, rtk_area, 'go', markersize=8,
-                    label=f"Well RTK Elevation ({well_point.elevation_rtk:.2f}m, {rtk_area:.2f}m^2)")
+            if abs(well_point.elevation_rtk - well_point.elevation_dem) > 2:
+                print(f"Warning: RTK elevation ({well_point.elevation_rtk:.2f}m) differs from DEM elevation ({well_point.elevation_dem:.2f}m) by more than 2m.")
+            else:
+                plt.plot(well_point.elevation_rtk, rtk_area, 'go', markersize=8,
+                        label=f"Well RTK Elevation ({well_point.elevation_rtk:.2f}m, {rtk_area:.2f}m^2)")
         
         plt.xlabel("Elevation (m)")
         plt.ylabel("Cumulative Area (m^2)")
@@ -363,7 +369,10 @@ class WetlandBasin:
         ax = show(dem_data, transform=dem_transform, ax=ax, cmap='gray')  # Changed colormap to 'gray'
         if ax.images:
             plt.colorbar(ax.images[0], ax=ax, label='Elevation (m)')
-        self.footprint.boundary.plot(ax=ax, color='blue', linewidth=2, label='Basin Boundary')
+        self.footprint.boundary.plot(ax=ax, color='red', linewidth=2, label='Basin Boundary')
+
+        if self.transect_buffer != 0:
+            self.footprint.geometry.buffer(self.transect_buffer).plot(ax=ax, facecolor='none', edgecolor='red', linestyle='--', label='Buffered Boundary')
 
         # Create a colormap for the transects
         num_transects = len(radial_transects)
@@ -376,7 +385,7 @@ class WetlandBasin:
             ax.plot(x, y, color=color, linewidth=1.5)
 
         center_x, center_y = radial_transects.geometry[0].xy[0][0], radial_transects.geometry[0].xy[1][0]
-        ax.plot(center_x, center_y, 'yo', markersize=8, label='Center Point')
+        ax.plot(center_x, center_y, 'yo', markersize=8, label='Radial Reference Point')
 
         plt.title("Radial Transects")
         plt.xlabel("x (meters)")
@@ -449,7 +458,7 @@ class WetlandBasin:
 
         return pd.concat(dfs, ignore_index=True)
 
-    def plot_radial_transects(self):
+    def plot_individual_radial_transects(self):
         
         transects = self.find_radial_transects_vals()
 
@@ -467,3 +476,31 @@ class WetlandBasin:
         plt.title("Radial Transects")
         plt.legend()
         plt.show()
+
+    def aggregate_radial_transects(self) -> pd.DataFrame:
+        """
+        Aggregate transect profiles by distance from the center, averaging elevations
+        across all transects at each distance.
+        Returns a DataFrame with distance_m and summary stats.
+        """
+        profiles = self.transect_profiles  # triggers computation via cached_property
+        df = profiles[['distance_m', 'dem_elevation']].dropna()
+
+        agg = (
+            df.groupby('distance_m', as_index=False)['dem_elevation']
+                .agg(n='count', mean='mean', std='std')
+        )
+
+        agg = agg[agg['n'] > 2]  # Filter out distances with only two transects available
+
+        return agg.sort_values('distance_m', ignore_index=True)
+    
+    def plot_aggregated_radial_transects(self):
+        
+        agg = self.aggregate_radial_transects()
+        plt.errorbar(agg['distance_m'], agg['mean'], yerr=agg['std'], fmt='o')
+        plt.xlabel("Distance (m)")
+        plt.ylabel("Elevation (m)")
+        plt.title(f"Aggregated Radial Transects for {self.wetland_id}\nwith n={self.transect_n} with basin shape buffer={self.transect_buffer}")
+        plt.show()
+
