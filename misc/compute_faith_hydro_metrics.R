@@ -423,4 +423,5 @@ output_slices <- soil_core_slice_summary
 
 out_slices_path <- "D:/depressional_lidar/data/osbs/out_data/hydrometrics_at_Faith_slices_relative_groundsurface.csv"
 
+write_csv(output_slices, out_slices_path)
 
