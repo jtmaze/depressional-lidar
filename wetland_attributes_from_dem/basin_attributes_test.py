@@ -45,12 +45,13 @@ if __name__ == "__main__":
         footprint=footprint, 
         well_point_info=well_point,
         transect_method='deepest',
-        transect_n=100,
-        transect_buffer=30
+        transect_n=15,
+        transect_buffer=20
     )
     
-    basin.visualize_shape(show_deepest=True, show_centroid=True, show_well=True)
-    basin.plot_basin_hypsometry(plot_points=True)
+    #basin.visualize_shape(show_deepest=True, show_centroid=True, show_well=True)
+    #basin.plot_basin_hypsometry(plot_points=True)
     basin.radial_transects_map()
     basin.plot_individual_radial_transects()
-    basin.plot_aggregated_radial_transects()
+    # basin.plot_aggregated_radial_transects()
+    basin.plot_hayashi_p(r0=2, r1=25)

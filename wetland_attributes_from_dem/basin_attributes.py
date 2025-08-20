@@ -482,6 +482,54 @@ class WetlandBasin:
         plt.legend()
         plt.show()
 
+    def hayashi_p_constants(self, r0: int, r1: int) -> float:
+        """
+        Based on Hayashi et. al (2000)
+        """
+        transects = self.transect_profiles
+        unique_idx = transects['trans_idx'].unique()
+
+        hayashi_ps = []
+        for i in unique_idx:
+            trans_idx = i
+            trans = transects[transects['trans_idx'] == i].copy()
+            min_elevation = trans['dem_elevation'].min()
+            trans['depth_from_min'] = trans['dem_elevation'] - min_elevation
+            z0 = trans[trans['distance_m'] == r0]['depth_from_min'].mean()
+            z1 = trans[trans['distance_m'] == r1]['depth_from_min'].mean()
+
+            if np.isnan(z0) or np.isnan(z1):
+                p = np.nan
+            else:
+                print(z0/z1, r0/r1)
+                p = np.log(z0/z1) / np.log(r0/r1)
+
+            results = {
+                'trans_idx': trans_idx,
+                'p': p
+            }
+            hayashi_ps.append(results)
+
+        return pd.DataFrame(hayashi_ps)
+    
+
+    def plot_hayashi_p(self, r0: int, r1: int):
+
+        df = self.hayashi_p_constants(r0, r1)
+
+        plt.figure(figsize=(10, 6))
+                
+        num_transects = len(df)
+        cmap = plt.cm.get_cmap('tab20' if num_transects <= 20 else 'viridis', num_transects)
+        
+        colors = [cmap(i) for i in range(len(df))]
+        plt.bar(df['trans_idx'], df['p'], color=colors)
+        
+        plt.xlabel("Transect Index")
+        plt.ylabel("Hayashi p")
+        plt.title(f"Basin {self.wetland_id} Hayashi p Constants for Radial Transects\n Computed with r0={r0}, r1={r1}")
+        plt.show()
+
     def aggregate_radial_transects(self) -> pd.DataFrame:
         """
         Aggregate transect profiles by distance from the center, averaging elevations
