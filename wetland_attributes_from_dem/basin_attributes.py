@@ -64,6 +64,9 @@ class WetlandBasin:
     @cached_property
     def transect_profiles(self) -> pd.DataFrame:
         return self.find_radial_transects_vals()
+    @cached_property
+    def aggregated_transect_profiles(self) -> pd.DataFrame:
+        return self.aggregate_radial_transects_vals()
 
     def visualize_shape(
             self, 
@@ -75,16 +78,17 @@ class WetlandBasin:
         # Create bounding box
         bounds = self.footprint.total_bounds
         buffer_bounds = [
-            bounds[0] - 25,  # minx
-            bounds[1] - 25,  # miny
-            bounds[2] + 25,  # maxx
-            bounds[3] + 25   # maxy
+            bounds[0] - 75,  # minx
+            bounds[1] - 75,  # miny
+            bounds[2] + 75,  # maxx
+            bounds[3] + 75   # maxy
         ]
         
         with rio.open(self.source_dem_path) as dem:
             # Create window from bounds
             window = rio.windows.from_bounds(*buffer_bounds, dem.transform)
             dem_data = dem.read(1, window=window)
+            dem_data = np.where(dem_data == dem.nodata, np.nan, dem_data)
             dem_transform = rio.windows.transform(window, dem.transform)
         
         fig, ax = plt.subplots(figsize=(10, 8))
@@ -352,16 +356,17 @@ class WetlandBasin:
         # Create bounding box
         bounds = self.footprint.total_bounds
         buffer_bounds = [
-            bounds[0] - 50,  # minx
-            bounds[1] - 50,  # miny
-            bounds[2] + 50,  # maxx
-            bounds[3] + 50   # maxy
+            bounds[0] - 75,  # minx
+            bounds[1] - 75,  # miny
+            bounds[2] + 75,  # maxx
+            bounds[3] + 75   # maxy
         ]
 
         with rio.open(self.source_dem_path) as dem:
             # Create window from bounds
             window = rio.windows.from_bounds(*buffer_bounds, dem.transform)
             dem_data = dem.read(1, window=window)
+            dem_data = np.where(dem_data == dem.nodata, np.nan, dem_data)  
             dem_transform = rio.windows.transform(window, dem.transform)
 
         radial_transects = self.radial_transects
@@ -387,7 +392,7 @@ class WetlandBasin:
         center_x, center_y = radial_transects.geometry[0].xy[0][0], radial_transects.geometry[0].xy[1][0]
         ax.plot(center_x, center_y, 'yo', markersize=8, label='Radial Reference Point')
 
-        plt.title("Radial Transects")
+        plt.title(f"Radial Transects for {self.wetland_id}")
         plt.xlabel("x (meters)")
         plt.ylabel("y (meters)")
         plt.legend()
@@ -491,7 +496,7 @@ class WetlandBasin:
                 .agg(n='count', mean='mean', std='std')
         )
 
-        agg = agg[agg['n'] > 2]  # Filter out distances with only two transects available
+        agg = agg[agg['n'] > 4]  # Filter out distances with only four transects available
 
         return agg.sort_values('distance_m', ignore_index=True)
     

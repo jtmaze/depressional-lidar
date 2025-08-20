@@ -38,14 +38,15 @@ Run the Wetland Basin Analysis
 from basin_attributes import WetlandBasin
 
 if __name__ == "__main__":
+
     basin = WetlandBasin(
         wetland_id=wetland_id, 
         source_dem_path=source_dem, 
         footprint=footprint, 
         well_point_info=well_point,
         transect_method='deepest',
-        transect_n=10,
-        transect_buffer=20
+        transect_n=100,
+        transect_buffer=30
     )
     
     basin.visualize_shape(show_deepest=True, show_centroid=True, show_well=True)

@@ -63,7 +63,7 @@ def assign_closest_wetland_id(
 depressions = assign_closest_wetland_id(
     depressions, 
     well_points,
-    250
+    400
 )
 
 out_depressions = depressions[depressions['wetland_id'].notna()]
