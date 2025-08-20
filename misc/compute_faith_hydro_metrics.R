@@ -39,12 +39,21 @@ soil_core_summary <- soil_core %>%
   ) %>% 
   filter(!is.na(soil_core_id))
 
+soil_core_slice_summary <- soil_core %>% 
+  group_by(soil_core_id, depth_increment_midpt_cm) %>% 
+  summarise(
+    well_id = first(well_id),
+    sample_date = first(sample_date),
+    soil_core_to_well_elevation_cm = first(soil_core_to_well_elevation_cm)
+  ) %>% 
+  filter(!is.na(soil_core_id)) %>% 
+  mutate(slice_to_well_elevation = soil_core_to_well_elevation_cm - depth_increment_midpt_cm)
 
 # 3.0 Functions for basic core info ----------------------------------------------
 
 calculate_stage_comp <- function(elevation_temp, stage_temp, core_well_elevation_diff){
   # Helper function for fetch_core_info()
-  #’ Calculate the discrepancy between a soil‑core measurment and the predicted well stage
+  #’ Calculate the discrepancy between a soil‑core measurement and the predicted well stage
   #’
   #’ this function computes:
   #’ 1. the core’s measured stage (in meters, negative = below ground),  
@@ -115,13 +124,37 @@ fetch_core_info <- function(stage_df, elevation_df, target_well_id, core_id){
   stage_comp <- calculate_stage_comp(elevation_temp, stage_temp, core_well_elevation_diff)
   
   core_hydrograph <- stage_temp %>% 
-    mutate(core_stage_m = well_depth_m - core_well_elevation_diff) %>% 
-    select(c(day, core_stage_m))
+    mutate(sample_stage_m = well_depth_m - core_well_elevation_diff) %>% 
+    select(c(day, sample_stage_m))
     
   return(list(
     core_hydrograph = core_hydrograph,
     stage_comp = stage_comp
   ))
+}
+
+fetch_slice_hydrograph <- function(stage_df, elevation_slice_df, target_well_id, core_id, tgt_depth_slice){
+  # Similar to fetch core info; however, only fetches hydrograph for a given elevation
+  # slice in the soil core. Uses the mid-point of the depth increments to assign the hydrograph
+  
+  stage_temp <- stage_df %>% 
+    filter(well_id == target_well_id)
+  
+  slice_elevation_temp <- elevation_slice_df %>% 
+    filter(soil_core_id == core_id,
+           well_id == target_well_id,
+           depth_increment_midpt_cm == tgt_depth_slice)
+  
+  slice_elevation_diff_cm <- unique(slice_elevation_temp$slice_to_well_elevation)
+
+  slice_elevation_diff <- as.numeric(slice_elevation_diff_cm) / 100
+
+  
+  slice_hydrograph <- stage_temp %>% 
+    mutate(sample_stage_m = well_depth_m - slice_elevation_diff) %>% 
+    select(c(day, sample_stage_m))
+  
+  return(slice_hydrograph)
 }
 
 # ...3.1 Get basic core info and hydrograph ----------------------------------------------
@@ -136,6 +169,22 @@ soil_core_summary <- soil_core_summary %>%
   ungroup() %>% 
   select(-c(basic_core_info)) %>% 
   unnest_wider(stage_comp)
+
+
+soil_core_slice_summary <- soil_core_slice_summary %>% 
+  rowwise() %>% 
+  mutate(
+    slice_hydrograph = list(
+      fetch_slice_hydrograph(
+        daily_stage, 
+        soil_core_slice_summary, 
+        well_id, 
+        soil_core_id, 
+        depth_increment_midpt_cm
+        )
+      )
+  ) %>% 
+  ungroup() 
 
 # ...3.2 Ensure stage measurements match ----------------------------------------------
 
@@ -161,7 +210,7 @@ print(p)
 
 # 4.0 Calculate the core's hydrograph metrics ----------------------------------------------
 
-calc_hydrograph_stats <- function(hydrograph, var_name="core_stage_m") {
+calc_hydrograph_stats <- function(hydrograph, var_name="sample_stage_m") {
   
   hg <- hydrograph[[var_name]] # Note var_name is dynamic for depth incrmentn metrics later
   stats <- tibble(
@@ -171,14 +220,20 @@ calc_hydrograph_stats <- function(hydrograph, var_name="core_stage_m") {
     p20_stage=quantile(hg, 0.2, na.rm=TRUE, names=FALSE),
     p80_stage=quantile(hg, 0.8, na.rm=TRUE, names=FALSE)
   )
-  
   return(stats)
 }
 
 soil_core_summary <- soil_core_summary %>% 
   mutate(
     hydrograph_stats = map(core_hydrograph,
-                           ~ calc_hydrograph_stats(.x, var_name = "core_stage_m"))
+                           ~ calc_hydrograph_stats(.x, var_name = "sample_stage_m"))
+  ) %>% 
+  unnest_wider(hydrograph_stats)
+
+soil_core_slice_summary <- soil_core_slice_summary %>% 
+  mutate(
+    hydrograph_stats = map(slice_hydrograph, 
+                            ~ calc_hydrograph_stats(.x, var_name = 'sample_stage_m'))
   ) %>% 
   unnest_wider(hydrograph_stats)
 
@@ -216,11 +271,11 @@ inundated_durations <- function(binary) {
 
 wet_dry_events <- function(binary, wet_dry) {
   if (wet_dry == 'wet') {
-    events = sum(diff(c(0L, binary)) == 1L, na.rm = TRUE)
+    events <- sum(diff(c(0L, binary)) == 1L, na.rm = TRUE)
   } else if (wet_dry == 'dry') {
-    events = sum(diff(c(0L, binary)) == -1L, na.rm = TRUE)
+    events <- sum(diff(c(0L, binary)) == -1L, na.rm = TRUE)
   } else {
-    events = -9999 # catch bad function call
+    events <- -9999 # catch bad function call
   }
   return(events)
 }
@@ -229,17 +284,20 @@ compute_binary_metrics <- function(hydrograph) {
  
  # Remove any na observations to ensure they aren't counted
  binary <- hydrograph %>% 
-   drop_na(core_stage_m) %>% 
+   drop_na(sample_stage_m) %>% 
    distinct(day, .keep_all=TRUE) %>% 
    arrange(day) %>% 
-   transmute(day, inundated=as.integer(core_stage_m >= 0))
+   transmute(day, inundated=as.integer(sample_stage_m >= 0))
  
+ hydroperiod_percent <- mean(binary$inundated) * 100
+ print(hydroperiod_percent)
  
  durations <- inundated_durations(binary$inundated)
- wet_events = wet_dry_events(binary$inundated, 'wet')
- dry_events = wet_dry_events(binary$inundated, 'dry')
+ wet_events <- wet_dry_events(binary$inundated, 'wet')
+ dry_events <- wet_dry_events(binary$inundated, 'dry')
  
  binary_metrics = tibble(
+   hydroperiod_percent = hydroperiod_percent,
    max_inundated_durration = durations$max_inundated,
    min_inundated_durration = durations$min_inundated,
    median_inundated_durration = durations$median_inundated,
@@ -262,6 +320,14 @@ soil_core_summary <- soil_core_summary %>%
   ungroup() %>% 
   unnest_wider(binary_metrics)
 
+soil_core_slice_summary <- soil_core_slice_summary %>% 
+  rowwise() %>% 
+  mutate(
+    binary_metrics = compute_binary_metrics(slice_hydrograph)
+  ) %>% 
+  ungroup() %>% 
+  unnest_wider(binary_metrics)
+
 # 6.0 Functions for sample date metrics ----------------------------------------
 
 get_prior_hydrograph_mean <- function(hg, sample_date, look_back){
@@ -273,7 +339,7 @@ get_prior_hydrograph_mean <- function(hg, sample_date, look_back){
   
   prior_avg <- hg %>%
     filter(day >= window_start, day < sample_date) %>%
-    pull(core_stage_m) %>%
+    pull(sample_stage_m) %>%
     mean(na.rm = TRUE)
   
   return(prior_avg)
@@ -302,13 +368,13 @@ calc_sample_date_info <- function(hydrograph, sample_date) {
     filter(day == sample_date) %>% 
     pull()
   
-  stage_60d_deviation = sample_date_stage - mean_60
+  print(mean_90)
   
   sample_date_info = tibble(
+    sample_date_stage = sample_date_stage,
     mean_30d_stage = mean_30,
     mean_60d_stage = mean_60,
     mean_90d_stage = mean_90,
-    stage_60d_deviation = stage_60d_deviation
   )
   
   return(sample_date_info)
@@ -325,13 +391,36 @@ soil_core_summary <- soil_core_summary %>%
   ungroup() %>% 
   unnest_wider(date_metrics)
 
+soil_core_slice_summary <- soil_core_slice_summary %>% 
+  rowwise() %>% 
+  mutate(
+    date_metrics = calc_sample_date_info(slice_hydrograph, sample_date)
+  ) %>% 
+  ungroup() %>% 
+  unnest_wider(date_metrics)
+
+# ...  6.2 Calculate sample devation from long-term average ----------------------------------------
+
+soil_core_summary <- soil_core_summary %>% 
+  select(-c('core_hydrograph')) %>% 
+  mutate(deviation_60d_from_mean = mean_60d_stage - mean_stage)
+
+
+soil_core_slice_summary <- soil_core_slice_summary %>% 
+  select(-c('slice_hydrograph')) %>% 
+  mutate(deviation_60d_from_mean = mean_60d_stage - mean_stage)
 
 # 7.0 Write soil core summary --------------------------------------------
-output <- soil_core_summary %>% 
-  select(-c('core_hydrograph'))
 
-out_path <- "D:/depressional_lidar/data/osbs/out_data/hydrometrics_at_Faith_cores_relative_groundsurface.csv"
 
-write_csv(output, out_path)
+output_cores <- soil_core_summary 
+
+out_cores_path <- "D:/depressional_lidar/data/osbs/out_data/hydrometrics_at_Faith_cores_relative_groundsurface.csv"
+
+write_csv(output_cores, out_cores_path)
+
+output_slices <- soil_core_slice_summary
+
+out_slices_path <- "D:/depressional_lidar/data/osbs/out_data/hydrometrics_at_Faith_slices_relative_groundsurface.csv"
 
 
