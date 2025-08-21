@@ -482,7 +482,7 @@ class WetlandBasin:
         plt.legend()
         plt.show()
 
-    def hayashi_p_constants(self, r0: int, r1: int) -> float:
+    def calc_hayashi_p_constants(self, r0: int, r1: int) -> float:
         """
         Based on Hayashi et. al (2000)
         """
@@ -501,8 +501,7 @@ class WetlandBasin:
             if np.isnan(z0) or np.isnan(z1):
                 p = np.nan
             else:
-                print(z0/z1, r0/r1)
-                p = np.log(z0/z1) / np.log(r0/r1)
+                p = np.log(z1/z0) / np.log(r1/r0)
 
             results = {
                 'trans_idx': trans_idx,
@@ -512,10 +511,25 @@ class WetlandBasin:
 
         return pd.DataFrame(hayashi_ps)
     
+    # def calc_hayashi_p_constants_max_r(self):
 
-    def plot_hayashi_p(self, r0: int, r1: int):
+    #     transects = self.transect_profiles
+    #     results = []
+    #     for i in transects:
+    #         temp = transects[transects['trans_idx'] == i]
+    #         r1 = temp['distance_m'].max()
+    #         temp.calc_hayashi_p_constants(1, r1)
+    #         results.append(temp)
 
-        df = self.hayashi_p_constants(r0, r1)
+    #     return pd.concat(results, ignore_index=True)
+
+    def plot_hayashi_p(self, r0: int, r1: int, max: bool = False):
+
+        if max:
+            df = self.calc_hayashi_p_constants_max_r()
+            r1 = 'max on transect'
+        else:
+            df = self.calc_hayashi_p_constants(r0, r1)
 
         plt.figure(figsize=(10, 6))
                 
