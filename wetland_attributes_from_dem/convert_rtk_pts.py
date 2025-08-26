@@ -243,5 +243,15 @@ def plot_well_elevations(
 
 
 # %%
-plot_df = combined_gdf[combined_gdf['type'] == 'soil_moisture_sensor']
-plot_well_elevations(plot_df, tgt_well='')
+plot_df = combined_gdf[combined_gdf['type'] == 'sensor_transect']
+plot_well_elevations(plot_df, tgt_well='Brantley North')
+
+# %%
+
+['litter_trap' 'ghg_flux' 'core_well' 'wetland_well'
+ 'soil_moisture_sensor' 'sensor_transect']
+
+['15_409' '14_612' '13_267' '6_93' '5a_582' '14_500' '14.9_601' '14_115'
+ '15_4' '5_161' '5_510' '5_546' '5_573' '5a_598' 'Brantley North'
+ 'Devils Den' 'Fish Cove' 'Ross' 'West Ford']
+
