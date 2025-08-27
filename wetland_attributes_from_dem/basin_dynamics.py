@@ -92,70 +92,7 @@ class BasinDynamics:
         
         return inundation_map
     
-    def calculate_inundation_timeseries(self) -> Dict[pd.Timestamp, np.ndarray]:
-        """
-        Calculate inundation maps for the entire time series.
-        """
-        # Get well data
-        well_data = self.well_stage.timeseries_data
-        
-        # Initialize results dictionary
-        inundation_maps = {}
-        
-        # Calculate inundation map for each date
-        for date, row in well_data.iterrows():
-            # Convert water level in well to water surface elevation in DEM datum
-            water_level = row['water_level']
-            water_elevation = self.well_point.elevation_dem + water_level + self.well_to_dem_offset
-            # Calculate inundation map
-            inundation_map = self.calculate_inundation_map(water_elevation)
-            
-            # Store in dictionary
-            inundation_maps[date] = inundation_map
-            
-        return inundation_maps
-    
-    def calculate_inundation_summary(self, inundation_maps: Dict[pd.Timestamp, np.ndarray] = None) -> np.ndarray:
-        """
-        Calculate a summary of inundation frequency across the time series.
-        Takes a dictionary of inundation maps with pd.Timestamp, np.ndarray
-
-        Returns an array with the fraction of time each cell was inundated.
-        """
-        # Calculate inundation maps if not provided
-        if inundation_maps is None:
-            inundation_maps = self.calculate_inundation_timeseries()
-            
-        # Stack inundation maps
-        stack = np.stack(list(inundation_maps.values()))
-        
-        # Calculate frequency of inundation
-        inundation_frequency = np.sum(stack, axis=0) / stack.shape[0]
-        
-        return inundation_frequency
-    
-    def calculate_inundated_area_timeseries(self, inundation_maps: Dict[pd.Timestamp, np.ndarray] = None) -> pd.Series:
-        """
-        Calculate the inundated area for each timestep.
-        """
-        # Calculate inundation maps if not provided
-        if inundation_maps is None:
-            inundation_maps = self.calculate_inundation_timeseries()
-            
-        # NOTE: This assumes the transform in clipped_dem gives us the cell size
-        cell_size = abs(self.basin.clipped_dem.transform.a)  # Cell width in meters
-        print(f'Cell size from DEM meta: {cell_size} m')
-        cell_area = cell_size * cell_size  # Cell area in sq meters
-        
-        # Calculate area for each timestep
-        areas = {}
-        for date, inundation_map in inundation_maps.items():
-            inundated_cells = np.sum(inundation_map)
-            areas[date] = inundated_cells * cell_area
-            
-        return pd.Series(areas)
-    
-    def visualize_inundation(self, date: pd.Timestamp = None, water_elevation: float = None):
+    def visualize_single_inundation_map(self, date: pd.Timestamp = None, water_elevation: float = None):
         """
         Visualize inundation for a specific date (pd.datetime) or water elevation (float).
         """
@@ -176,7 +113,6 @@ class BasinDynamics:
         # Create plot
         fig, ax = plt.subplots(figsize=(10, 8))
         
-        # Plot DEM with hill shade effect
         plt.imshow(dem, cmap='gray', interpolation='nearest')
         plt.colorbar(label='Elevation (m)')
         
@@ -193,5 +129,83 @@ class BasinDynamics:
             
         plt.show()
     
+    def calculate_inundation_stacks(self) -> Dict[pd.Timestamp, np.ndarray]:
+        """
+        Calculate inundation maps for the entire time series.
+        """
+        # Get well data
+        well_data = self.well_stage.timeseries_data
+        
+        # Initialize results dictionary
+        inundation_stacks = {}
+        
+        # Calculate inundation map for each date
+        for date, row in well_data.iterrows():
+            # Convert water level in well to water surface elevation in DEM datum
+            water_level = row['water_level']
+            water_elevation = self.well_point.elevation_dem + water_level + self.well_to_dem_offset
+            # Calculate inundation map
+            inundation_map = self.calculate_inundation_map(water_elevation)
+            
+            # Store in dictionary
+            inundation_stacks[date] = inundation_map
+            
+        return inundation_stacks
+
+    def aggregate_inundation_stacks(self, inundation_stacks: Dict[pd.Timestamp, np.ndarray] = None) -> np.ndarray:
+        """
+        Calculate a summary of inundation frequency across the time series.
+        Takes a dictionary of inundation maps with pd.Timestamp, np.ndarray
+
+        Returns an array with the fraction of time each cell was inundated.
+        """
+        # Calculate inundation maps if not provided
+        if self.inundation_stacks is None:
+            inundation_stacks = self.calculate_inundation_stacks()
+
+        # Stack inundation maps
+        stack = np.stack(list(inundation_stacks.values()))
+
+        # Calculate frequency of inundation
+        inundation_frequency = np.sum(stack, axis=0) / stack.shape[0]
+        
+        return inundation_frequency
+    
+    def calculate_inundated_area_timeseries(self, inundation_stacks: Dict[pd.Timestamp, np.ndarray] = None) -> pd.Series:
+        """
+        Calculate the inundated area for each timestep.
+        """
+        # Calculate inundation maps if not provided
+        if inundation_stacks is None:
+            inundation_stacks = self.calculate_inundation_stacks()
+
+        # NOTE: This assumes the transform in clipped_dem gives us the cell size
+        cell_size = abs(self.basin.clipped_dem.transform.a)  # Cell width in meters
+        print(f'Cell size from DEM meta: {cell_size} m')
+        cell_area = cell_size * cell_size  # Cell area in sq meters
+        
+        # Calculate area for each timestep
+        areas = {}
+        for date, inundation_map in inundation_stacks.items():
+            inundated_cells = np.nansum(inundation_map)
+            areas[date] = inundated_cells * cell_area
+
+            
+        return pd.Series(areas)
+    
+    def plot_inundated_area_timeseries(self, area_timeseries: pd.Series = None):
+        """
+        Plot the inundated area timeseries.
+        """
+        if area_timeseries is None:
+            area_timeseries = self.calculate_inundated_area_timeseries()
+
+        plt.figure(figsize=(12, 6))
+        plt.plot(area_timeseries.index, area_timeseries.values, marker='o')
+        plt.title(f"{self.well_stage.well_id} Inundated Area Timeseries")
+        plt.xlabel("Date")
+        plt.ylabel("Inundated Area (m²)")
+        plt.grid()
+        plt.show()
 
     

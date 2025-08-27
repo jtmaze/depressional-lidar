@@ -52,10 +52,10 @@ if __name__ == '__main__':
 
     basin.visualize_shape(show_deepest=True, show_centroid=True, show_well=True)
     #basin.plot_basin_hypsometry(plot_points=True)
-    #basin.radial_transects_map()
-    #basin.plot_individual_radial_transects()
-    #basin.plot_aggregated_radial_transects()
-    #basin.plot_hayashi_p(r0=2, r1=20)
+    basin.radial_transects_map()
+    basin.plot_individual_radial_transects()
+    basin.plot_aggregated_radial_transects()
+    basin.plot_hayashi_p(r0=2, r1=20)
 
     #basin.plot_hayashi_p(r0=2, r1=None, max=True)
 
@@ -70,11 +70,11 @@ if __name__ == '__main__':
     well_stage.plot()
 
     # %% ..
-    dynamics = BasinDynamics(basin=basin, well_stage=well_stage, well_to_dem_offset=-0.35)
+    dynamics = BasinDynamics(basin=basin, well_stage=well_stage, well_to_dem_offset=-0.03)
     # %% 5.0 Visualize Inundation Dynamics
     import pandas as pd
 
-    dynamics.visualize_inundation(date=pd.Timestamp('2023-7-01', tz='UTC'))
-
+    dynamics.visualize_single_inundation_map(date=pd.Timestamp('2023-7-01', tz='UTC'))
+    dynamics.plot_inundated_area_timeseries()
 
     # %%
