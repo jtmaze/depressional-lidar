@@ -15,7 +15,7 @@ from rasterio.warp import calculate_default_transform, reproject, Resampling
 import geopandas as gpd
 
 target_crs = 'EPSG:26917'
-site_name = 'osbs' # bradford or osbs
+site_name = 'bradford' # bradford or osbs
 lidar_data = 'USGS' # multiple neon flights at OSBS (e.g., sep2016), tbd which on works best
 US_SURVEY_FOOT_TO_METER = 0.304800609601219
 
@@ -53,9 +53,9 @@ basin_shapes = basin_shapes.to_crs(basin_shapes_utm)
 # Buffer/dilate the basin shapes for landscape detrending
 basin_shapes['geometry'] = basin_shapes.geometry.buffer(5_000)
 
-# %% Run the DEM cropping code for each basin
+# %% 2.0 Run the DEM cropping code for each basin
 
-# 1.0 Crop the DEM for the basin/basin(s)
+# 2.1 Crop the DEM for the basin/basin(s)
 for basin_id in unique_basin_ids:
     print(f"Processing basin: {basin_id}")
     if basin_id == 'all_basins':
@@ -66,7 +66,7 @@ for basin_id in unique_basin_ids:
         crop_shape = crop_shape.reset_index(drop=True)
 
 
-    # 1.1 Check that each DEM tile has the same crs
+    # 2.2 Check that each DEM tile has the same crs
     crs_list = []
 
     for fp in dem_tile_paths:
@@ -85,7 +85,7 @@ for basin_id in unique_basin_ids:
         unique_crs = set(str(crs) for crs in crs_list)
         print(f"Unique CRS values found: {unique_crs}")
 
-    # 2.0 Check if DEM files are within crop bounds. If within bounds, keep in mosaic list. Discard if outside bounds.
+    # 2.3 Check if DEM files are within crop bounds. If within bounds, keep in mosaic list. Discard if outside bounds.
     valid_paths = []
     for fp in dem_tile_paths:
         with rio.open(fp) as src:
@@ -101,7 +101,7 @@ for basin_id in unique_basin_ids:
                 else:
                     raise
 
-    # 3.0 Mosaic the files that aree within the crop bounds
+    # 3.0 Mosaic the files that are within the crop bounds
     reprojected_tiles = []
     tile_temp_filepaths = []
     for idx, p in enumerate(valid_paths):
@@ -171,7 +171,7 @@ for basin_id in unique_basin_ids:
     with rio.open(mosaic_fp, 'w', **final_meta) as dst:
         dst.write(out_mosaic)
 
-    # 4.0 Mask the mosaic'd DEM to the study area's crop shape and write to out_data
+    # 4.0 Mask the mosaic'd DEM to the study area's buffered shape and write to out_data
     with rio.open(mosaic_fp) as src:
 
         crop_geom = crop_shape.to_crs(target_crs).geometry

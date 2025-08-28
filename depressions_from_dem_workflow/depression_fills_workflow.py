@@ -5,7 +5,7 @@ import rasterio as rio
 import whitebox_workflows as wbw
 wbe = wbw.WbEnvironment()
 wbe.verbose = True
-site = 'osbs'
+site = 'bradford'
 print(wbe)
 
 os.chdir(f'D:/depressional_lidar/data/{site}')
@@ -14,7 +14,7 @@ filled_path = f'./temp/{site}_depressions_filled.tif'
 
 # %% 
 input_raster = wbe.read_raster(vegetation_off_dem_path)
-filled_raster = wbe.fill_depressions(input_raster)
+filled_raster = wbe.fill_depressions(input_raster, max_depth=3.0)
 wbe.write_raster(filled_raster, filled_path)
 
  #%% Subtract the filled DEM from the original DEM to get the depth of depressions

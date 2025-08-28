@@ -13,7 +13,7 @@ from rasterio.mask import mask
 
 wbe = wbw.WbEnvironment()
 
-site = 'osbs'
+site = 'bradford'
 lidar_data = 'neon_sep2016' # NOTE: 2016 DEM at OSBS has lowest water levels. Still some flooding. 
 os.chdir(f'D:/depressional_lidar/data/{site}/')
 
@@ -40,43 +40,43 @@ final_out_path = os.path.join(processing_dir, f'{site}_DEM_cleaned_veg.tif')
 # %% 3.0 Crop the DEM to immediate watershed areas instead of buffered. Imporves processing speeds.
 # Plus, we don't need filtering on the buffered DEM for now. 
 
-# Get boundary
-if site == 'bradford':
-    boundary_path = f'D:/depressional_lidar/data/{site}/in_data/original_basins/watershed_delineations.shp'
-elif site == 'osbs':
-    boundary_path = f'D:/depressional_lidar/data/{site}/in_data/OSBS_boundary.shp'
+# # Get boundary
+# if site == 'bradford':
+#     boundary_path = f'D:/depressional_lidar/data/{site}/in_data/original_basins/watershed_delineations.shp'
+# elif site == 'osbs':
+#     boundary_path = f'D:/depressional_lidar/data/{site}/in_data/OSBS_boundary.shp'
 
-boundary = gpd.read_file(boundary_path)
-boundary_union = gpd.GeoDataFrame(geometry=[boundary.union_all()], crs=boundary.crs)
+# boundary = gpd.read_file(boundary_path)
+# boundary_union = gpd.GeoDataFrame(geometry=[boundary.union_all()], crs=boundary.crs)
 
-# Read the DEM to get its CRS
-with rio.open(temp_file_path) as dem_src:
-    dem_crs = dem_src.crs
+# # Read the DEM to get its CRS
+# with rio.open(temp_file_path) as dem_src:
+#     dem_crs = dem_src.crs
     
-    # Reproject boundary to match DEM CRS
-    boundary_union = boundary_union.to_crs(dem_crs)
+#     # Reproject boundary to match DEM CRS
+#     boundary_union = boundary_union.to_crs(dem_crs)
     
-    # Crop/clip the DEM to the boundary
-    cropped_file_path = os.path.join(processing_dir, f'{site}_DEM_cropped.tif')
+#     # Crop/clip the DEM to the boundary
+#     cropped_file_path = os.path.join(processing_dir, f'{site}_DEM_cropped.tif')
     
-    # Build the transform arguments
-    out_image, out_transform = mask(dem_src, boundary_union.geometry, crop=True)
+#     # Build the transform arguments
+#     out_image, out_transform = mask(dem_src, boundary_union.geometry, crop=True)
     
-    # Update metadata for the new raster
-    out_meta = dem_src.meta.copy()
-    out_meta.update({
-        "driver": "GTiff",
-        "height": out_image.shape[1],
-        "width": out_image.shape[2],
-        "transform": out_transform
-    })
+#     # Update metadata for the new raster
+#     out_meta = dem_src.meta.copy()
+#     out_meta.update({
+#         "driver": "GTiff",
+#         "height": out_image.shape[1],
+#         "width": out_image.shape[2],
+#         "transform": out_transform
+#     })
     
-    # Write the cropped raster
-    with rio.open(cropped_file_path, "w", **out_meta) as dest:
-        dest.write(out_image)
+#     # Write the cropped raster
+#     with rio.open(cropped_file_path, "w", **out_meta) as dest:
+#         dest.write(out_image)
     
-    # Update temp_file_path to use the cropped version
-    temp_file_path = cropped_file_path
+#     # Update temp_file_path to use the cropped version
+#     temp_file_path = cropped_file_path
 
 # %% 4.0 Set-up parameters for vegitation filtering
 """
