@@ -15,9 +15,9 @@ from shapely.geometry import Polygon, MultiPolygon
 
 wbe = wbw.WbEnvironment()
 wbe.verbose = True
-site = 'bradford'
-min_depth = 0.05  # meters
-max_depth_percentile = 97
+site = 'osbs'
+min_depth = 0.05  # meters NOTE: changed from 0.05 Bradford to 0.10 osbs
+max_depth_percentile = 99 # NOTE: changed from 97 in Bradford to 99 in osbs
 gaussian_sigma = 12
 gaussian_radius = 35  # pixels
 smoothed_depression_threshold = 0.35
@@ -108,6 +108,10 @@ depression_gdf = gpd.GeoDataFrame({'value': values}, geometry=geoms, crs=src.crs
 # 6.1 Clip to the polygons to the site boundary
 boundary = gpd.read_file(boundary_path)
 boundary = boundary.to_crs(crs)
+# The OSBS site boundary is extremely jagged so buffer it to clean
+if site == 'osbs':
+    boundary['geometry'] = boundary['geometry'].buffer(250)
+    
 depression_gdf = depression_gdf.clip(boundary)
 
 # 6.2 Buffer the polygons by to close gaps.
@@ -147,4 +151,6 @@ plt.show()
 # %% 8.0 Write the depression polygons to a shapefile
 
 depression_gdf = depression_gdf[depression_gdf['area_m2'] >= min_depression_area]
-depression_gdf.to_file(f'./temp/{site}_depression_polygons.shp')
+depression_gdf.to_file(f'./temp/{site}_depression_polygons_v3.shp')
+
+# %%

@@ -13,7 +13,7 @@ from rasterio.mask import mask
 
 wbe = wbw.WbEnvironment()
 
-site = 'bradford'
+site = 'osbs'
 lidar_data = 'neon_sep2016' # NOTE: 2016 DEM at OSBS has lowest water levels. Still some flooding. 
 os.chdir(f'D:/depressional_lidar/data/{site}/')
 

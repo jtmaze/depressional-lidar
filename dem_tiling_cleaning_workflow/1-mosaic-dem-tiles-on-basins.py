@@ -15,8 +15,8 @@ from rasterio.warp import calculate_default_transform, reproject, Resampling
 import geopandas as gpd
 
 target_crs = 'EPSG:26917'
-site_name = 'bradford' # bradford or osbs
-lidar_data = 'USGS' # multiple neon flights at OSBS (e.g., sep2016), tbd which on works best
+site_name = 'osbs' # bradford or osbs
+lidar_data = 'sep2016' # multiple neon flights at OSBS (e.g., sep2016), tbd which on works best
 US_SURVEY_FOOT_TO_METER = 0.304800609601219
 
 os.chdir('D:/depressional_lidar/data/')

@@ -5,8 +5,6 @@ import geopandas as gpd
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from shapely.geometry import Point, Polygon
-
 os.chdir('D:/depressional_lidar/data/')
 
 site = 'bradford'
@@ -18,10 +16,9 @@ print(depressions.crs)
 well_points_path = f'./rtk_pts_with_dem_elevations.shp'
 well_points = gpd.read_file(well_points_path)
 well_points = well_points[
-    (well_points['type'] == 'wetland_well') |
-    (well_points['type'] == 'core_well') &
-    (well_points['site'] == 'site')
-]
+    ((well_points['type'] == 'wetland_well') | (well_points['type'] == 'core_well')) &
+    (well_points['site'] == site)
+].copy()
 print(well_points.crs)
 
 # %% 2.0 Match wells to basins where well points are contained within the basin polygon
@@ -55,7 +52,7 @@ matched_list = []
 
 for idx, row in unmatched_wells.iterrows():
     search_area = row.geometry.buffer(200)
-    candidate_depressions = depressions[depressions['area_m2'] >= 1000].copy()
+    candidate_depressions = depressions[depressions['area_m2'] >= 300]
     candidate_depressions = candidate_depressions[candidate_depressions.intersects(search_area)]
     candidate_depressions['boundary_dist'] = candidate_depressions.boundary.distance(row.geometry)
     nearest_depression = candidate_depressions.sort_values(by='boundary_dist', ascending=True).iloc[[0]]
@@ -78,7 +75,7 @@ for idx, row in unmatched_wells.iterrows():
         nearest_depression['wetland_id'] = row['wetland_id']
         nearest_depression.index.name = 'orig_idx'
         nearest_depression['rtk_el'] = row['rtk_elevat']
-        nearest_depression['core_well'] = pt['type'] == 'core_well'
+        nearest_depression['core_well'] = row['type'] == 'core_well'
         matched_list.append(nearest_depression)
 
 # Add the other matched depressions to the out_gdf
