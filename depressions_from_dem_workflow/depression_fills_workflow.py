@@ -10,15 +10,16 @@ import geopandas as gpd
 from shapely.geometry import shape
 from rasterio.features import shapes
 
-
 import whitebox_workflows as wbw
 from shapely.geometry import Polygon, MultiPolygon
 
 wbe = wbw.WbEnvironment()
 wbe.verbose = True
 site = 'bradford'
-min_depth = 0.03
-max_depth_percentile = 95
+min_depth = 0.05  # meters
+max_depth_percentile = 97
+gaussian_sigma = 12
+gaussian_radius = 35  # pixels
 smoothed_depression_threshold = 0.35
 depression_buffer_distance = 3  # meters
 min_depression_area = 300  # m^2
@@ -71,11 +72,11 @@ binary_depression_array = (
 # %% 4.0 Smooth the binary raster to make shapes more contiguous. Use a wide sigma to convolve the image. 
 smoothed_array = ndimage.gaussian_filter(
     binary_depression_array,
-    sigma=10,
-    radius=25,
+    sigma=gaussian_sigma,
+    radius=gaussian_radius,
 )
 # 4.1 Write the smoothed raster file to see how it looks
-smoothed_depression_depth_path = f'./temp/{site}_depression_depth_smoothed_v4.tif'
+smoothed_depression_depth_path = f'./temp/{site}_depression_depth_smoothed.tif'
 with rio.open(depression_depth_path) as src:
     profile = src.profile
     with rio.open(smoothed_depression_depth_path, 'w', **profile) as dst:
@@ -109,8 +110,8 @@ boundary = gpd.read_file(boundary_path)
 boundary = boundary.to_crs(crs)
 depression_gdf = depression_gdf.clip(boundary)
 
-# 6.2 Buffer the polygons by 5m to close gaps.
-depression_gdf['geometry'] = depression_gdf['geometry'].buffer(3)
+# 6.2 Buffer the polygons by to close gaps.
+depression_gdf['geometry'] = depression_gdf['geometry'].buffer(depression_buffer_distance)
 
 # 6.3 Dissolve all polygons into one, then explode back into individual polygons
 collapsed = depression_gdf.geometry.union_all()
@@ -122,30 +123,28 @@ def remove_holes(geom):
     if isinstance(geom, Polygon):
         return Polygon(geom.exterior)
     elif isinstance(geom, MultiPolygon):
-        return MultiPolygon([Polygon(part.exterior) for part in geom.geoms])
+        # First remove holes from each polygon
+        no_holes = [Polygon(part.exterior) for part in geom.geoms]
+        # Then combine all polygons into one
+        return MultiPolygon(no_holes).union_all()
     else:
         return geom
 
 depression_gdf['geometry'] = depression_gdf['geometry'].apply(remove_holes)
 
 # %% 7.0 Filter polygons based on size thresholds
-
 depression_gdf['area_m2'] = depression_gdf.geometry.area
+plot_gdf = depression_gdf[depression_gdf['area_m2'] <= 10_000]
 
 # Histogram of depression areas
-plt.hist(depression_gdf['area_m2'], bins=50)
+plt.hist(plot_gdf['area_m2'], bins=50)
 plt.xlabel('Depression Area (m²)')
 plt.ylabel('Frequency')
 plt.title('Histogram of Depression Areas')
 plt.axvline(min_depression_area, color='r', linestyle='dashed', linewidth=1)
 plt.show()
 
-# %%
+# %% 8.0 Write the depression polygons to a shapefile
 
 depression_gdf = depression_gdf[depression_gdf['area_m2'] >= min_depression_area]
-
-
-depression_gdf.to_file(f'./temp/{site}_depression_polygons_test.shp')
-
-# %% 5.0 Convert the rounded raster to a vector, then filter based on size thresholds
-
+depression_gdf.to_file(f'./temp/{site}_depression_polygons_test_v8.shp')
