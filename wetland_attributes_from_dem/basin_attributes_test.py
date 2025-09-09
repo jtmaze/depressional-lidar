@@ -9,7 +9,7 @@ from basin_attributes import WetlandBasin
 from basin_dynamics import BasinDynamics, WellStageTimeseries
 
 if __name__ == '__main__':
-    wetland_id = '15_409'
+    wetland_id = '6_93'
     source_dem = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'
     basins_path = 'D:/depressional_lidar/data/bradford/in_data/basins_assigned_wetland_ids.shp'
     well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
