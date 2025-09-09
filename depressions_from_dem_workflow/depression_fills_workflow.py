@@ -147,4 +147,4 @@ plt.show()
 # %% 8.0 Write the depression polygons to a shapefile
 
 depression_gdf = depression_gdf[depression_gdf['area_m2'] >= min_depression_area]
-depression_gdf.to_file(f'./temp/{site}_depression_polygons_test_v8.shp')
+depression_gdf.to_file(f'./temp/{site}_depression_polygons.shp')
