@@ -18,7 +18,7 @@ well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/stage_data/{site}_
 
 basin_footprints = gpd.read_file(basins_path)
 well_points = gpd.read_file(well_points_path)
-well_points = well_points[(well_points['site'] == 'osbs') & (well_points['type'] == 'core_well')]
+well_points = well_points[(well_points['site'] == site) & (well_points['type'] == 'core_well')]
 
 # %% 1.1 Clean up the well points gdf
 
@@ -165,10 +165,11 @@ boxplot_df = pd.DataFrame({
 fig, ax = plt.subplots(figsize=(12, 6))
 sns.boxplot(data=boxplot_df, x='wetland_id', y='tai_fraction', ax=ax)
 
-plt.ylabel('TAI Area % Relative to Max Wetland Area')
-plt.title('TAI Area % of Maximum Wetland Area')
-plt.xticks(rotation=15)
-plt.xlabel('')
+plt.ylabel('TAI Area % Relative to Max Wetland Area', fontsize=16)
+plt.title('TAI Area % of Maximum Wetland Area', fontsize=18)
+plt.xticks(fontsize=14, rotation=15)
+plt.yticks(fontsize=14)
+plt.xlabel('', fontsize=16)
 plt.tight_layout()
 plt.show()
 
@@ -195,22 +196,19 @@ boxplot_df = pd.DataFrame({
     'wetland_id': wetland_labels
 })
 
-# Create the boxplot
+# Create the boxplot with outliers removed
 fig, ax = plt.subplots(figsize=(12, 6))
-sns.boxplot(data=boxplot_df, x='wetland_id', y='tai_fraction', ax=ax, color='orange')
+sns.boxplot(data=boxplot_df, x='wetland_id', y='tai_fraction', ax=ax, color='orange', showfliers=False)
 
-plt.ylabel('TAI Area % Relative Wetland A(t))')
+plt.ylabel('TAI Area % Relative Wetland A(t)')
 plt.title('TAI Area % Relative to Wetland A(t)')
 plt.xticks(rotation=15)
 plt.xlabel('')
 
-ax.set_yscale('log')  # Set y-axis to logarithmic scale
-
 plt.tight_layout()
 plt.show()
 
-# %% Scatter plot of TAI area and wetland area for each wetland
-
+# %% 5.3 Scatter plot of TAI area and wetland area for each wetland
 
 fig, ax = plt.subplots(figsize=(10, 8))
 
@@ -224,13 +222,15 @@ for wid in wetland_ids:
     print(min_a, max_a)
     area_scaled = (area - min_a) / (max_a - min_a)
 
-    
+    min_tai = np.nanmin(tai)
+    max_tai = np.nanmax(tai)
+    tai_scaled = (tai -  min_tai) / (max_tai - min_tai)
     # Filter out zero area values if desired
     
-    ax.scatter(area_scaled, tai, label=wid, alpha=0.6, s=30)
+    ax.scatter(area_scaled, tai_scaled, label=wid, alpha=0.6, s=30)
 
-plt.xlabel('Wetland Area (m²)')
-plt.ylabel('TAI Area (m²)')
+plt.xlabel('Wetland Area (Scaled 0-1)')
+plt.ylabel('TAI Area (Scaled 0-1)')
 plt.title('TAI Area vs Wetland Area by Wetland ID')
 plt.legend()
 plt.grid(True, alpha=0.3)
