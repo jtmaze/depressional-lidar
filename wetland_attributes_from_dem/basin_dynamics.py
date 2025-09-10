@@ -239,7 +239,7 @@ class BasinDynamics:
         Returns an array with the fraction of time each cell was inundated.
         """
         # Calculate inundation maps if not provided
-        if self.inundation_stacks is None:
+        if inundation_stacks is None:
             inundation_stacks = self.calculate_inundation_stacks()
 
         # Stack inundation maps
@@ -416,6 +416,52 @@ class BasinDynamics:
 
         plt.tight_layout()
         plt.show()
+
+    def map_inundation_stacks(self, inundation_frequency: np.array = None):
+        """
+        Map the inundation stacks.
+        """
+        if inundation_frequency is None:
+            inundation_frequency = self.aggregate_inundation_stacks()
+
+        dem = self.basin.clipped_dem.dem
+        inundation_percent = inundation_frequency * 100
+        inundation_percent = np.where(np.isnan(dem), np.nan, inundation_percent)  # Keep NaNs outside the basin boundary as NaNs
+        well_point = self.well_point
+        well_point_x = well_point.location.x.values[0]
+        well_point_y = well_point.location.y.values[0]
+
+        
+        fig, ax = plt.subplots(figsize=(12, 8))
+
+        from matplotlib.colors import LinearSegmentedColormap
+        colors = ['#8B4513', '#FFFFFF', '#0000FF']  # Brown, White, Blue
+        custom_cmap = LinearSegmentedColormap.from_list('brown_white_blue', colors, N=256)
+        
+        # Show inundation frequency (values from 0-1 representing frequency of being inundated)
+        im = show(inundation_percent, ax=ax, cmap=custom_cmap, alpha=0.8,
+                transform=self.basin.clipped_dem.transform,
+                vmin=0, vmax=np.nanmax(inundation_percent))
+
+        # Add colorbar
+        cbar = plt.colorbar(im.images[0], ax=ax, shrink=0.8)
+        cbar.set_label('Inundation Frequency (0-100%) of Days', rotation=270, labelpad=20)
+
+        # Plot well point
+        ax.scatter(well_point_x, well_point_y, color='red', 
+                marker='x', s=100, linewidths=3,
+                label=f'Well Location @{well_point.elevation_dem:.2f}m')
+        
+        # Add legend and labels
+        ax.legend(loc='upper right')
+        ax.set_xlabel('(m)')
+        ax.set_ylabel('(m)')
+        
+        ax.set_title('Inundation Frequency Map')
+
+        plt.tight_layout()
+        plt.show()
+
 
 
         

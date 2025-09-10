@@ -8,15 +8,16 @@ import pandas as pd
 from basin_attributes import WetlandBasin
 from basin_dynamics import BasinDynamics, WellStageTimeseries
 
-site = 'bradford'
+site = 'osbs'
 
 if __name__ == '__main__':
-    wetland_id = '6_93'
+    wetland_id = 'Brantley North'
     source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_veg.tif'
     basins_path = f'D:/depressional_lidar/data/{site}/in_data/{site}_basins_assigned_wetland_ids.shp'
     well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
     # osbs {site}_core_wells_tracked_datum.csv'
-    well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/stage_data/waterlevel_offsets_tracked.csv'
+    # brandford waterlevel_offsets_tracked.csv'
+    well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/stage_data/{site}_core_wells_tracked_datum.csv'
 
     # 2.0 Read and clean the data
 
@@ -67,9 +68,9 @@ if __name__ == '__main__':
     well_stage = WellStageTimeseries.from_csv(
         well_stage_path,
         well_id=wetland_id,
-        date_column='Date',
-        water_level_column='revised_depth',
-        well_id_column='Site_ID'
+        date_column='date',
+        water_level_column='water_depth',
+        well_id_column='well_id'
     )
     well_stage.plot()
 
@@ -87,8 +88,9 @@ if __name__ == '__main__':
         min_depth=0
     )
 
-    dynamics.plot_inundated_area_timeseries()
-    dynamics.plot_tai_area_timeseries(max_depth=0.05, min_depth=-0.05)
-    #dynamics.plot_inundated_area_histogram()
-    dynamics.plot_tai_area_histogram(max_depth=0.05, min_depth=-0.05)
+    # dynamics.plot_inundated_area_timeseries()
+    # dynamics.plot_tai_area_timeseries(max_depth=0.05, min_depth=-0.05)
+    # #dynamics.plot_inundated_area_histogram()
+    # dynamics.plot_tai_area_histogram(max_depth=0.05, min_depth=-0.05)
     dynamics.map_tai_stacks(max_depth=0.05, min_depth=-0.05)
+    dynamics.map_inundation_stacks()
