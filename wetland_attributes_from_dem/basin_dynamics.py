@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -37,6 +37,7 @@ class WellStageTimeseries:
             well_id_column: Name of the column containing well identifiers
         """
         df = pd.read_csv(file_path)
+        print(df[well_id_column].unique())
         print(df.columns)
         if well_id_column in df.columns:
             df = df[df[well_id_column] == well_id]
@@ -58,7 +59,7 @@ class WellStageTimeseries:
         """Plot the water level time series."""
         fig, ax = plt.subplots(figsize=(12, 6))
         self.timeseries_data['water_level'].plot(ax=ax)
-        ax.set_ylabel(f'Water Depth at Well, m)')
+        ax.set_ylabel(f'Water Depth at Well (m)')
         ax.set_title(f'Well {self.well_id} Stage')
         ax.grid(True)
         plt.axhline(y=0, color='red', linestyle='--')
@@ -264,7 +265,11 @@ class BasinDynamics:
 
         return tai_frequency
     
-    def calculate_inundated_area_timeseries(self, inundation_stacks: Dict[pd.Timestamp, np.ndarray] = None) -> pd.Series:
+    def calculate_inundated_area_timeseries(
+            self, 
+            inundation_stacks: Dict[pd.Timestamp, np.ndarray] = None,
+        ) -> pd.Series:
+
         """
         Calculate the inundated area for each timestep.
         """
@@ -293,7 +298,7 @@ class BasinDynamics:
         ) -> pd.Series:
 
         if tai_stacks is None:
-            tai_stacks = self.calculate_tai_stacks(max_depth, min_depth)
+            tai_stacks = self.calculate_tai_stacks(max_depth=max_depth, min_depth=min_depth)
 
         cell_size = abs(self.basin.clipped_dem.transform.a)
         print(f'Cell size from DEM meta: {cell_size} m')

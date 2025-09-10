@@ -121,7 +121,7 @@ class WetlandBasin:
             WellPoint = self.establish_well_point(self.well_point_info)
             if WellPoint:
                 WellPoint.location.plot(ax=ax, color='violet', marker='o', markersize=100)
-                ax.annotate(f"DEM {WellPoint.elevation_dem:.2f}m -- RTK {WellPoint.elevation_rtk:.2f}m", 
+                ax.annotate(f"DEM {WellPoint.elevation_dem:.2f}m", 
                         xy=(WellPoint.location.x.values[0], WellPoint.location.y.values[0]),
                         xytext=(10, 10), textcoords='offset points',
                         color='white', fontweight='bold')

@@ -8,12 +8,15 @@ import pandas as pd
 from basin_attributes import WetlandBasin
 from basin_dynamics import BasinDynamics, WellStageTimeseries
 
+site = 'bradford'
+
 if __name__ == '__main__':
     wetland_id = '6_93'
-    source_dem = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'
-    basins_path = 'D:/depressional_lidar/data/bradford/in_data/basins_assigned_wetland_ids.shp'
+    source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_veg.tif'
+    basins_path = f'D:/depressional_lidar/data/{site}/in_data/{site}_basins_assigned_wetland_ids.shp'
     well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-    well_stage_path = 'D:/depressional_lidar/data/bradford/in_data/stage_data/waterlevel_offsets_tracked.csv'
+    # osbs {site}_core_wells_tracked_datum.csv'
+    well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/stage_data/waterlevel_offsets_tracked.csv'
 
     # 2.0 Read and clean the data
 
@@ -52,7 +55,7 @@ if __name__ == '__main__':
     )
 
     basin.visualize_shape(show_deepest=True, show_centroid=True, show_well=True)
-    #basin.plot_basin_hypsometry(plot_points=True)
+    # basin.plot_basin_hypsometry(plot_points=True)
     # basin.radial_transects_map()
     # basin.plot_individual_radial_transects()
     # basin.plot_aggregated_radial_transects()
@@ -75,17 +78,17 @@ if __name__ == '__main__':
     # 5.0 Visualize Inundation Dynamics
 
     dynamics.visualize_single_inundation_map(
-        date=pd.Timestamp('2023-08-28', 
+        date=pd.Timestamp('2022-10-15', 
                           tz='UTC')
     )
     dynamics.visualize_single_tai_map(
-        date=pd.Timestamp('2023-08-28', tz='UTC'),
-        max_depth=0.05,
-        min_depth=-0.05
+        date=pd.Timestamp('2022-10-15', tz='UTC'),
+        max_depth=0.10,
+        min_depth=0
     )
 
-    # dynamics.plot_inundated_area_timeseries()
-    # dynamics.plot_tai_area_timeseries(max_depth=0.05, min_depth=-0.05)
-    # dynamics.plot_inundated_area_histogram()
-    # dynamics.plot_tai_area_histogram(max_depth=0.05, min_depth=-0.05)
+    dynamics.plot_inundated_area_timeseries()
+    dynamics.plot_tai_area_timeseries(max_depth=0.05, min_depth=-0.05)
+    #dynamics.plot_inundated_area_histogram()
+    dynamics.plot_tai_area_histogram(max_depth=0.05, min_depth=-0.05)
     dynamics.map_tai_stacks(max_depth=0.05, min_depth=-0.05)
