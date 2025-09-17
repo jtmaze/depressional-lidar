@@ -64,6 +64,11 @@ class WetlandBasin:
     @cached_property
     def transect_profiles(self) -> pd.DataFrame:
         return self.find_radial_transects_vals()
+    
+    @cached_property
+    def truncated_transect_profiles(self) -> pd.DataFrame:
+        return self.truncate_radial_transects_by_zmin()
+    
     @cached_property
     def aggregated_transect_profiles(self) -> pd.DataFrame:
         return self.aggregate_radial_transects_vals()
@@ -482,7 +487,28 @@ class WetlandBasin:
         plt.legend()
         plt.show()
 
-    def calc_hayashi_p_constants(self, r0: int, r1: int) -> float:
+    def _hayashi_p_calculator(self, single_transect: pd.DataFrame, r0: int, r1: int) -> float:
+
+        """
+        Helper function to calculate Hayash P value on single transect
+        used in calc_hayashi_p_defined_r() and calc_hayashi_p_uniform_z()
+        """
+        
+        z0 = single_transect[single_transect['distance_m'] == r0]['depth_from_min'].mean()
+        z1 = single_transect[single_transect['distance_m'] == r1]['depth_from_min'].mean()
+
+        if np.isnan(z0) or np.isnan(z1):
+            p = np.nan
+        else:
+            p = np.log(z1/z0) / np.log(r1/r0)
+
+        result = {
+            'trans_idx': single_transect['trans_idx'].iloc[0],
+            'p': p
+        }
+        return result
+    
+    def calc_hayashi_p_defined_r(self, r0: int, r1: int) -> float:
         """
         Based on Hayashi et. al (2000)
         """
@@ -491,45 +517,84 @@ class WetlandBasin:
 
         hayashi_ps = []
         for i in unique_idx:
-            trans_idx = i
             trans = transects[transects['trans_idx'] == i].copy()
             min_elevation = trans['dem_elevation'].min()
             trans['depth_from_min'] = trans['dem_elevation'] - min_elevation
-            z0 = trans[trans['distance_m'] == r0]['depth_from_min'].mean()
-            z1 = trans[trans['distance_m'] == r1]['depth_from_min'].mean()
+            
+            result = self._hayashi_p_calculator(trans, r0, r1)
 
-            if np.isnan(z0) or np.isnan(z1):
-                p = np.nan
-            else:
-                p = np.log(z1/z0) / np.log(r1/r0)
-
-            results = {
-                'trans_idx': trans_idx,
-                'p': p
-            }
-            hayashi_ps.append(results)
+            hayashi_ps.append(result)
 
         return pd.DataFrame(hayashi_ps)
     
-    # def calc_hayashi_p_constants_max_r(self):
+    def truncate_radial_transects_by_zmin(self):
 
-    #     transects = self.transect_profiles
-    #     results = []
-    #     for i in transects:
-    #         temp = transects[transects['trans_idx'] == i]
-    #         r1 = temp['distance_m'].max()
-    #         temp.calc_hayashi_p_constants(1, r1)
-    #         results.append(temp)
+        """
+        Takes the original transects and adjust their radial distance to the spill elevation. 
+        In this case, the spill elevation is the highest point on the lowest transect
+        """
 
-    #     return pd.concat(results, ignore_index=True)
+        transects = self.transect_profiles
+        unique_idx = transects['trans_idx'].unique()
+        transects_max_z = {}
 
-    def plot_hayashi_p(self, r0: int, r1: int, max: bool = False):
+        # Find the maximum z value relative to wetland bottom for each transect.
+        for i in unique_idx:
+            trans = transects[transects['trans_idx'] == i].copy()
+            min_elevation = trans['dem_elevation'].min()
+            trans['depth_from_min'] = trans['dem_elevation'] - min_elevation
+            max_z = trans['depth_from_min'].max()
+            transects_max_z[i] = max_z
 
-        if max:
-            df = self.calc_hayashi_p_constants_max_r()
+        # Find the transect with the lowest z_max value
+        min_idx = min(transects_max_z, key=transects_max_z.get)
+        z_val = transects_max_z[min_idx]
+
+        # Restrict each transect's radius (distance_m) whenever the z_val is first reached
+        truncated_transects = []
+        for i in unique_idx:
+            trans = transects[transects['trans_idx'] == i].copy()
+            min_elevation = trans['dem_elevation'].min()
+            trans['depth_from_min'] = trans['dem_elevation'] - min_elevation
+
+            # Ensure values sorted by distance from center
+            trans = trans.sort_values(by='distance_m', ascending=True)
+
+            # Find the first distance value where z_val is exceded
+            msk = trans['depth_from_min'] >= z_val
+            if msk.any():
+                first_exceed_idx = msk.idxmax()
+                truncated_trans = trans.loc[:first_exceed_idx]
+                truncated_transects.append(truncated_trans)
+            else:
+                # if z_val isn't exceded, keep the entire transect
+                truncated_transects.append(trans)
+
+        return pd.concat(truncated_transects, ignore_index=True)
+    
+    def calc_hayashi_p_uniform_z(self):
+
+        transects = self.truncated_transect_profiles
+        unique_idx = transects['trans_idx'].unique()
+
+        hayashi_ps = []
+
+        for i in unique_idx:
+            trans = transects[transects['trans_idx'] == i]
+            r_max = trans['distance_m'].max()
+            p = self._hayashi_p_calculator(trans, r0=1, r1=r_max)
+
+            hayashi_ps.append(p)
+
+        return pd.DataFrame(hayashi_ps)
+
+    def plot_hayashi_p(self, r0: int, r1: int, uniform: bool = False):
+
+        if uniform:
+            df = self.calc_hayashi_p_uniform_z()
             r1 = 'max on transect'
         else:
-            df = self.calc_hayashi_p_constants(r0, r1)
+            df = self.calc_hayashi_p_defined_r(r0, r1)
 
         plt.figure(figsize=(10, 6))
                 
@@ -543,6 +608,7 @@ class WetlandBasin:
         plt.ylabel("Hayashi p")
         plt.title(f"Basin {self.wetland_id} Hayashi p Constants for Radial Transects\n Computed with r0={r0}, r1={r1}")
         plt.show()
+
 
     def aggregate_radial_transects(self) -> pd.DataFrame:
         """
