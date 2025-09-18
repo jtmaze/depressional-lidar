@@ -356,7 +356,7 @@ class WetlandBasin:
 
         return gpd.GeoDataFrame(records, geometry=lines, crs=self.footprint.crs)
 
-    def radial_transects_map(self):
+    def radial_transects_map(self, uniform: bool = False):
 
         # Create bounding box
         bounds = self.footprint.total_bounds
@@ -374,7 +374,41 @@ class WetlandBasin:
             dem_data = np.where(dem_data == dem.nodata, np.nan, dem_data)  
             dem_transform = rio.windows.transform(window, dem.transform)
 
-        radial_transects = self.radial_transects
+        if uniform:
+            # A bit of a hacky strategy...
+            # Clip the geometries in radial_transects (gdf) by distance values in truncated_profiles (df)
+            # Render a new gdf with the truncated geometries.
+            truncated_profiles = self.truncated_transect_profiles
+            original_transects = self.radial_transects
+            max_distances = truncated_profiles.groupby('angle_rad')['distance_m'].max().reset_index()
+            truncated_geoms = []
+            for _, row in max_distances.iterrows():
+                angle = row['angle_rad']
+                max_dist = row['distance_m']
+
+                # Get the original transect for this angle
+                original_transect = original_transects[original_transects['angle_rad'] == angle].iloc[0]
+                original_line = original_transect['geometry']
+
+                # Truncate the line at the max distance
+                if max_dist < original_line.length:
+                    truncated_line = LineString([
+                        original_line.coords[0],  # Start point (center)
+                        original_line.interpolate(max_dist)  # End point at max distance
+                    ])
+                else:
+                    truncated_line = original_line  # Keep original if max_dist exceeds line length
+                
+                truncated_geoms.append({
+                    'angle_rad': angle,
+                    'length_m': max_dist,
+                    'geometry': truncated_line
+                })
+                plot_transects = gpd.GeoDataFrame(truncated_geoms, crs=self.footprint.crs)
+
+        else:
+            plot_transects = self.radial_transects
+
         fig, ax = plt.subplots(figsize=(10, 8))
         ax = show(dem_data, transform=dem_transform, ax=ax, cmap='gray')  # Changed colormap to 'gray'
         if ax.images:
@@ -385,16 +419,16 @@ class WetlandBasin:
             self.footprint.geometry.buffer(self.transect_buffer).plot(ax=ax, facecolor='none', edgecolor='red', linestyle='--', label='Buffered Boundary')
 
         # Create a colormap for the transects
-        num_transects = len(radial_transects)
+        num_transects = len(plot_transects)
         cmap = plt.cm.get_cmap('tab20' if num_transects <= 20 else 'viridis', num_transects)
         
         # Plot each transect line with a different color based on index
-        for i, line in enumerate(radial_transects.geometry):
+        for i, line in enumerate(plot_transects.geometry):
             x, y = line.xy
             color = cmap(i)
             ax.plot(x, y, color=color, linewidth=1.5)
 
-        center_x, center_y = radial_transects.geometry[0].xy[0][0], radial_transects.geometry[0].xy[1][0]
+        center_x, center_y = plot_transects.geometry[0].xy[0][0], plot_transects.geometry[0].xy[1][0]
         ax.plot(center_x, center_y, 'yo', markersize=8, label='Radial Reference Point')
 
         plt.title(f"Radial Transects for {self.wetland_id}")
@@ -468,9 +502,13 @@ class WetlandBasin:
 
         return pd.concat(dfs, ignore_index=True)
 
-    def plot_individual_radial_transects(self):
-        
-        transects = self.find_radial_transects_vals()
+    def plot_individual_radial_transects(self, uniform: bool = False):
+
+        # TODO: Add functionality to plot truncated transects
+        if uniform:
+            transects = self.truncated_transect_profiles
+        else:
+            transects = self.transect_profiles
 
         indexes = transects['trans_idx'].unique()
 
@@ -483,12 +521,11 @@ class WetlandBasin:
 
         plt.xlabel("Distance (m)")
         plt.ylabel("Elevation (m)")
-        plt.title("Radial Transects")
+        plt.title(f"Radial Transects -- Uniform z={uniform}")
         plt.legend()
         plt.show()
 
     def _hayashi_p_calculator(self, single_transect: pd.DataFrame, r0: int, r1: int) -> float:
-
         """
         Helper function to calculate Hayash P value on single transect
         used in calc_hayashi_p_defined_r() and calc_hayashi_p_uniform_z()
@@ -528,7 +565,6 @@ class WetlandBasin:
         return pd.DataFrame(hayashi_ps)
     
     def truncate_radial_transects_by_zmin(self):
-
         """
         Takes the original transects and adjust their radial distance to the spill elevation. 
         In this case, the spill elevation is the highest point on the lowest transect
@@ -606,17 +642,25 @@ class WetlandBasin:
         
         plt.xlabel("Transect Index")
         plt.ylabel("Hayashi p")
-        plt.title(f"Basin {self.wetland_id} Hayashi p Constants for Radial Transects\n Computed with r0={r0}, r1={r1}")
+        plt.title(
+            f"Basin {self.wetland_id} Hayashi p Constants for Radial Transects\n"
+            f"Computed with r0={r0}, r1={r1}"
+            f"Uniform z = {uniform}"
+        )
         plt.show()
 
 
-    def aggregate_radial_transects(self) -> pd.DataFrame:
+    def aggregate_radial_transects(self, uniform: bool = True) -> pd.DataFrame:
         """
         Aggregate transect profiles by distance from the center, averaging elevations
         across all transects at each distance.
         Returns a DataFrame with distance_m and summary stats.
         """
-        profiles = self.transect_profiles  # triggers computation via cached_property
+        if uniform:
+            profiles = self.truncated_transect_profiles
+        else:
+            profiles = self.transect_profiles
+            
         df = profiles[['distance_m', 'dem_elevation']].dropna()
 
         agg = (
@@ -628,12 +672,21 @@ class WetlandBasin:
 
         return agg.sort_values('distance_m', ignore_index=True)
     
-    def plot_aggregated_radial_transects(self):
+    def plot_aggregated_radial_transects(self, uniform: bool = True):
+
+        if uniform:
+            agg = self.aggregate_radial_transects(uniform=uniform)
+        else:
+            agg = self.aggregate_radial_transects(uniform=uniform)
         
-        agg = self.aggregate_radial_transects()
+        plt.figure(figsize=(10, 6))
         plt.errorbar(agg['distance_m'], agg['mean'], yerr=agg['std'], fmt='o')
         plt.xlabel("Distance (m)")
         plt.ylabel("Elevation (m)")
-        plt.title(f"Aggregated Radial Transects for {self.wetland_id}\nwith n={self.transect_n} with basin shape buffer={self.transect_buffer}")
+        plt.title(
+            f"Aggregated Radial Transects for {self.wetland_id}\n"
+            f"with n={self.transect_n} with basin shape buffer={self.transect_buffer}"
+            f"z is uniform {uniform}"
+        )
         plt.show()
 
