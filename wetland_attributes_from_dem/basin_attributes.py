@@ -608,7 +608,7 @@ class WetlandBasin:
 
         return pd.concat(truncated_transects, ignore_index=True)
     
-    def calc_hayashi_p_uniform_z(self):
+    def calc_hayashi_p_uniform_z(self, r0: int):
 
         transects = self.truncated_transect_profiles
         unique_idx = transects['trans_idx'].unique()
@@ -618,7 +618,7 @@ class WetlandBasin:
         for i in unique_idx:
             trans = transects[transects['trans_idx'] == i]
             r_max = trans['distance_m'].max()
-            p = self._hayashi_p_calculator(trans, r0=1, r1=r_max)
+            p = self._hayashi_p_calculator(trans, r0=r0, r1=r_max)
 
             hayashi_ps.append(p)
 
@@ -627,7 +627,7 @@ class WetlandBasin:
     def plot_hayashi_p(self, r0: int, r1: int, uniform: bool = False):
 
         if uniform:
-            df = self.calc_hayashi_p_uniform_z()
+            df = self.calc_hayashi_p_uniform_z(r0=r0)
             r1 = 'max on transect'
         else:
             df = self.calc_hayashi_p_defined_r(r0, r1)
@@ -689,4 +689,5 @@ class WetlandBasin:
             f"z is uniform {uniform}"
         )
         plt.show()
+
 

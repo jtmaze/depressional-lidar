@@ -13,7 +13,7 @@ site = 'bradford'
 source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_veg.tif'
 basins_path = f'D:/depressional_lidar/data/{site}/in_data/{site}_basins_assigned_wetland_ids.shp'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/stage_data/waterlevel_offsets_tracked.csv'
+well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/stage_data/bradford_wells_tracked_datum.csv'
 
 basin_footprints = gpd.read_file(basins_path)
 well_points = gpd.read_file(well_points_path)
@@ -22,7 +22,7 @@ well_points = well_points[(well_points['site'] == site) &
                           ((well_points['type'] == 'core_well') | (well_points['type'] == 'wetland_well'))
 ]
 
-well_id = '6_93'
+well_id = '13_267'
 
 # %% 1.1 Clean up the well points gdf
 

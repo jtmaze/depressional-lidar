@@ -15,10 +15,10 @@ from shapely.geometry import Polygon, MultiPolygon
 
 wbe = wbw.WbEnvironment()
 wbe.verbose = True
-site = 'osbs'
+site = 'bradford'
 min_depth = 0.05  # meters NOTE: changed from 0.05 Bradford to 0.10 osbs
 max_depth_percentile = 99 # NOTE: changed from 97 in Bradford to 99 in osbs
-gaussian_sigma = 12
+gaussian_sigma = 12 # wide sigma to smooth
 gaussian_radius = 35  # pixels
 smoothed_depression_threshold = 0.35
 depression_buffer_distance = 3  # meters
