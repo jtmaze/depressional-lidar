@@ -90,7 +90,7 @@ class BasinDynamics:
         dem = self.basin.clipped_dem.dem
         
         # 1=inundated, 0=dry, np.nan=out of basin
-        inundation_map = np.zeros_like(dem, dtype=np.uint8)
+        inundation_map = np.zeros_like(dem, dtype=np.float16)
         inundation_map[~np.isnan(dem) & (dem <= water_elevation)] = 1
         inundation_map = np.where(np.isnan(dem), np.nan, inundation_map)  # Keep NaNs as NaNs
         
@@ -101,7 +101,8 @@ class BasinDynamics:
         dem = self.basin.clipped_dem.dem
         depth = water_elevation - dem
 
-        tai_map = np.zeros_like(dem, dtype=np.int8)
+
+        tai_map = np.zeros_like(dem, dtype=np.float16)
         tai_map = np.where((depth < max_depth) & (depth > min_depth), 1, tai_map)
         tai_map = np.where(np.isnan(dem), np.nan, tai_map)  # Keep NaNs outside the basin boundary as NaNs
 
@@ -247,7 +248,7 @@ class BasinDynamics:
         stack = np.stack(list(inundation_stacks.values()))
 
         # Calculate frequency of inundation
-        inundation_frequency = np.sum(stack, axis=0) / stack.shape[0]
+        inundation_frequency = np.sum(stack, axis=0, dtype=np.float16) / stack.shape[0]
         
         return inundation_frequency
     
@@ -261,8 +262,9 @@ class BasinDynamics:
         if tai_stacks is None:
             tai_stacks = self.calculate_tai_stacks(max_depth, min_depth)
 
+        # Stack TAI maps 
         stack = np.stack(list(tai_stacks.values()))
-        tai_frequency = np.nansum(stack, axis=0) / stack.shape[0]
+        tai_frequency = np.nansum(stack, axis=0, dtype=np.float16) / stack.shape[0]
 
         return tai_frequency
     

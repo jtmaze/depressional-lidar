@@ -52,7 +52,7 @@ if __name__ == '__main__':
         well_point_info=well_point,
         transect_method='deepest',
         transect_n=10,
-        transect_buffer=10
+        transect_buffer=250
     )
 
     basin.visualize_shape(show_deepest=True, show_centroid=True, show_well=True)
