@@ -21,10 +21,10 @@ class WellStageTimeseries:
     """Class to handle and process well stage (water level) timeseries data."""
     well_id: str
     timeseries_data: pd.DataFrame  # DataFrame with datetime index and water_level column
-    
+    basin: WetlandBasin
     
     @classmethod
-    def from_csv(cls, file_path: str, well_id: str, date_column: str = 'date', 
+    def from_csv(cls, file_path: str, well_id: str, basin: WetlandBasin, date_column: str = 'date', 
                 water_level_column: str = 'water_level', well_id_column: str = 'well_id'):
         """
         Create a WellStageTimeseries from a CSV file.
@@ -44,7 +44,6 @@ class WellStageTimeseries:
         
         df[date_column] = pd.to_datetime(df[date_column])
         
-
         df = df.set_index(df[date_column])
         
         if water_level_column != 'water_level':
@@ -53,17 +52,23 @@ class WellStageTimeseries:
         # Keep only necessary column and aggregate to daily values
         df = df[['water_level']].resample('D').mean()
         
-        return cls(well_id=well_id, timeseries_data=df)
+        return cls(well_id=well_id, timeseries_data=df, basin=basin)
     
     def plot(self):
         """Plot the water level time series."""
+        
+        # Basin low elevation is important for understanding well timeseries
+        basin_low_elevation = self.basin.deepest_point.elevation
+        well_point_elevation = self.basin.well_point.elevation_dem
+        diff = basin_low_elevation - well_point_elevation
+        
         fig, ax = plt.subplots(figsize=(12, 6))
         self.timeseries_data['water_level'].plot(ax=ax)
         ax.set_ylabel(f'Water Depth at Well (m)')
         ax.set_title(f'Well {self.well_id} Stage')
         ax.grid(True)
-        plt.axhline(y=0, color='red', linestyle='--')
-        # ?? TODO: Add v-line for lowest basin point dry?
+        plt.axhline(y=0, color='blue', linestyle='--', label='Well Depth')
+        plt.axhline(y=diff, color='red', linestyle='--', label='Depth of Basin Low')
         plt.show()
 
 

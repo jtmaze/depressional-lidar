@@ -11,7 +11,7 @@ from basin_dynamics import BasinDynamics, WellStageTimeseries
 site = 'bradford'
 
 if __name__ == '__main__':
-    wetland_id = '3_311'
+    wetland_id = '13_410'
     source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_veg.tif'
     basins_path = f'D:/depressional_lidar/data/{site}/in_data/{site}_basins_assigned_wetland_ids_KG.shp'
     well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
@@ -52,11 +52,12 @@ if __name__ == '__main__':
         well_point_info=well_point,
         transect_method='deepest',
         transect_n=10,
-        transect_buffer=250
+        transect_buffer=25
     )
 
     basin.visualize_shape(show_deepest=True, show_centroid=True, show_well=True)
-    # basin.plot_basin_hypsometry(plot_points=True)
+    basin.plot_basin_hypsometry(plot_points=True)
+
     # basin.radial_transects_map(uniform=False)
     # basin.radial_transects_map(uniform = True)
     # basin.plot_individual_radial_transects(uniform=False)
@@ -65,8 +66,6 @@ if __name__ == '__main__':
     # basin.plot_aggregated_radial_transects(uniform=True)
 
     # basin.plot_hayashi_p(r0=2, r1=30, uniform=False)
-  
-  
     # basin.plot_hayashi_p(r0=1, r1=None, uniform=True)
     # basin.plot_hayashi_p(r0=10, r1=None, uniform=True)
 
@@ -75,9 +74,10 @@ if __name__ == '__main__':
     well_stage = WellStageTimeseries.from_csv(
         well_stage_path,
         well_id=wetland_id,
+        basin=basin,
         date_column='Date',
         water_level_column='revised_depth',
-        well_id_column='Site_ID'
+        well_id_column='Site_ID',
     )
     well_stage.plot()
 
