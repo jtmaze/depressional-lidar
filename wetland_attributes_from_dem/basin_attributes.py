@@ -349,6 +349,17 @@ class WetlandBasin:
 
             return cum_area_m2, bin_centers
         
+        if method == "pct_trim":
+            flat_dem = dem_data.flatten()
+            p_low, p_high = np.nanpercentile(flat_dem, [2, 98])
+            flat_dem = flat_dem[(flat_dem >= p_low) & (flat_dem <= p_high)]
+            bins = np.arange(flat_dem.min(), flat_dem.max() + step, step)
+            hist, bin_edges = np.histogram(flat_dem, bins=bins)
+            cum_area_m2 = np.cumsum(hist) # NOTE: Assumes 1x1m cell size on DEM
+            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+            return cum_area_m2, bin_centers
+
         else:
             print(f"Method '{method}' not implemented for hypsometry calculation.")
             return None, None
