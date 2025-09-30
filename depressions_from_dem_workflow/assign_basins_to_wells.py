@@ -7,9 +7,9 @@ import matplotlib.pyplot as plt
 
 os.chdir('D:/depressional_lidar/data/')
 
-site = 'osbs'
+site = 'bradford'
 out_path = f'./{site}/in_data/{site}_basins_assigned_wetland_ids.shp'
-depressions_path = f'./{site}/in_data/original_basins/{site}_depression_polygons.shp'
+depressions_path = f'./{site}/in_data/original_basins/_depression_polygons.shp'
 depressions = gpd.read_file(depressions_path)
 print(depressions.crs)
 

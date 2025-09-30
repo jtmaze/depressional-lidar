@@ -1,4 +1,4 @@
-# %% 1.0
+# %% 1.0 Libraries and file paths
 
 import os
 import numpy as np
@@ -11,7 +11,7 @@ os.chdir('D:/depressional_lidar/data/')
 bradford_points = pd.read_excel('doe_point_data_master.xlsx', sheet_name='Bradford')
 osbs_points = pd.read_excel('doe_point_data_master.xlsx', sheet_name='OSBS')
 
-# %%
+# %% 2.0 Define functions to covert pts to gpd and find elevations
 
 def convert_pts_to_gpd(
     pts_df: pd.DataFrame,
@@ -97,14 +97,14 @@ def estimate_pts_dem_elevation(
     # Return the points GeoDataFrame with elevation estimates
     return pts_gdf
 
-# %% Convert Bradford and OSBS RTK points to GeoDataFrames
+# %% 3.0 Convert Bradford and OSBS RTK points to GeoDataFrames
 
 bradford_gdf = convert_pts_to_gpd(bradford_points, crs='EPSG:4326', latitude_colname='rtk_latitude', longitude_colname='rtk_longitude')
 bradford_gdf['site'] = 'bradford'
 osbs_gdf = convert_pts_to_gpd(osbs_points, crs='EPSG:4326', latitude_colname='rtk_latitude', longitude_colname='rtk_longitude')
 osbs_gdf['site'] = 'osbs'
 
-# %% Estimate DEM elevation for Bradford and OSBS points
+# %% 4.0 Estimate DEM elevation for Bradford and OSBS points
 # Convert to DEM crs for elevation extraction and filter empty geometries
 bradford_gdf = bradford_gdf.to_crs('EPSG:26917')
 bradford_gdf = bradford_gdf[~bradford_gdf.geometry.is_empty & bradford_gdf.geometry.notna()]

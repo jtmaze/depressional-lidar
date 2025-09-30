@@ -80,7 +80,7 @@ class BasinDynamics:
     @cached_property
     def well_point(self) -> WellPoint:
         """Get the well point from the basin."""
-        return self.basin.establish_well_point(self.basin.well_point_info)
+        return self.basin.well_point
     
     def calculate_inundation_map(self, water_elevation: float) -> np.ndarray:
         """
@@ -116,7 +116,7 @@ class BasinDynamics:
             
         if water_elevation is None:
             water_level = self.well_stage.timeseries_data.loc[date, 'water_level']
-            water_elevation = self.well_point.elevation_dem - self.well_point.depth + water_level
+            water_elevation = self.well_point.elevation_dem + water_level
         
         # Get inundation map, DEM, and well point for visualization
         inundation_map = self.calculate_inundation_map(water_elevation)
@@ -135,7 +135,7 @@ class BasinDynamics:
         plt.imshow(dem, cmap='gray', interpolation='nearest')
         plt.colorbar(label='Elevation (m)')
         plt.imshow(inundation_map, cmap='Blues', alpha=0.4)
-        ax.scatter(row, col, color='red', 
+        ax.scatter(col, row, color='red', 
                    marker='x', s=100, label=f'Well Location @{well_point.elevation_dem:.2f}m')
         plt.legend()
 
@@ -159,7 +159,7 @@ class BasinDynamics:
 
         if water_elevation is None:
             water_level = self.well_stage.timeseries_data.loc[date, 'water_level']
-            water_elevation = self.well_point.elevation_dem - self.well_point.depth + water_level
+            water_elevation = self.well_point.elevation_dem + water_level
 
         # Get TAI map, DEM, and well point for visualization
         tai_map = self.calculate_tai_map(water_elevation, max_depth, min_depth)
@@ -167,6 +167,7 @@ class BasinDynamics:
         well_point = self.well_point
         well_point_x = well_point.location.x.values[0]
         well_point_y = well_point.location.y.values[0]
+
         row, col = rio.transform.rowcol(
             self.basin.clipped_dem.transform,
             well_point_x,
@@ -178,7 +179,7 @@ class BasinDynamics:
         plt.imshow(dem, cmap='gray', interpolation='nearest')
         plt.colorbar(label='Elevation (m)')
         plt.imshow(tai_map, cmap='Oranges', alpha=0.2)
-        ax.scatter(row, col, color='red',
+        ax.scatter(col, row, color='red',
                    marker='x', s=100, label=f'Well Location @{well_point.elevation_dem:.2f}m')
         plt.legend()
 

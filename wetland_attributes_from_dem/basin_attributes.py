@@ -33,7 +33,6 @@ class DeepestPoint:
 class WellPoint:
     elevation_dem: float # The well's elevatation - coords placed on DEM
     elevation_rtk: float # The well's elevation as measured by RTK GPS
-    depth: float # The well's location relative to wetland bottom
     location: gpd.GeoSeries
 
 
@@ -47,6 +46,21 @@ class WetlandBasin:
     transect_method: str = 'deepest'  # 'centroid' or 'deepest'
     transect_n: int = 8
     transect_buffer: float = 0.0
+
+    @cached_property
+    def well_point(self) -> WellPoint:
+        """
+        Establishes the well point either with or without a prior basin geometry.
+        """
+        if self.well_point_info is None:
+            raise ValueError("Well point info is required")
+        
+        if self.footprint is not None:
+            # Use DEM clipped to the prior basin footprint
+            return self.establish_well_point(self.well_point_info)
+        else:
+            # Use source DEM becuase there's no prior basin footprint
+            return self._establish_well_point_from_source()
 
     @cached_property
     def deepest_point(self) -> DeepestPoint:
@@ -80,13 +94,22 @@ class WetlandBasin:
             show_well: bool = False
         ):
 
-        # Create bounding box
-        bounds = self.footprint.total_bounds
+
+        if self.footprint is not None:
+            plot_shape = self.footprint
+            bounds = self.footprint.total_bounds
+        else:
+            well_point = self.well_point.location
+            buffer_dist = self.transect_buffer if self.transect_buffer > 0 else 100
+            buffered = well_point.buffer(buffer_dist)
+            plot_shape = buffered
+            bounds = buffered.total_bounds
+
         buffer_bounds = [
-            bounds[0] - 75,  # minx
-            bounds[1] - 75,  # miny
-            bounds[2] + 75,  # maxx
-            bounds[3] + 75   # maxy
+            bounds[0] - 100,  # minx
+            bounds[1] - 100,  # miny
+            bounds[2] + 100,  # maxx
+            bounds[3] + 100   # maxy
         ]
         
         with rio.open(self.source_dem_path) as dem:
@@ -100,10 +123,10 @@ class WetlandBasin:
         ax = show(dem_data, transform=dem_transform, ax=ax, cmap='viridis')
         if ax.images:
             plt.colorbar(ax.images[0], ax=ax, label='Elevation (m)')
-        self.footprint.plot(ax=ax, facecolor='none', edgecolor='red')
+        plot_shape.plot(ax=ax, facecolor='none', edgecolor='red')
 
-        if self.transect_buffer != 0:
-            self.footprint.geometry.buffer(self.transect_buffer).plot(ax=ax, facecolor='none', edgecolor='red', linestyle='--')
+        if self.transect_buffer != 0 and self.footprint is not None:
+            plot_shape.geometry.buffer(self.transect_buffer).plot(ax=ax, facecolor='none', edgecolor='red', linestyle='--')
 
         if show_deepest:
             deepest = self.deepest_point
@@ -113,8 +136,8 @@ class WetlandBasin:
                 xytext=(10, 10), textcoords='offset points',
                 color='white', fontweight='bold')
             
-        if show_centroid:
-            centroid = self.footprint.geometry.centroid
+        if show_centroid and self.footprint is not None:
+            centroid = plot_shape.geometry.centroid
             centroid_elevation = self._find_point_elevation(centroid)
             centroid.plot(ax=ax, color='orange', marker='*', markersize=100)
             ax.annotate(f"Centroid: {centroid_elevation:.2f}m", 
@@ -123,7 +146,7 @@ class WetlandBasin:
                 color='white', fontweight='bold')
             
         if show_well:
-            WellPoint = self.establish_well_point(self.well_point_info)
+            WellPoint = self.well_point
             if WellPoint:
                 WellPoint.location.plot(ax=ax, color='violet', marker='o', markersize=100)
                 ax.annotate(f"DEM {WellPoint.elevation_dem:.2f}m", 
@@ -138,22 +161,33 @@ class WetlandBasin:
 
     def get_clipped_dem(self) -> ClippedDEM:
 
-        if self.transect_buffer != 0:
-            shape = [self.footprint.geometry.buffer(self.transect_buffer).values[0]]
-        else:   
-            shape = [self.footprint.geometry.values[0]]
+        """
+        Two approaches to clipping the DEM:
+            1) If a basin_footprint is passed to the WetlandBasin constructor, use that 
+            geometry buffered by some distance to select DEM cells.
+            2) Otherwise, select the DEM cells within some distance of the well.
+        """
+
+        if self.footprint is not None:
+            if self.transect_buffer != 0:
+                shape = [self.footprint.geometry.buffer(self.transect_buffer).values[0]]
+            else:   
+                shape = [self.footprint.geometry.values[0]]
+        else:
+            if self.well_point_info is None:
+                raise ValueError("Either footprint or well_point_info must be provided")
+            
+            well_buffer_dist = self.transect_buffer if self.transect_buffer > 0 else 100
+            well_point = self.well_point_info.geometry.values[0]
+            shape = [well_point.buffer(well_buffer_dist)]
+
+        # Clip DEM to either basin footprint or the well point
         with rio.open(self.source_dem_path) as dem:
             data, out_transform = rio_mask(
-                dem,
-                shape,
-                crop=True,
-                filled=True,
-                nodata=dem.nodata
+                dem, shape, crop=True, filled=True, nodata=dem.nodata
             )
-
             band = data[0].astype("float64")
             nodata = dem.nodata
-            
             # Replace nodata values with np.nan
             band = np.where(band == nodata, np.nan, band)
 
@@ -166,31 +200,54 @@ class WetlandBasin:
     
     def find_deepest_point(self) -> DeepestPoint:
         """
-        Find the minimum DEM value within the footprint based on a 3x3 cell average.
-        Returns the location of the minimum 3x3 average with its actual elevation.
+        Find the minimum DEM value within the footprint based on a 5x5 cell average.
+        Returns the location of the minimum 5x5 average with its actual elevation.
         """
+
+        #TODO: Find the percentile?
         clipped = self.clipped_dem
         dem_data = clipped.dem
         
-        # Create an output array for the 3x3 averages
+        # Create an output array for the 5x5 averages
         dem_avg = np.zeros_like(dem_data)
         dem_avg.fill(np.nan)
         
-        # Calculate 3x3 averages
+        # Calculate 5x5 averages
         rows, cols = dem_data.shape
-        for i in range(1, rows-1):
-            for j in range(1, cols-1):
-                # Extract 3x3 window
-                window = dem_data[i-1:i+2, j-1:j+2]
-                # Calculate average ignoring NaNs
-                if not np.all(np.isnan(window)):
-                    dem_avg[i, j] = np.nanmean(window)
+        for i in range(2, rows-2):
+            for j in range(2, cols-2):
+                # Extract 5x5 window
+                window = dem_data[i-2:i+3, j-2:j+3]
+                # Calculate IQR mean to get a better estimate
+                flat_window = window.flatten()
+                valid_vals = flat_window[~np.isnan(flat_window)]
+                if len(valid_vals) >= 4:
+                    q25, q75 = np.nanpercentile(valid_vals, [25, 75])
+                    iqr_vals = valid_vals[(valid_vals >= q25) & (valid_vals <= q75)]
+                    dem_avg[i, j] = np.mean(iqr_vals)
         
         # Find the minimum value and its location in the averaged DEM
         row, col = np.unravel_index(np.nanargmin(dem_avg), dem_avg.shape)
         
         # Get the actual elevation from the original DEM at this location
-        min_val = float(dem_data[row, col])
+        def _get_low_elevation(row, col):
+            """
+            Calculate the 25th percentile elevation within a 5×5 window centered on the given cell.
+            """
+            row_start = max(0, row - 2)
+            row_end = min(dem_data.shape[0], row + 3)
+            col_start = max(0, col - 2)
+            col_end = min(dem_data.shape[1], col + 3)
+
+            min_window = dem_data[row_start:row_end, col_start:col_end]
+
+            # Calculate 25th percentile, ignoring NaN values
+            valid_vals = min_window[~np.isnan(min_window)]
+            min_val = float(np.percentile(valid_vals, 25))
+
+            return min_val
+
+        min_val = _get_low_elevation(row, col)
         
         # Convert (row, col) to map x,y using the clipped transform
         x, y = rio.transform.xy(clipped.transform, row, col, offset="center")
@@ -203,7 +260,7 @@ class WetlandBasin:
     def _find_point_elevation(self, point: gpd.GeoSeries) -> float:
         """
         Find the elevation at a specific point using the clipped DEM.
-        # BUG some of our wetland wells are outside the basins
+        Uses a 3x3 window to mitigate DEM noise
         """
         clipped = self.clipped_dem
         dem_data = clipped.dem
@@ -244,15 +301,37 @@ class WetlandBasin:
 
         elevation_dem = self._find_point_elevation(well_point_info.geometry)
 
-        basin_low = self.deepest_point.elevation
-        depth = elevation_dem - basin_low
         rtk = float(well_point_info['rtk_elevation'].values[0])
 
         return WellPoint(
             elevation_dem=elevation_dem,
             elevation_rtk=rtk,
-            depth=depth,
             location=well_point_info.geometry
+        )
+    
+    def _establish_well_point_from_source(self) -> WellPoint:
+        """
+        Establishes the well point using the original source DEM (before clipping)
+        """
+        if self.well_point_info is None:
+            raise ValueError("well_point_info is required becuase no basin footprint is required")
+        
+        with rio.open(self.source_dem_path) as dem:
+            x = self.well_point_info.geometry.x.values[0]
+            y = self.well_point_info.geometry.y.values[0]
+            # Convert to row/col in source DEM
+            row, col = rio.transform.rowcol(dem.transform, x, y)
+            window = rio.windows.Window(col-1, row-1, 3, 3)
+            dem_data = dem.read(1, window=window)
+            dem_data = np.where(dem_data==dem.nodata, np.nan, dem_data)
+            elevation_dem = float(np.nanmean(dem_data))
+
+        rtk = float(self.well_point_info['rtk_elevation'].values[0])
+        
+        return WellPoint(
+            elevation_dem=elevation_dem,
+            elevation_rtk=rtk,
+            location=self.well_point_info.geometry
         )
 
     def calculate_hypsometry(self, method: str = "total"):
@@ -285,19 +364,19 @@ class WetlandBasin:
 
         if plot_points:
             # Add well point elevations if available
-            well_point = self.establish_well_point(self.well_point_info)
+            well_pt = self.well_point
             
             # Interpolate cumulative area at well point elevations
-            dem_area = np.interp(well_point.elevation_dem, bin_centers, cum_area_m2)
-            rtk_area = np.interp(well_point.elevation_rtk, bin_centers, cum_area_m2)
+            dem_area = np.interp(well_pt.elevation_dem, bin_centers, cum_area_m2)
+            rtk_area = np.interp(well_pt.elevation_rtk, bin_centers, cum_area_m2)
 
-            plt.plot(well_point.elevation_dem, dem_area, 'ro', markersize=8,
-                     label=f"Well DEM Elevation ({well_point.elevation_dem:.2f}m, {dem_area:.2f}m^2)")
-            if abs(well_point.elevation_rtk - well_point.elevation_dem) > 2:
-                print(f"Warning: RTK elevation ({well_point.elevation_rtk:.2f}m) differs from DEM elevation ({well_point.elevation_dem:.2f}m) by more than 2m.")
+            plt.plot(well_pt.elevation_dem, dem_area, 'ro', markersize=8,
+                     label=f"Well DEM Elevation ({well_pt.elevation_dem:.2f}m, {dem_area:.2f}m^2)")
+            if abs(well_pt.elevation_rtk - well_pt.elevation_dem) > 2:
+                print(f"Warning: RTK elevation ({well_pt.elevation_rtk:.2f}m) differs from DEM elevation ({well_pt.elevation_dem:.2f}m) by more than 2m.")
             else:
-                plt.plot(well_point.elevation_rtk, rtk_area, 'go', markersize=8,
-                        label=f"Well RTK Elevation ({well_point.elevation_rtk:.2f}m, {rtk_area:.2f}m^2)")
+                plt.plot(well_pt.elevation_rtk, rtk_area, 'go', markersize=8,
+                        label=f"Well RTK Elevation ({well_pt.elevation_rtk:.2f}m, {rtk_area:.2f}m^2)")
         
         plt.xlabel("Elevation (m)")
         plt.ylabel("Cumulative Area (m^2)")
@@ -314,6 +393,7 @@ class WetlandBasin:
         ) -> gpd.GeoDataFrame:
 
         poly = self.footprint.geometry.values[0]
+        
         target_poly = poly if buffer_distance == 0 else poly.buffer(buffer_distance)
 
         if method == 'deepest':
@@ -358,15 +438,19 @@ class WetlandBasin:
 
     def radial_transects_map(self, uniform: bool = False):
 
-        # Create bounding box
+        # Don't compute transects without basin footprint
+        if self.footprint is None:
+            print('Will not compute radial transects without prior basin')
+            return
+        
+        plot_shape = self.footprint
         bounds = self.footprint.total_bounds
         buffer_bounds = [
-            bounds[0] - 75,  # minx
-            bounds[1] - 75,  # miny
-            bounds[2] + 75,  # maxx
-            bounds[3] + 75   # maxy
+            bounds[0] - 100,  # minx
+            bounds[1] - 100,  # miny
+            bounds[2] + 100,  # maxx
+            bounds[3] + 100   # maxy
         ]
-
         with rio.open(self.source_dem_path) as dem:
             # Create window from bounds
             window = rio.windows.from_bounds(*buffer_bounds, dem.transform)
@@ -404,7 +488,7 @@ class WetlandBasin:
                     'length_m': max_dist,
                     'geometry': truncated_line
                 })
-                plot_transects = gpd.GeoDataFrame(truncated_geoms, crs=self.footprint.crs)
+            plot_transects = gpd.GeoDataFrame(truncated_geoms, crs=self.footprint.crs)
 
         else:
             plot_transects = self.radial_transects
@@ -413,10 +497,12 @@ class WetlandBasin:
         ax = show(dem_data, transform=dem_transform, ax=ax, cmap='gray')  # Changed colormap to 'gray'
         if ax.images:
             plt.colorbar(ax.images[0], ax=ax, label='Elevation (m)')
-        self.footprint.boundary.plot(ax=ax, color='red', linewidth=2, label='Basin Boundary')
+        plot_shape.boundary.plot(ax=ax, color='red', linewidth=2, label='Basin Boundary')
 
-        if self.transect_buffer != 0:
-            self.footprint.geometry.buffer(self.transect_buffer).plot(ax=ax, facecolor='none', edgecolor='red', linestyle='--', label='Buffered Boundary')
+        if self.transect_buffer != 0 and self.footprint is not None:
+            plot_shape.geometry.buffer(self.transect_buffer).plot(
+                ax=ax, facecolor='none', edgecolor='red', linestyle='--', label='Buffered Boundary'
+            )
 
         # Create a colormap for the transects
         num_transects = len(plot_transects)
@@ -431,7 +517,7 @@ class WetlandBasin:
         center_x, center_y = plot_transects.geometry[0].xy[0][0], plot_transects.geometry[0].xy[1][0]
         ax.plot(center_x, center_y, 'yo', markersize=8, label='Radial Reference Point')
 
-        plt.title(f"Radial Transects for {self.wetland_id}")
+        plt.title(f"Radial Transects for {self.wetland_id} (Uniform: {uniform})")
         plt.xlabel("x (meters)")
         plt.ylabel("y (meters)")
         plt.legend()
@@ -503,8 +589,11 @@ class WetlandBasin:
         return pd.concat(dfs, ignore_index=True)
 
     def plot_individual_radial_transects(self, uniform: bool = False):
-
-        # TODO: Add functionality to plot truncated transects
+        # skip theres no basin shape
+        if self.footprint is None:
+            print('Will not compute radial transects without prior basin')
+            return
+        
         if uniform:
             transects = self.truncated_transect_profiles
         else:
@@ -626,6 +715,10 @@ class WetlandBasin:
 
     def plot_hayashi_p(self, r0: int, r1: int, uniform: bool = False):
 
+        if self.footprint is None:
+            print('Will not compute radial transects without prior basin')
+            return  
+        
         if uniform:
             df = self.calc_hayashi_p_uniform_z(r0=r0)
             r1 = 'max on transect'
@@ -648,7 +741,6 @@ class WetlandBasin:
             f"Uniform z = {uniform}"
         )
         plt.show()
-
 
     def aggregate_radial_transects(self, uniform: bool = True) -> pd.DataFrame:
         """
@@ -673,6 +765,10 @@ class WetlandBasin:
         return agg.sort_values('distance_m', ignore_index=True)
     
     def plot_aggregated_radial_transects(self, uniform: bool = True):
+
+        if self.footprint is None:
+            print('Will not compute radial transects without prior basin')
+            return
 
         if uniform:
             agg = self.aggregate_radial_transects(uniform=uniform)
