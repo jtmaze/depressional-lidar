@@ -7,18 +7,20 @@ import geopandas as gpd
 import pandas as pd
 from basin_attributes import WetlandBasin
 from basin_dynamics import BasinDynamics, WellStageTimeseries
-from wetland_model import WetlandModel
+from wetland_model import WetlandModel, ForcingData
 
 site = 'bradford'
+forcing = 'ERA-5'
 
 if __name__ == '__main__':
-    wetland_id = '14_115'
+    wetland_id = '3_311'
     source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_veg.tif'
     basins_path = f'D:/depressional_lidar/data/{site}/in_data/{site}_basins_assigned_wetland_ids_KG.shp'
     well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
     # osbs {site}_core_wells_tracked_datum.csv'
     # brandford waterlevel_offsets_tracked.csv'
     well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/stage_data/{site}_wells_tracked_datum.csv'
+    forcing_path = f'D:/depressional_lidar/data/{site}/in_data/hydro_forcings/{forcing}_daily_mean.csv'
 
     # 2.0 Read and clean the data
     footprint = gpd.read_file(basins_path)
@@ -67,10 +69,19 @@ if __name__ == '__main__':
     dynamics.map_inundation_stacks()
 
     # 5.0 Implement Haki's BICY model
-    wetland_model = WetlandModel(
-        basin=basin,
-        well_stage_timeseries=well_stage
+    forcing_data = ForcingData.from_csv(
+        file_path=forcing_path, 
+        data_source='ERA-5'
     )
 
-    #wetland_model.plot_rET_and_Sy()
+    wetland_model = WetlandModel(
+        basin=basin,
+        well_stage_timeseries=well_stage,
+        forcing_data=forcing_data
+    )
+
+    wetland_model.plot_rET_and_Sy()
     wetland_model.plot_Qh_A()
+    wetland_model.plot_Q_timeseries()
+    wetland_model.plot_rET_timeseries()
+    wetland_model.plot_Sy_timeseries()

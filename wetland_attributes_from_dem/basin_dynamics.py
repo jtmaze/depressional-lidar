@@ -37,17 +37,16 @@ class WellStageTimeseries:
             well_id_column: Name of the column containing well identifiers
         """
         df = pd.read_csv(file_path)
-        print(df[well_id_column].unique())
-        print(df.columns)
         if well_id_column in df.columns:
             df = df[df[well_id_column] == well_id]
-        
-        df[date_column] = pd.to_datetime(df[date_column])
-        
-        df = df.set_index(df[date_column])
-        
+
         if water_level_column != 'water_level':
             df = df.rename(columns={water_level_column: 'water_level'})
+        if date_column != 'date':
+            df = df.rename(columns={date_column: 'date'})
+        
+        df['date'] = pd.to_datetime(df['date'])
+        df = df.set_index(df['date'])
         
         # Keep only necessary column and aggregate to daily values
         df = df[['water_level']].resample('D').mean()

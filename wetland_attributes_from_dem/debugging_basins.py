@@ -7,7 +7,6 @@ import geopandas as gpd
 import pandas as pd
 from basin_attributes import WetlandBasin
 from basin_dynamics import BasinDynamics, WellStageTimeseries
-from wetland_model import WetlandModel
 
 site = 'bradford'
 
@@ -21,16 +20,12 @@ if __name__ == '__main__':
     well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/stage_data/{site}_wells_tracked_datum.csv'
 
     # 2.0 Read and clean the data
-
     footprint = gpd.read_file(basins_path)
     footprint = footprint[footprint['wetland_id'] == wetland_id]
 
     well_point = gpd.read_file(well_points_path)
-    well_point = well_point[['wetland_id', 'type', 'rtk_elevat', 'geometry']]
-
-    """ 
-    Clean well points gdf 
-    """
+    well_point = well_point[['wetland_id', 'type', 'rtk_elevat', 'geometry']]  
+    # Clean well points gdf 
     well_point.rename(
         columns={
             'rtk_elevat': 'rtk_elevation'
@@ -47,26 +42,26 @@ if __name__ == '__main__':
     basin = WetlandBasin(
         wetland_id=wetland_id, 
         source_dem_path=source_dem, 
-        footprint=None, 
+        footprint=footprint, 
         well_point_info=well_point,
         transect_method='deepest',
-        transect_n=10,
-        transect_buffer=300
+        transect_n=50,
+        transect_buffer=10
     )
 
     basin.visualize_shape(show_deepest=True, show_centroid=True, show_well=True)
 
 
-    # basin.plot_basin_hypsometry(plot_points=True)
+    basin.plot_basin_hypsometry(plot_points=True)
     # basin.radial_transects_map(uniform=False)
-    # basin.radial_transects_map(uniform = True)
+    basin.radial_transects_map(uniform = True)
     # basin.plot_individual_radial_transects(uniform=False)
-    # basin.plot_individual_radial_transects(uniform=True)
+    basin.plot_individual_radial_transects(uniform=True)
     # basin.plot_aggregated_radial_transects(uniform=False)
     # basin.plot_aggregated_radial_transects(uniform=True)
 
     # basin.plot_hayashi_p(r0=2, r1=30, uniform=False)
-    # basin.plot_hayashi_p(r0=1, r1=None, uniform=True)
+    basin.plot_hayashi_p(r0=1, r1=None, uniform=True)
     # basin.plot_hayashi_p(r0=10, r1=None, uniform=True)
 
 
