@@ -12,7 +12,7 @@ from wetland_model import WetlandModel
 site = 'bradford'
 
 if __name__ == '__main__':
-    wetland_id = '7_243'
+    wetland_id = '14_115'
     source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_veg.tif'
     basins_path = f'D:/depressional_lidar/data/{site}/in_data/{site}_basins_assigned_wetland_ids_KG.shp'
     well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
@@ -72,4 +72,5 @@ if __name__ == '__main__':
         well_stage_timeseries=well_stage
     )
 
-    wetland_model.plot_rET_and_Sy()
+    #wetland_model.plot_rET_and_Sy()
+    wetland_model.plot_Qh_A()

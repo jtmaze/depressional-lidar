@@ -13,6 +13,14 @@ from basin_dynamics import WellStageTimeseries
 class WetlandModel:
     basin: WetlandBasin
     well_stage_timeseries: WellStageTimeseries
+    # Model parameters with defaults
+    delta: float = 0.38
+    beta: float = 4.1
+    alpha: float = 1.11
+    n: float = 2.07
+    n1: float = 0.15
+    a: float = 2000
+    c: float = 4
 
     @cached_property
     def raw_hypsometric_curve(self) -> pd.DataFrame:
@@ -48,15 +56,15 @@ class WetlandModel:
 
         return out_df
 
-    def r_ET(self, h, delta: float = 0.38, beta: float = 4.1):
+    def r_ET(self, h):
 
         df = self.scaled_hypsometric_curve.copy()
 
-        Ar_hdelta_term = WetlandModel._Ar_h_func(h + delta, df)
+        Ar_hdelta_term = WetlandModel._Ar_h_func(h + self.delta, df)
 
         # Integrand
         def integrand(Ar):
-            return np.exp(-beta * (WetlandModel._h_Ar_func(Ar, df) - h - delta))
+            return np.exp(-self.beta * (WetlandModel._h_Ar_func(Ar, df) - h - self.delta))
         
         # Compute the integral
         int_result, _ = integrate.quad(integrand, Ar_hdelta_term, 1.0)
@@ -85,24 +93,24 @@ class WetlandModel:
 
         return dict(zip(domain, vals))
 
-    def Sy(self, h, alpha: float = 1.11, n: float = 2.07, n1=0.15):
+    def Sy(self, h):
 
         df = self.scaled_hypsometric_curve.copy()
 
         Ar_h = WetlandModel._Ar_h_func(h, df)
 
-        term1 = Ar_h + (n1 * (1 - Ar_h))
+        term1 = Ar_h + (self.n1 * (1 - Ar_h))
 
         def integrand(Ar):
             h_Ar = WetlandModel._h_Ar_func(Ar, df)
-            term = alpha * (h_Ar - h)
+            term = self.alpha * (h_Ar - h)
             if term < 0: 
                 return 0.05
-            return (1 + term**n) ** (-(n + 1) / n)
+            return (1 + term**self.n) ** (-(self.n + 1) / self.n)
         
         int_result, _ = integrate.quad(integrand, Ar_h, 1.0)
 
-        result = term1 + n1 * int_result
+        result = term1 + self.n1 * int_result
 
         return result
     
@@ -150,7 +158,35 @@ class WetlandModel:
         plt.grid(True, alpha=0.3)
         plt.show()
 
-    def Q(self, a: float = 2_000, c: float = 4):
+    def Qh_A(self, h):
+        """Calculate normalized outflow as a function of depth."""
+        max_A = self.raw_hypsometric_curve['cum_area_m2'].max()
+        # TODO: Modify Spill logic for Bradfod
+        spill = 0.1
+        Qh = self.a * ((h - spill) ** self.c)
+        Qh_A = Qh / max_A
+        
+        return Qh_A
+
+    def plot_Qh_A(self, n_points: int = 100):
+        """
+        Plot normalized outflow (Qh/A) as a function of depth.
+        """
+        h_min = self.scaled_hypsometric_curve['depth'].min()
+        h_max = self.scaled_hypsometric_curve['depth'].max()
+        
+        # Create domain - only plot where h > spill (otherwise negative)
+        domain = np.linspace(h_min, h_max, n_points)
+        vals = [self.Qh_A(h) for h in domain]
+        
+        plt.figure(figsize=(10, 6))
+        plt.plot(domain, vals, linewidth=2)
+        plt.xlabel('h (depth)', fontsize=12)
+        plt.ylabel('Qh/A (normalized outflow [m/s])', fontsize=12)
+        plt.title('Normalized Outflow vs Depth', fontsize=14)
+        plt.legend(fontsize=10)
+        plt.grid(True, alpha=0.3)
+        plt.show()
 
 
 
