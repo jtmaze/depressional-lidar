@@ -7,6 +7,7 @@ import geopandas as gpd
 import pandas as pd
 from basin_attributes import WetlandBasin
 from basin_dynamics import BasinDynamics, WellStageTimeseries
+from wetland_model import WetlandModel
 
 site = 'bradford'
 
@@ -39,7 +40,6 @@ if __name__ == '__main__':
     well_point = well_point[
         (well_point['type'] == 'core_well') | (well_point['type'] == 'wetland_well')
     ]
-
     well_point = well_point[well_point['wetland_id'] == wetland_id]
 
     # 3.0 Create the WetlandBasin object and visualize attributes
@@ -55,8 +55,9 @@ if __name__ == '__main__':
     )
 
     basin.visualize_shape(show_deepest=True, show_centroid=True, show_well=True)
-    basin.plot_basin_hypsometry(plot_points=True)
 
+
+    # basin.plot_basin_hypsometry(plot_points=True)
     # basin.radial_transects_map(uniform=False)
     # basin.radial_transects_map(uniform = True)
     # basin.plot_individual_radial_transects(uniform=False)
