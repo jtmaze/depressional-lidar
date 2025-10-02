@@ -129,7 +129,7 @@ class WetlandModel:
         return ts[['r_ET']]
     
     @cached_property
-    def dh_dt_timeseries(self) -> pd.DataFrame:
+    def dh_dt_model(self) -> pd.DataFrame:
         """
         Generate dh/dt timeseries by computing the rate of depth change for each time step.
         """
@@ -142,6 +142,19 @@ class WetlandModel:
         
         return ts[['dh_dt']]
     
+    @cached_property
+    def dh_dt_actual(self) -> pd.DataFrame:
+
+        df = self.adjust_stage_timeseries.copy()
+        df = df[['basin_depth']]
+        df['basin_depth_t1'] = df['basin_depth'].shift(1)
+        days_diff = (df.index.shift(1) - df.index).days
+        df['dh_dt'] = (df['basin_depth_t1'] - df['basin_depth']) / days_diff
+        # Omit rows without subsequent measurements (where dh_dt_actual is NaN)
+        df = df.dropna(subset=['dh_dt'])
+
+        return df
+
     @staticmethod
     def _Ar_h_func(h_val, df):
         idx = np.argmin(np.abs(df['depth'] - h_val))
@@ -330,20 +343,44 @@ class WetlandModel:
         plt.tight_layout()
         plt.show()
 
-    def plot_dh_dt_timeseries(self):
+    def plot_dh_dt_timseries(self, modeled: bool = True):
         """
         Plot the rate of depth change (dh/dt) over time.
         """
-        df = self.dh_dt_timeseries
+        if modeled:
+            df = self.dh_dt_model
+            title_text = 'Modeled'
+        else:
+            df = self.dh_dt_actual
+            title_text = 'Actual'
         
         plt.figure(figsize=(12, 6))
         plt.plot(df.index, df['dh_dt'], linewidth=1.5, color='purple')  # Choose a distinct color
         plt.xlabel('Date', fontsize=12)
-        plt.ylabel('dh/dt (rate of depth change [m/day])', fontsize=12)
+        plt.ylabel(f'dh/dt ({title_text} rate of depth change [m/day])', fontsize=12)
         plt.title('Rate of Depth Change Timeseries', fontsize=14)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.show()
+
+    def modeled_vs_actual_scatter_plot(self):
+        
+        modeled = self.dh_dt_model.rename(columns={'dh_dt': 'modeled'})
+        actual = self.dh_dt_actual[['dh_dt']].rename(columns={'dh_dt': 'actual'})
+        df = modeled.join(actual, how='inner').dropna()
+
+        plt.figure(figsize=(8, 6))
+        plt.scatter(df['actual'], df['modeled'], alpha=0.7, edgecolor='k')
+        lims = [df.min().min(), df.max().max()]
+        plt.plot(lims, lims, 'r--', label='1:1')
+        plt.xlabel('Actual dh/dt [m/day]')
+        plt.ylabel('Modeled dh/dt [m/day]')
+        plt.title('Modeled vs Actual dh/dt')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.show()
+
 
     
     

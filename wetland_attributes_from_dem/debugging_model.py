@@ -88,4 +88,6 @@ if __name__ == '__main__':
     wetland_model.plot_Q_timeseries()
     wetland_model.plot_rET_timeseries()
     wetland_model.plot_Sy_timeseries()
-    wetland_model.plot_dh_dt_timeseries()
+    wetland_model.plot_dh_dt_timseries(modeled=True)
+    wetland_model.plot_dh_dt_timseries(modeled=False)
+    wetland_model.modeled_vs_actual_scatter_plot()
