@@ -13,7 +13,7 @@ site = 'bradford'
 forcing = 'ERA-5'
 
 if __name__ == '__main__':
-    wetland_id = '3_311'
+    wetland_id = '15_409'
     source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_veg.tif'
     basins_path = f'D:/depressional_lidar/data/{site}/in_data/{site}_basins_assigned_wetland_ids_KG.shp'
     well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
@@ -50,7 +50,7 @@ if __name__ == '__main__':
         well_point_info=well_point,
         transect_method='deepest',
         transect_n=10,
-        transect_buffer=50
+        transect_buffer=20
     )
     #basin.visualize_shape(show_deepest=True, show_centroid=True, show_well=True)
 
@@ -77,7 +77,10 @@ if __name__ == '__main__':
     wetland_model = WetlandModel(
         basin=basin,
         well_stage_timeseries=well_stage,
-        forcing_data=forcing_data
+        forcing_data=forcing_data,
+        a=1, #NOTE why is my scale so far off...
+        c=2,
+        est_spill_depth=0.35
     )
 
     wetland_model.plot_rET_and_Sy()
@@ -85,3 +88,4 @@ if __name__ == '__main__':
     wetland_model.plot_Q_timeseries()
     wetland_model.plot_rET_timeseries()
     wetland_model.plot_Sy_timeseries()
+    wetland_model.plot_dh_dt_timeseries()

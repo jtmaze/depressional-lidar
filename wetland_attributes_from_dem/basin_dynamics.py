@@ -45,7 +45,7 @@ class WellStageTimeseries:
         if date_column != 'date':
             df = df.rename(columns={date_column: 'date'})
         
-        df['date'] = pd.to_datetime(df['date'])
+        df['date'] = pd.to_datetime(df['date']).dt.tz_localize(None)
         df = df.set_index(df['date'])
         
         # Keep only necessary column and aggregate to daily values

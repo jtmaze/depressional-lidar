@@ -21,11 +21,12 @@ class ForcingData:
         """
         raw = pd.read_csv(file_path)
         if data_source == "ERA-5":
-            df = raw[['date', 'pet_m', 'precip_m']]
+            df = raw.rename(columns={'date_local': 'date'})
+            df = df[['date', 'pet_m', 'precip_m']]
         else:
             print("Warning no column name handling for other data sources")
 
-        df['date'] = pd.to_datetime(df['date'])
+        df['date'] = pd.to_datetime(df['date']).dt.tz_localize(None)
         df = df.set_index('date')
 
         return cls(data_source=data_source, data=df)
@@ -41,8 +42,9 @@ class WetlandModel:
     alpha: float = 1.11
     n: float = 2.07
     n1: float = 0.15
-    a: float = 2000
-    c: float = 4
+    a: float = 500
+    c: float = 2
+    est_spill_depth: float = 0.25
 
     @cached_property
     def raw_hypsometric_curve(self) -> pd.DataFrame:
@@ -125,6 +127,20 @@ class WetlandModel:
         ts['r_ET'] = np.interp(ts['basin_depth'], lookup['h'], lookup['r_ET'])
 
         return ts[['r_ET']]
+    
+    @cached_property
+    def dh_dt_timeseries(self) -> pd.DataFrame:
+        """
+        Generate dh/dt timeseries by computing the rate of depth change for each time step.
+        """
+        ts = self.adjust_stage_timeseries.copy()
+        
+        ts['dh_dt'] = [
+            self.dh_dt(h, pd.to_datetime(t))  # Convert index to single Timestamp for dh_dt method
+            for h, t in zip(ts['basin_depth'], ts.index)
+        ]
+        
+        return ts[['dh_dt']]
     
     @staticmethod
     def _Ar_h_func(h_val, df):
@@ -214,15 +230,40 @@ class WetlandModel:
         plt.grid(True, alpha=0.3)
         plt.show()
 
-    def Qh_A(self, h):
+    def Qh_A(self, h: float):
         """Calculate normalized outflow as a function of depth."""
         max_A = self.raw_hypsometric_curve['cum_area_m2'].max()
-        # TODO: Modify Spill logic for Bradfod
-        spill = 0.1
-        Qh = self.a * ((h - spill) ** self.c)
+        spill = self.est_spill_depth
+
+        if h > spill:
+            Qh = self.a * ((h - spill) ** self.c)
+        else:
+            Qh = 0
+
         Qh_A = Qh / max_A
+        # Convert using seconds per day
+        Qh_A_daily = Qh_A * 86_400
         
-        return Qh_A
+        return Qh_A_daily
+    
+    def dh_dt(self, h: float, t: pd.DatetimeIndex) -> float:
+        """
+        Compute change in stage as a function of climate data depth-dependent Sy, ET, Q
+        """
+        # Forcing values
+        precip = self.forcing_data.data['precip_m'].loc[t]
+        pet = self.forcing_data.data['pet_m'].loc[t]
+
+        # Depth-dependent values
+        Q = self.Qh_A(h)
+        r_ET_lookup = self.r_ET_lookup_table
+        r_ET = np.interp(h, r_ET_lookup['h'], r_ET_lookup['r_ET'])
+        Sy_lookup = self.Sy_lookup_table
+        Sy = np.interp(h, Sy_lookup['h'], Sy_lookup['Sy'])
+
+        dh_dt = (precip - (r_ET * pet) - Q) / (Sy)
+
+        return dh_dt
 
     def plot_Qh_A(self, n_points: int = 100):
         """
@@ -238,7 +279,7 @@ class WetlandModel:
         plt.figure(figsize=(10, 6))
         plt.plot(domain, vals, linewidth=2)
         plt.xlabel('h (depth)', fontsize=12)
-        plt.ylabel('Qh/A (normalized outflow [m/s])', fontsize=12)
+        plt.ylabel('Qh/A (normalized outflow [m/d])', fontsize=12)
         plt.title('Normalized Discharge vs Depth', fontsize=14)
         plt.legend(fontsize=10)
         plt.grid(True, alpha=0.3)
@@ -253,7 +294,7 @@ class WetlandModel:
         plt.figure(figsize=(12, 6))
         plt.plot(df.index, df['Q'], linewidth=1.5)
         plt.xlabel('Date', fontsize=12)
-        plt.ylabel('Q (normalized discharge [m/s])', fontsize=12)
+        plt.ylabel('Q (normalized discharge [m/d])', fontsize=12)
         plt.title('Discharge Timeseries', fontsize=14)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
@@ -263,10 +304,10 @@ class WetlandModel:
         """
         Plot specific yield over time.
         """
-        data = self.Sy_timeseries
+        df = self.Sy_timeseries
         
         plt.figure(figsize=(12, 6))
-        plt.plot(data.index, data['Sy'], linewidth=1.5, color='green')
+        plt.plot(df.index, df['Sy'], linewidth=1.5, color='green')
         plt.xlabel('Date', fontsize=12)
         plt.ylabel('Sy (specific yield)', fontsize=12)
         plt.title('Specific Yield Timeseries', fontsize=14)
@@ -278,16 +319,33 @@ class WetlandModel:
         """
         Plot relative ET over time.
         """
-        data = self.rET_timeseries
+        df = self.rET_timeseries
         
         plt.figure(figsize=(12, 6))
-        plt.plot(data.index, data['r_ET'], linewidth=1.5, color='orange')
+        plt.plot(df.index, df['r_ET'], linewidth=1.5, color='orange')
         plt.xlabel('Date', fontsize=12)
         plt.ylabel('r_ET (relative evapotranspiration)', fontsize=12)
         plt.title('Relative ET Timeseries', fontsize=14)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.show()
+
+    def plot_dh_dt_timeseries(self):
+        """
+        Plot the rate of depth change (dh/dt) over time.
+        """
+        df = self.dh_dt_timeseries
+        
+        plt.figure(figsize=(12, 6))
+        plt.plot(df.index, df['dh_dt'], linewidth=1.5, color='purple')  # Choose a distinct color
+        plt.xlabel('Date', fontsize=12)
+        plt.ylabel('dh/dt (rate of depth change [m/day])', fontsize=12)
+        plt.title('Rate of Depth Change Timeseries', fontsize=14)
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.show()
+
+    
     
 
     
