@@ -6,25 +6,24 @@ library(readxl)
 library(rlang)
 library(glue)
 
-soil_core_dir <- 'D:/depressional_lidar/data/osbs/in_data/sampling_elevations/faith_osbs_soilcore_elevations.xlsx'
+soil_core_dir <- 'D:/depressional_lidar/data/osbs/in_data/sampling_elevations/complete_faith_osbs_soilcore_elevations.xlsx'
 soil_core <- read_excel(
   soil_core_dir,
   sheet='Sheet1'
 )
 
-stage_dir <- "D:/depressional_lidar/data/osbs/in_data/stage_data/osbs_core_wells_consistent_datum.csv"
+stage_dir <- "D:/depressional_lidar/data/osbs/in_data/stage_data/fall2025_processed_well_depth.csv"
 stage <- read_csv(
   stage_dir
-  # TODO: Obtain spring download for __
   # I filter out early data so we have consistent period of record across wetlands, safe comparison
-) %>% filter(timestamp_utc >= as.POSIXct('2022-03-09 12:00:00', tz='UTC'))
+) %>% filter(Date >= as.POSIXct('2022-03-09 12:00:00', tz='UTC'))
 
 daily_stage <- stage %>% 
   # Take daily mean water level for easier computation
-  mutate(day = as.Date(timestamp_utc)) %>% 
+  mutate(day = as.Date(Date)) %>% 
   group_by(day, well_id) %>% 
   summarise(
-    well_depth_m = mean(well_depth_m, na.rm = TRUE),
+    well_depth_m = mean(water_level, na.rm = TRUE),
     #max_depth_m = mean(max_depth_m, na.rm = TRUE),
   )
 
@@ -348,10 +347,11 @@ get_prior_hydrograph_mean <- function(hg, sample_date, look_back){
 
 calc_sample_date_info <- function(hydrograph, sample_date) {
   
-  last_date <- max(hydrograph$day)
+  days <- as.Date(hydrograph$day)
+  sd   <- as.Date(sample_date)
   
   # Bail-out early if sample date is beynd the hydrograph's last date
-  if (last_date < sample_date) {
+  if (is.na(sd) || !(sd %in% days)) {
     return(tibble(
       mean_30d_stage=NA_real_, 
       mean_60d_stage=NA_real_,
@@ -415,13 +415,13 @@ soil_core_slice_summary <- soil_core_slice_summary %>%
 
 output_cores <- soil_core_summary 
 
-out_cores_path <- "D:/depressional_lidar/data/osbs/out_data/hydrometrics_at_Faith_cores_relative_groundsurface.csv"
+out_cores_path <- "D:/depressional_lidar/data/osbs/out_data/updated_faith_osbs_hydrometrics_at_cores.csv"
 
 write_csv(output_cores, out_cores_path)
 
 output_slices <- soil_core_slice_summary
 
-out_slices_path <- "D:/depressional_lidar/data/osbs/out_data/hydrometrics_at_Faith_slices_relative_groundsurface.csv"
+out_slices_path <- "D:/depressional_lidar/data/osbs/out_data/updated_faith_osbs_hydrometrics_at_slices.csv"
 
 write_csv(output_slices, out_slices_path)
 

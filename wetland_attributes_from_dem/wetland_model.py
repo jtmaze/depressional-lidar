@@ -22,7 +22,9 @@ class ForcingData:
         raw = pd.read_csv(file_path)
         if data_source == "ERA-5":
             df = raw.rename(columns={'date_local': 'date'})
+            df['pet_m'] = df['pet_m'] * -1 # NOTE: ERA-5 reports the flux as negative
             df = df[['date', 'pet_m', 'precip_m']]
+            
         else:
             print("Warning no column name handling for other data sources")
 
@@ -37,6 +39,7 @@ class WetlandModel:
     well_stage_timeseries: WellStageTimeseries
     forcing_data: ForcingData
     # Model parameters with defaults
+    well_flags: tuple = (2, 4) # 2=PT bottomed out, 4=Baro data suspect, noisy timeseries
     delta: float = 0.38
     beta: float = 4.1
     alpha: float = 1.11
@@ -62,6 +65,14 @@ class WetlandModel:
         basin_low = self.basin.deepest_point.elevation
         well_height = self.basin.well_point.elevation_dem - basin_low
         ts['basin_depth'] = ts['water_level'] + well_height
+
+        return ts
+    
+    @cached_property
+    def filtered_stage_timeseries(self) -> pd.DataFrame:
+        """Remove flagged data for the actual vs model comparison"""
+        ts = self.adjust_stage_timeseries.copy()
+        ts = ts[~ts['flag'].isin(self.well_flags)]
 
         return ts
     
@@ -105,7 +116,6 @@ class WetlandModel:
         
         return pd.DataFrame({'h': h_values, 'r_ET': r_ET_values})
 
-
     @cached_property
     def Sy_timeseries(self) -> pd.DataFrame:
         """
@@ -145,11 +155,11 @@ class WetlandModel:
     @cached_property
     def dh_dt_actual(self) -> pd.DataFrame:
 
-        df = self.adjust_stage_timeseries.copy()
+        df = self.filtered_stage_timeseries.copy()
         df = df[['basin_depth']]
-        df['basin_depth_t1'] = df['basin_depth'].shift(1)
-        days_diff = (df.index.shift(1) - df.index).days
-        df['dh_dt'] = (df['basin_depth_t1'] - df['basin_depth']) / days_diff
+        df['basin_depth_t1'] = df['basin_depth'].shift(-1)
+        df['days_diff'] = (df.index.to_series().shift(-1) - df.index.to_series()).dt.days
+        df['dh_dt'] = (df['basin_depth_t1'] - df['basin_depth']) / df['days_diff']
         # Omit rows without subsequent measurements (where dh_dt_actual is NaN)
         df = df.dropna(subset=['dh_dt'])
 
@@ -223,6 +233,7 @@ class WetlandModel:
         """
         Plot r_ET and Sy on the same figure for comparison.
         """
+        wetland_id = self.basin.wetland_id
         rET_data = self.r_ET_lookup_table
         Sy_data = self.Sy_lookup_table
         
@@ -238,7 +249,10 @@ class WetlandModel:
         
         plt.xlabel('h (depth)', fontsize=12)
         plt.ylabel('Value', fontsize=12)
-        plt.title('r_ET and Sy vs h', fontsize=14)
+        plt.title(
+                    f'{wetland_id} r_ET and Sy vs h \n(delta={self.delta}, beta={self.beta}, alpha={self.alpha}, n={self.n}, n1={self.n1})',
+                    fontsize=14
+                )
         plt.legend(fontsize=10)
         plt.grid(True, alpha=0.3)
         plt.show()
@@ -282,6 +296,8 @@ class WetlandModel:
         """
         Plot normalized outflow (Qh/A) as a function of depth.
         """
+        wetland_id = self.basin.wetland_id
+        est_spill = self.est_spill_depth
         h_min = self.scaled_hypsometric_curve['depth'].min()
         h_max = self.scaled_hypsometric_curve['depth'].max()
         
@@ -292,8 +308,8 @@ class WetlandModel:
         plt.figure(figsize=(10, 6))
         plt.plot(domain, vals, linewidth=2)
         plt.xlabel('h (depth)', fontsize=12)
-        plt.ylabel('Qh/A (normalized outflow [m/d])', fontsize=12)
-        plt.title('Normalized Discharge vs Depth', fontsize=14)
+        plt.ylabel(f'Qh/A (normalized outflow [m/d])', fontsize=12)
+        plt.title(f'{wetland_id} (a={self.a}, c={self.c}, est_spill={est_spill}m)', fontsize=14)
         plt.legend(fontsize=10)
         plt.grid(True, alpha=0.3)
         plt.show()
@@ -302,13 +318,14 @@ class WetlandModel:
         """
         Plot discharge over time.
         """
+        wetland_id = self.basin.wetland_id
         df = self.Q_timeseries
         
         plt.figure(figsize=(12, 6))
         plt.plot(df.index, df['Q'], linewidth=1.5)
         plt.xlabel('Date', fontsize=12)
         plt.ylabel('Q (normalized discharge [m/d])', fontsize=12)
-        plt.title('Discharge Timeseries', fontsize=14)
+        plt.title(f'{wetland_id} (a={self.a}, c={self.c})', fontsize=14)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.show()
@@ -338,7 +355,7 @@ class WetlandModel:
         plt.plot(df.index, df['r_ET'], linewidth=1.5, color='orange')
         plt.xlabel('Date', fontsize=12)
         plt.ylabel('r_ET (relative evapotranspiration)', fontsize=12)
-        plt.title('Relative ET Timeseries', fontsize=14)
+        plt.title(f'Relative ET Timeseries (delta={self.delta}, beta={self.beta})', fontsize=14)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.show()
@@ -353,37 +370,142 @@ class WetlandModel:
         else:
             df = self.dh_dt_actual
             title_text = 'Actual'
+
+        daily_idx = pd.date_range(df.index.min(), df.index.max(), freq='D')
+        df = df.reindex(daily_idx)
         
         plt.figure(figsize=(12, 6))
         plt.plot(df.index, df['dh_dt'], linewidth=1.5, color='purple')  # Choose a distinct color
         plt.xlabel('Date', fontsize=12)
-        plt.ylabel(f'dh/dt ({title_text} rate of depth change [m/day])', fontsize=12)
-        plt.title('Rate of Depth Change Timeseries', fontsize=14)
+        plt.ylabel(f'dh/dt ([m/day])', fontsize=12)
+        plt.title(f'{title_text}', fontsize=14)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.show()
 
+    def plot_fluxes_timeseries(self):
+
+        p = self.forcing_data.data[['precip_m']]
+        pet = self.forcing_data.data[['pet_m']]
+        r_et = self.rET_timeseries
+        q = self.Q_timeseries
+
+            # Calculate actual ET by multiplying PET by relative ET
+        actual_et = pet.join(r_et, how='inner')
+        actual_et['actual_et'] = actual_et['pet_m'] * actual_et['r_ET']
+        
+        # Create subplots for better visualization
+        fig, axes = plt.subplots(4, 1, figsize=(12, 10), sharex=True)
+        
+        # Plot precipitation
+        axes[0].bar(p.index, p['precip_m'], width=1, alpha=0.7, color='blue', label='Precipitation')
+        axes[0].set_ylabel('Precipitation [m/day]', fontsize=10)
+        axes[0].legend(fontsize=9)
+        axes[0].grid(True, alpha=0.3)
+        
+        # Plot PET and actual ET
+        axes[1].plot(pet.index, pet['pet_m'], linewidth=1.5, color='red', label='PET')
+        axes[1].plot(actual_et.index, actual_et['actual_et'], linewidth=1.5, color='orange', label='Actual ET')
+        axes[1].set_ylabel('ET [m/day]', fontsize=10)
+        axes[1].legend(fontsize=9)
+        axes[1].grid(True, alpha=0.3)
+        
+        # Plot relative ET
+        axes[2].plot(r_et.index, r_et['r_ET'], linewidth=1.5, color='green', label='Relative ET')
+        axes[2].set_ylabel('r_ET [-]', fontsize=10)
+        axes[2].legend(fontsize=9)
+        axes[2].grid(True, alpha=0.3)
+        
+        # Plot discharge
+        axes[3].plot(q.index, q['Q'], linewidth=1.5, color='purple', label='Discharge')
+        axes[3].set_ylabel('Q [m/day]', fontsize=10)
+        axes[3].set_xlabel('Date', fontsize=10)
+        axes[3].legend(fontsize=9)
+        axes[3].grid(True, alpha=0.3)
+        
+        plt.suptitle('Water Balance Fluxes Timeseries', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+ 
     def modeled_vs_actual_scatter_plot(self):
         
         modeled = self.dh_dt_model.rename(columns={'dh_dt': 'modeled'})
         actual = self.dh_dt_actual[['dh_dt']].rename(columns={'dh_dt': 'actual'})
-        df = modeled.join(actual, how='inner').dropna()
+        basin_depth = self.adjust_stage_timeseries[['basin_depth']]
 
-        plt.figure(figsize=(8, 6))
-        plt.scatter(df['actual'], df['modeled'], alpha=0.7, edgecolor='k')
-        lims = [df.min().min(), df.max().max()]
-        plt.plot(lims, lims, 'r--', label='1:1')
+        df = modeled.join(actual, how='inner').join(basin_depth, how='inner').dropna()
+
+        plt.figure(figsize=(10, 6))
+        scatter = plt.scatter(df['actual'], df['modeled'], c=df['basin_depth'], 
+                            alpha=0.7, edgecolor='k', cmap='viridis')
+        
+        # Add colorbar
+        cbar = plt.colorbar(scatter)
+        cbar.set_label('Basin Depth [m]', fontsize=10)
+        
+        lims = [df[['actual', 'modeled']].min().min(), df[['actual', 'modeled']].max().max()]
+        plt.plot(lims, lims, 'r--', label='1:1', linewidth=2)
         plt.xlabel('Actual dh/dt [m/day]')
         plt.ylabel('Modeled dh/dt [m/day]')
-        plt.title('Modeled vs Actual dh/dt')
+        plt.title('Modeled vs Actual dh/dt (colored by basin depth)')
         plt.legend()
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.show()
+        
+    def plot_filtered_timeseries(self):
 
+        df = self.filtered_stage_timeseries.copy()
+        daily_idx = pd.date_range(df.index.min(), df.index.max(), freq='D')
+        df = df.reindex(daily_idx)
 
-    
-    
+        plt.figure(figsize=(12, 6))
+        plt.plot(df.index, df['basin_depth'], linewidth=1.5, label='Filtered basin depth')
+        plt.xlabel('Date', fontsize=12)
+        plt.ylabel('Basin Depth [m]', fontsize=12)
+        plt.title('Filtered Depth Timeseries', fontsize=14)
+        plt.legend(fontsize=10)
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.show()
 
-    
+    def difference_dh_dt_predictions_histogram(self, x_lims: tuple = (-0.15, 0.15)):
 
+        actual = self.dh_dt_actual
+        modeled = self.dh_dt_model
+
+        df = modeled.join(actual, how='inner', lsuffix='_modeled', rsuffix='_actual')
+        df['difference'] = df['dh_dt_modeled'] - df['dh_dt_actual']
+        df = df[(df['difference'] >= x_lims[0]) & (df['difference'] <= x_lims[1])]
+
+        plt.figure(figsize=(12, 6))
+        plt.hist(df['difference'], bins=30, color='skyblue', edgecolor='black', alpha=0.7)
+        plt.axvline(0, color='red', linestyle='dashed', linewidth=1.5)
+        plt.xlabel('Difference (Modeled - Actual) dh/dt [m/day]', fontsize=12)
+        plt.ylabel('Frequency', fontsize=12)
+        plt.title(f'Histogram of dh/dt Differences (filtered {x_lims[0]} to {x_lims[1]})', fontsize=14)
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.show()
+
+    def difference_dh_dt_predictions_onlogging(self, log_date: str, x_lims: tuple = (-0.15, 0.15)):
+
+        actual = self.dh_dt_actual
+        modeled = self.dh_dt_model
+
+        df = modeled.join(actual, how='inner', lsuffix='_modeled', rsuffix='_actual')
+        df['difference'] = df['dh_dt_modeled'] - df['dh_dt_actual']
+        df = df[(df['difference'] >= x_lims[0]) & (df['difference'] <= x_lims[1])]
+
+        pre = df[df.index < pd.to_datetime(log_date)]
+        post = df[df.index >= pd.to_datetime(log_date)]
+
+        plt.figure(figsize=(12, 6))
+        plt.hist(pre['difference'], bins=30, color='lightgreen', edgecolor='black', alpha=0.7, label='Pre-Logging')
+        plt.hist(post['difference'], bins=30, color='salmon', edgecolor='black', alpha=0.7, label='Post-Logging')
+        plt.axvline(0, color='red', linestyle='dashed', linewidth=1.5)
+        plt.xlabel('Difference (Modeled - Actual) dh/dt [m/day]', fontsize=12)
+        plt.ylabel('Frequency', fontsize=12)
+        plt.title(f'Histogram of dh/dt Differences (filtered {x_lims[0]} to {x_lims[1]})', fontsize=14)
+        plt.legend(fontsize=10)
+        plt.show()

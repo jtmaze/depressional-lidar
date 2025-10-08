@@ -36,7 +36,8 @@ class WellStageTimeseries:
             water_level_column: Name of the column containing water level data
             well_id_column: Name of the column containing well identifiers
         """
-        df = pd.read_csv(file_path)
+        df = pd.read_csv(file_path, dtype={'flag': 'Int64'})
+        
         if well_id_column in df.columns:
             df = df[df[well_id_column] == well_id]
 
@@ -47,10 +48,12 @@ class WellStageTimeseries:
         
         df['date'] = pd.to_datetime(df['date']).dt.tz_localize(None)
         df = df.set_index(df['date'])
-        
-        # Keep only necessary column and aggregate to daily values
-        df = df[['water_level']].resample('D').mean()
-        
+        # Keep only necessary columns and aggregate to daily values
+        df = df[['water_level', 'flag']].resample('D').agg({
+            'water_level': 'mean',
+            'flag': lambda x: x.mode().iloc[0] if not x.mode().empty else 0
+        }).round({'flag': 0}).astype({'flag': int})
+
         return cls(well_id=well_id, timeseries_data=df, basin=basin)
     
     def plot(self):

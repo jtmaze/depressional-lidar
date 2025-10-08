@@ -13,7 +13,7 @@ site = 'bradford'
 forcing = 'ERA-5'
 
 if __name__ == '__main__':
-    wetland_id = '15_409'
+    wetland_id = '9_439'
     source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_veg.tif'
     basins_path = f'D:/depressional_lidar/data/{site}/in_data/{site}_basins_assigned_wetland_ids_KG.shp'
     well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
@@ -52,7 +52,8 @@ if __name__ == '__main__':
         transect_n=10,
         transect_buffer=20
     )
-    #basin.visualize_shape(show_deepest=True, show_centroid=True, show_well=True)
+    basin.visualize_shape(show_deepest=True, show_centroid=True, show_well=True)
+    basin.plot_basin_hypsometry(plot_points=True)
 
 
     # 4.0 Incorporate Well Data to Explore Dynamics
@@ -78,11 +79,14 @@ if __name__ == '__main__':
         basin=basin,
         well_stage_timeseries=well_stage,
         forcing_data=forcing_data,
+        delta=0.1,
+        well_flags = (2, 4),
         a=1, #NOTE why is my scale so far off...
-        c=2,
-        est_spill_depth=0.35
+        c=1.2,
+        est_spill_depth=0.88
     )
 
+    wetland_model.plot_filtered_timeseries()
     wetland_model.plot_rET_and_Sy()
     wetland_model.plot_Qh_A()
     wetland_model.plot_Q_timeseries()
@@ -90,4 +94,7 @@ if __name__ == '__main__':
     wetland_model.plot_Sy_timeseries()
     wetland_model.plot_dh_dt_timseries(modeled=True)
     wetland_model.plot_dh_dt_timseries(modeled=False)
+    wetland_model.plot_fluxes_timeseries()
     wetland_model.modeled_vs_actual_scatter_plot()
+    wetland_model.difference_dh_dt_predictions_histogram(x_lims=(-0.15, 0.15))
+    wetland_model.difference_dh_dt_predictions_onlogging(log_date='2024-01-01', x_lims=(-0.15, 0.15))
