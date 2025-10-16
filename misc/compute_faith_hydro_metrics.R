@@ -11,12 +11,19 @@ soil_core <- read_excel(
   soil_core_dir,
   sheet='Sheet1'
 )
+print(unique(soil_core$well_id))
 
 stage_dir <- "D:/depressional_lidar/data/osbs/in_data/stage_data/fall2025_processed_well_depth.csv"
 stage <- read_csv(
   stage_dir
   # I filter out early data so we have consistent period of record across wetlands, safe comparison
 ) %>% filter(Date >= as.POSIXct('2022-03-09 12:00:00', tz='UTC'))
+
+well_id_key <- tibble(
+  'Fish Cove' = 'Fishcove',
+  'Ross' = 'Ross Pond', 
+  'Surprise' = 'Surprise Pond',
+)
 
 daily_stage <- stage %>% 
   # Take daily mean water level for easier computation
@@ -25,7 +32,13 @@ daily_stage <- stage %>%
   summarise(
     well_depth_m = mean(water_level, na.rm = TRUE),
     #max_depth_m = mean(max_depth_m, na.rm = TRUE),
+  ) %>% 
+  mutate(
+    well_id = recode(well_id, !!!well_id_key, .default=well_id)
   )
+  
+  
+print(unique(daily_stage$well_id))
 
 # 2.0 Munge the soil core data into a summary table ----------------------------------------------
 
@@ -411,7 +424,6 @@ soil_core_slice_summary <- soil_core_slice_summary %>%
   mutate(deviation_60d_from_mean = mean_60d_stage - mean_stage)
 
 # 7.0 Write soil core summary --------------------------------------------
-
 
 output_cores <- soil_core_summary 
 

@@ -13,14 +13,14 @@ site = 'bradford'
 forcing = 'ERA-5'
 
 if __name__ == '__main__':
-    wetland_id = '9_439'
+    wetland_id = '3_173'
     source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_veg.tif'
     basins_path = f'D:/depressional_lidar/data/{site}/in_data/{site}_basins_assigned_wetland_ids_KG.shp'
     well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
     # osbs {site}_core_wells_tracked_datum.csv'
     # brandford waterlevel_offsets_tracked.csv'
-    well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/stage_data/{site}_wells_tracked_datum.csv'
-    forcing_path = f'D:/depressional_lidar/data/{site}/in_data/hydro_forcings/{forcing}_daily_mean.csv'
+    well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/stage_data/waterlevel_Fall2025.csv'
+    forcing_path = f'D:/depressional_lidar/data/{site}/in_data/hydro_forcings_and_LAI/{forcing}_daily_mean.csv'
 
     # 2.0 Read and clean the data
     footprint = gpd.read_file(basins_path)
@@ -62,8 +62,8 @@ if __name__ == '__main__':
         well_id=wetland_id,
         basin=basin,
         date_column='Date',
-        water_level_column='revised_depth',
-        well_id_column='Site_ID',
+        water_level_column='well_depth',
+        well_id_column='well_id',
     )
     well_stage.plot()
     dynamics = BasinDynamics(basin=basin, well_stage=well_stage, well_to_dem_offset=0)
@@ -83,7 +83,8 @@ if __name__ == '__main__':
         well_flags = (2, 4),
         a=1, #NOTE why is my scale so far off...
         c=1.2,
-        est_spill_depth=0.88
+        beta=1.5, 
+        est_spill_depth=0.42
     )
 
     wetland_model.plot_filtered_timeseries()
@@ -97,4 +98,4 @@ if __name__ == '__main__':
     wetland_model.plot_fluxes_timeseries()
     wetland_model.modeled_vs_actual_scatter_plot()
     wetland_model.difference_dh_dt_predictions_histogram(x_lims=(-0.15, 0.15))
-    wetland_model.difference_dh_dt_predictions_onlogging(log_date='2024-01-01', x_lims=(-0.15, 0.15))
+    wetland_model.difference_dh_dt_predictions_onlogging(log_date='2023-01-07', x_lims=(-0.15, 0.15))

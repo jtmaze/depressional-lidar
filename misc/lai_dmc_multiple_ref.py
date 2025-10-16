@@ -1,46 +1,94 @@
-# %%
+# %% 1.0 Libraries and file paths
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 stage_path = "D:/depressional_lidar/data/bradford/in_data/stage_data/daily_waterlevel_Fall2025.csv"
 stage_data = pd.read_csv(stage_path)
 stage_data['day'] = pd.to_datetime(stage_data['day'])
 
-# %%
+# %% 2.0 Set up reference and logged time series
+
 stage_data = stage_data[stage_data['flag'] == 0].copy()
-reference_id = '5_546'
-reference_ts = stage_data[stage_data['well_id'] == reference_id].copy()
-logged_id = '9_77'
+logged_id = '14_500'
+reference_ids = ['14_612', '14_538', '15_409']
 logged_ts = stage_data[stage_data['well_id'] == logged_id].copy()
-logged_date = pd.to_datetime('1/1/2024')
+logged_date = pd.to_datetime('2/1/2024')
+print(logged_date)
 
-# %% Plot the reference and logged time series
+# %% 2.1 Set up the reference time series
 
-plt.figure(figsize=(12, 6))
-plt.plot(reference_ts['day'], reference_ts['well_depth'], label=f'Reference ({reference_id})')
-plt.plot(logged_ts['day'], logged_ts['well_depth'], label=f'Logged ({logged_id})')
-plt.axvline(logged_date, color='red', linestyle='--', label='Logged Date')
+reference_ts = stage_data[stage_data['well_id'].isin(reference_ids)].copy()
+reference_ts.sort_values(['well_id', 'day'], inplace=True)
+
+
+# Line plot colored by well_id
+plt.figure(figsize=(8, 6))
+for wid, df in reference_ts.groupby('well_id'):
+    plt.plot(df['day'], df['well_depth'], label=wid)
 plt.xlabel('Date')
 plt.ylabel('Well Depth')
-plt.title(f'Well Depth Time Series - Reference: {reference_id}, Logged: {logged_id}')
+plt.title('Reference Well Depth Time Series')
+plt.legend(title='well_id', ncol=2)
+plt.grid(True)
+ax = plt.gca()
+ax.xaxis.set_major_locator(mdates.YearLocator())
+ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+plt.tight_layout()
+plt.show()
+
+# %% 2.2 Average the reference time series across wells
+
+# Drop any days that don't have data for all reference wells
+reference_ts = reference_ts.groupby('day').filter(lambda x: len(x) == len(reference_ids))
+
+# Adjust well depth to be relative to the minimum well depth for each well
+reference_ts['well_stage_zeroed'] = reference_ts.groupby('well_id')['well_depth'].transform(lambda x: x - x.min())
+
+# Get the cumulative well stage across all reference wells
+reference_ts_avg = reference_ts.groupby('day').agg({'well_stage_zeroed': 'mean'}).reset_index()
+
+plt.figure(figsize=(8, 6))
+plt.plot(reference_ts_avg['day'], reference_ts_avg['well_stage_zeroed'], label='Reference (Average)')
+plt.xlabel('Date')
+plt.ylabel('Well Stage (Average)')
+plt.title('Reference Well Stage Time Series (Average)')
 plt.legend()
 plt.grid(True)
+
+# %% 3.0 Plot the reference and logged time series
+
+logged_ts['well_stage_zeroed'] = logged_ts['well_depth'] - logged_ts['well_depth'].min()
+
+plt.figure(figsize=(8, 6))
+plt.plot(reference_ts_avg['day'], reference_ts_avg['well_stage_zeroed'], label=f'Reference')
+plt.plot(logged_ts['day'], logged_ts['well_stage_zeroed'], label=f'Logged ({logged_id})')
+plt.axvline(logged_date, color='red', linestyle='--', label='Logged Date')
+plt.xlabel('Date')
+plt.ylabel('Well Stage (Average)')
+plt.title(f'Well Stage Time Series - Reference: {reference_ids}, Logged: {logged_id}')
+plt.legend()
+plt.grid(True)
+
+ax = plt.gca()
+ax.xaxis.set_major_locator(mdates.YearLocator())
+ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+
+plt.tight_layout()
 plt.show()
 
 # %% 
 
-reference_ts['well_stage_zeroed'] = reference_ts['well_depth'] - reference_ts['well_depth'].min()
-logged_ts['well_stage_zeroed'] = logged_ts['well_depth'] - logged_ts['well_depth'].min()
-
 comparison = pd.merge(
-    reference_ts[['day', 'well_stage_zeroed']], 
+    reference_ts_avg[['day', 'well_stage_zeroed']], 
     logged_ts[['day', 'well_stage_zeroed']], 
     how='inner', 
     on='day', 
     suffixes=('_ref', '_log')
 )
-
+print(comparison.head(10))
 comparison['cum_stage_ref'] = comparison['well_stage_zeroed_ref'].cumsum()
 comparison['cum_stage_log'] = comparison['well_stage_zeroed_log'].cumsum()
 
@@ -74,14 +122,14 @@ comparison['predicted_log_partial'] = comparison['cum_stage_ref'] * m_partial
 comparison['residual_full'] = comparison['cum_stage_log'] - comparison['predicted_log_full']
 comparison['residual_partial'] = comparison['cum_stage_log'] - comparison['predicted_log_partial']
 
-plt.figure(figsize=(12, 6))
+plt.figure(figsize=(10, 6))
 plt.plot(comparison['day'], comparison['residual_full'], linewidth=2, color='red', label='Residual Full Fit')
 plt.plot(comparison['day'], comparison['residual_partial'], linewidth=2, color='green', label='Residual Pre-Logged Fit')
 plt.axvline(logged_date, color='red', linestyle='--', label='Logged Date')
 plt.axhline(0, color='black', linestyle='-', label='Zero Line')
 plt.xlabel('Date')
-plt.ylabel('Residual')
-plt.title(f'Residual Time Series - Reference: {reference_id}, Logged: {logged_id}')
+plt.ylabel('Residual (Logging - Predicted)')
+plt.title(f'Residual Time Series - Reference: {reference_ids}, Logged: {logged_id}')
 plt.legend()
 plt.grid(True)
 plt.show()
