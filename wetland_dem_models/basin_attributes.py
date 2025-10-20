@@ -335,8 +335,9 @@ class WetlandBasin:
         )
 
     def calculate_hypsometry(self, method: str = "total"):
-        step = 0.02 # NOTE: Hardcoded this for now
+        step = 0.01 # NOTE: Hardcoded this for now
         dem_data = self.clipped_dem.dem
+        dem_scale = self.clipped_dem.transform.a 
         min_elevation = np.nanmin(dem_data)
         max_elevation = np.nanmax(dem_data)
 
@@ -344,7 +345,7 @@ class WetlandBasin:
             flat_dem = dem_data.flatten()
             bins = np.arange(min_elevation, max_elevation + step, step)
             hist, bin_edges = np.histogram(flat_dem, bins=bins)
-            cum_area_m2 = np.cumsum(hist) # NOTE: Assumes 1x1m cell size on DEM
+            cum_area_m2 = np.cumsum(hist) * (dem_scale ** 2)  
             bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
 
             return cum_area_m2, bin_centers
@@ -355,7 +356,7 @@ class WetlandBasin:
             flat_dem = flat_dem[(flat_dem >= p_low) & (flat_dem <= p_high)]
             bins = np.arange(flat_dem.min(), flat_dem.max() + step, step)
             hist, bin_edges = np.histogram(flat_dem, bins=bins)
-            cum_area_m2 = np.cumsum(hist) # NOTE: Assumes 1x1m cell size on DEM
+            cum_area_m2 = np.cumsum(hist) * (dem_scale ** 2)  
             bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
 
             return cum_area_m2, bin_centers
@@ -371,7 +372,7 @@ class WetlandBasin:
 
         cum_area_m2, bin_centers = self.calculate_hypsometry()
         plt.figure(figsize=(10, 6))
-        plt.plot(bin_centers, cum_area_m2, label="Cumulative Area", color="blue")
+        plt.plot(bin_centers, cum_area_m2, label="Inundated Area", color="blue")
 
         if plot_points:
             # Add well point elevations if available
@@ -383,14 +384,14 @@ class WetlandBasin:
 
             plt.plot(well_pt.elevation_dem, dem_area, 'ro', markersize=8,
                      label=f"Well DEM Elevation ({well_pt.elevation_dem:.2f}m, {dem_area:.2f}m^2)")
-            if abs(well_pt.elevation_rtk - well_pt.elevation_dem) > 2:
-                print(f"Warning: RTK elevation ({well_pt.elevation_rtk:.2f}m) differs from DEM elevation ({well_pt.elevation_dem:.2f}m) by more than 2m.")
+            if abs(well_pt.elevation_rtk - well_pt.elevation_dem) > 0.25:
+                print(f"Warning: RTK elevation ({well_pt.elevation_rtk:.2f}m) differs from DEM elevation ({well_pt.elevation_dem:.2f}m) by more than 0.25m.")
             else:
                 plt.plot(well_pt.elevation_rtk, rtk_area, 'go', markersize=8,
                         label=f"Well RTK Elevation ({well_pt.elevation_rtk:.2f}m, {rtk_area:.2f}m^2)")
         
         plt.xlabel("Elevation (m)")
-        plt.ylabel("Cumulative Area (m^2)")
+        plt.ylabel("Inundated Area (m^2)")
         plt.title(f"{self.wetland_id} Hypsometry")
         plt.grid()
         plt.legend()

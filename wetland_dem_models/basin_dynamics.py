@@ -97,8 +97,9 @@ class BasinDynamics:
         dem = self.basin.clipped_dem.dem
         
         # 1=inundated, 0=dry, np.nan=out of basin
-        inundation_map = np.zeros_like(dem, dtype=np.float16)
-        inundation_map[~np.isnan(dem) & (dem <= water_elevation)] = 1
+        inundation_map = np.zeros_like(dem, dtype=np.float32)
+
+        inundation_map[~np.isnan(dem) & (dem <= water_elevation)] = 1.0
         inundation_map = np.where(np.isnan(dem), np.nan, inundation_map)  # Keep NaNs as NaNs
         
         return inundation_map
@@ -295,6 +296,9 @@ class BasinDynamics:
         # Calculate area for each timestep
         areas = {}
         for date, inundation_map in inundation_stacks.items():
+            inundation_map = inundation_map.astype(np.float32)
+            inundation_map = np.where(np.isinf(inundation_map), 0, inundation_map)
+
             inundated_cells = np.nansum(inundation_map)
             areas[date] = inundated_cells * cell_area
 
@@ -360,6 +364,11 @@ class BasinDynamics:
         """
         if area_timeseries is None:
             area_timeseries = self.calculate_inundated_area_timeseries()
+        # Debug: Check for infinite values
+        infinite_mask = np.isinf(area_timeseries.values)
+        if infinite_mask.any():
+            print(f"Found {infinite_mask.sum()} infinite values")
+            print(f"Dates with infinity: {area_timeseries[infinite_mask].index.tolist()}")
 
         plt.figure(figsize=(10, 6))
         plt.hist(area_timeseries.values, bins=40, color='blue', alpha=0.7, edgecolor='black')
