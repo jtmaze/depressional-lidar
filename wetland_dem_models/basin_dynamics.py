@@ -97,7 +97,7 @@ class BasinDynamics:
         dem = self.basin.clipped_dem.dem
         
         # 1=inundated, 0=dry, np.nan=out of basin
-        inundation_map = np.zeros_like(dem, dtype=np.float32)
+        inundation_map = np.zeros_like(dem, dtype=np.float16)
 
         inundation_map[~np.isnan(dem) & (dem <= water_elevation)] = 1.0
         inundation_map = np.where(np.isnan(dem), np.nan, inundation_map)  # Keep NaNs as NaNs
@@ -108,7 +108,6 @@ class BasinDynamics:
 
         dem = self.basin.clipped_dem.dem
         depth = water_elevation - dem
-
 
         tai_map = np.zeros_like(dem, dtype=np.float16)
         tai_map = np.where((depth < max_depth) & (depth > min_depth), 1, tai_map)
@@ -320,6 +319,7 @@ class BasinDynamics:
 
         tai_areas = {}
         for date, tai_map in tai_stacks.items():
+            tai_map = tai_map.astype(np.float64)
             tai_cells = np.nansum(tai_map)
             tai_areas[date] = tai_cells * cell_area
 
@@ -378,13 +378,21 @@ class BasinDynamics:
         plt.grid()
         plt.show()
 
-    def plot_tai_area_histogram(self, tai_timeseries: pd.Series = None, max_depth: float = None, min_depth: float = None):
+    def plot_tai_area_histogram(
+            self, 
+            tai_timeseries: pd.Series = None, 
+            max_depth: float = None, 
+            min_depth: float = None, 
+            as_pct: bool = False
+        ):
         """
         Plot a histogram of TAI areas.
         """
         if tai_timeseries is None:
             tai_timeseries = self.calculate_tai_timeseries(max_depth, min_depth)
-
+        
+        if as_pct:
+            pass
         plt.figure(figsize=(10, 6))
         plt.hist(tai_timeseries.values, bins=40, color='orange', alpha=0.7, edgecolor='black')
         plt.title(f"{self.well_stage.well_id} TAI Area Histogram\nDepth {min_depth} to {max_depth} m")

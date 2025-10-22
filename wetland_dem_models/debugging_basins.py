@@ -11,7 +11,7 @@ from basin_dynamics import BasinDynamics, WellStageTimeseries
 site = 'bradford'
 
 if __name__ == '__main__':
-    wetland_id = '6_20'
+    wetland_id = '3_173'
     source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_veg.tif'
     basins_path = f'D:/depressional_lidar/data/{site}/in_data/{site}_basins_assigned_wetland_ids_KG.shp'
     well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
@@ -46,7 +46,7 @@ if __name__ == '__main__':
         well_point_info=well_point,
         transect_method='deepest',
         transect_n=50,
-        transect_buffer=250
+        transect_buffer=200
     )
 
     basin.visualize_shape(show_deepest=True, show_centroid=True, show_well=True)

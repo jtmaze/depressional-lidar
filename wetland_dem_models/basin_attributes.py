@@ -334,15 +334,15 @@ class WetlandBasin:
             location=self.well_point_info.geometry
         )
 
-    def calculate_hypsometry(self, method: str = "total"):
+    def calculate_hypsometry(self, method: str = "total_cdf"):
         step = 0.01 # NOTE: Hardcoded this for now
         dem_data = self.clipped_dem.dem
+        flat_dem = dem_data.flatten()
         dem_scale = self.clipped_dem.transform.a 
         min_elevation = np.nanmin(dem_data)
         max_elevation = np.nanmax(dem_data)
 
-        if method == "total":
-            flat_dem = dem_data.flatten()
+        if method == "total_cdf":
             bins = np.arange(min_elevation, max_elevation + step, step)
             hist, bin_edges = np.histogram(flat_dem, bins=bins)
             cum_area_m2 = np.cumsum(hist) * (dem_scale ** 2)  
@@ -350,8 +350,7 @@ class WetlandBasin:
 
             return cum_area_m2, bin_centers
         
-        if method == "pct_trim":
-            flat_dem = dem_data.flatten()
+        if method == "pct_trim_cdf":
             p_low, p_high = np.nanpercentile(flat_dem, [2, 98])
             flat_dem = flat_dem[(flat_dem >= p_low) & (flat_dem <= p_high)]
             bins = np.arange(flat_dem.min(), flat_dem.max() + step, step)
@@ -360,7 +359,16 @@ class WetlandBasin:
             bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
 
             return cum_area_m2, bin_centers
-
+        
+        if method == "pct_trim_pdf":
+            p_low, p_high = np.nanpercentile(flat_dem, [2, 98])
+            flat_dem = flat_dem[(flat_dem >= p_low) & (flat_dem <= p_high)]
+            bins = np.arange(flat_dem.min(), flat_dem.max() + step, step)
+            hist, bin_edges = np.histogram(flat_dem, bins=bins)
+            area = hist * (dem_scale ** 2)
+            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+            return area, bin_centers
+    
         else:
             print(f"Method '{method}' not implemented for hypsometry calculation.")
             return None, None
