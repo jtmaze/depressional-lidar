@@ -390,18 +390,32 @@ class BasinDynamics:
         """
         if tai_timeseries is None:
             tai_timeseries = self.calculate_tai_timeseries(max_depth, min_depth)
-        
-        if as_pct:
-            pass
+
         plt.figure(figsize=(10, 6))
-        plt.hist(tai_timeseries.values, bins=40, color='orange', alpha=0.7, edgecolor='black')
+        if as_pct:
+            total_days = len(tai_timeseries)
+            weights = np.ones_like(tai_timeseries.values) / total_days * 100
+            area, _ = self.basin.calculate_hypsometry(method="total_cdf")
+            max_area = max(area)
+            plt.hist((tai_timeseries.values / max_area) * 100, bins=40, color='orange', alpha=0.7, edgecolor='black', weights=weights)
+            plt.xlabel("TAI Area (Percent of Total Area)")
+            plt.ylabel("Percent Observations")
+        else:
+            plt.hist(tai_timeseries.values, bins=40, color='orange', alpha=0.7, edgecolor='black')
+            plt.xlabel("TAI Area (m²)")
+            plt.ylabel("Days")
+
         plt.title(f"{self.well_stage.well_id} TAI Area Histogram\nDepth {min_depth} to {max_depth} m")
-        plt.xlabel("TAI Area (m²)")
-        plt.ylabel("Frequency")
         plt.grid()
         plt.show()
 
-    def map_tai_stacks(self, tai_frequency: np.array = None, max_depth: float = None, min_depth: float = None):
+    def map_tai_stacks(
+            self, 
+            tai_frequency: np.array = None, 
+            max_depth: float = None, 
+            min_depth: float = None,
+            show_basin_footprint: bool = False
+        ):
         """
         Map the TAI stacks for a given depth range.
         """
@@ -417,7 +431,6 @@ class BasinDynamics:
         well_point_x = well_point.location.x.values[0]
         well_point_y = well_point.location.y.values[0]
 
-        
         fig, ax = plt.subplots(figsize=(12, 8))
         
         # Show TAI frequency (values from 0-1 representing frequency of being in TAI zone)
@@ -429,8 +442,12 @@ class BasinDynamics:
         cbar = plt.colorbar(im.images[0], ax=ax, shrink=0.8)
         cbar.set_label('TAI Frequency (0-100%) of Days', rotation=270, labelpad=20)
 
+        if show_basin_footprint:
+            footprint = self.basin.footprint
+            footprint.boundary.plot(ax=ax, color='green', linewidth=2, alpha=0.8, label='Basin Footprint')
+
         # Plot well point
-        ax.scatter(well_point_x, well_point_y, color='red', 
+        ax.scatter(well_point_x, well_point_y, color='green', 
                 marker='x', s=100, linewidths=3,
                 label=f'Well Location @{well_point.elevation_dem:.2f}m')
         
@@ -444,7 +461,7 @@ class BasinDynamics:
         plt.tight_layout()
         plt.show()
 
-    def map_inundation_stacks(self, inundation_frequency: np.array = None):
+    def map_inundation_stacks(self, inundation_frequency: np.array = None, show_basin_footprint: bool = False):
         """
         Map the inundation stacks.
         """
@@ -464,6 +481,10 @@ class BasinDynamics:
         from matplotlib.colors import LinearSegmentedColormap
         colors = ['#8B4513', '#FFFFFF', '#0000FF']  # Brown, White, Blue
         custom_cmap = LinearSegmentedColormap.from_list('brown_white_blue', colors, N=256)
+
+        if show_basin_footprint:
+            footprint = self.basin.footprint
+            footprint.boundary.plot(ax=ax, color='green', linewidth=2, alpha=0.8, label='Basin Footprint')
         
         # Show inundation frequency (values from 0-1 representing frequency of being inundated)
         im = show(inundation_percent, ax=ax, cmap=custom_cmap, alpha=0.8,
@@ -475,7 +496,7 @@ class BasinDynamics:
         cbar.set_label('Inundation Frequency (0-100%) of Days', rotation=270, labelpad=20)
 
         # Plot well point
-        ax.scatter(well_point_x, well_point_y, color='red', 
+        ax.scatter(well_point_x, well_point_y, color='green', 
                 marker='x', s=100, linewidths=3,
                 label=f'Well Location @{well_point.elevation_dem:.2f}m')
         

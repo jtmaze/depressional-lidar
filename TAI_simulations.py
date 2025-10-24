@@ -83,7 +83,7 @@ def generate_wtr_depth_normal(domain: tuple, mean: float, std: float, plot: bool
     if plot:
         plt.plot(x, y)
         plt.xlabel('Depth (m)')
-        plt.ylabel('Proportional Stage Occurence')
+        plt.ylabel('Proportional Stage Occurence (Not Normalized)')
         plt.title(f'Proportional Stage Occurrence (mean={mean}, std={std})')
         plt.grid(True)
         plt.show()
@@ -100,7 +100,7 @@ def generate_wtr_depth_bimodal(
 ):
     
     """Generate bimodal distribution with two peaks."""
-    # TODO: Give the peaks different variances
+    # TODO: Give the peaks different variances?
     start, end = domain[0], domain[1]
     x = np.linspace(start, end, 10_000)
     
@@ -113,7 +113,7 @@ def generate_wtr_depth_bimodal(
     if plot:
         plt.plot(x, y)
         plt.xlabel('Depth (m)')
-        plt.ylabel('Proportional Stage Occurence')
+        plt.ylabel('Proportional Stage Occurence (Not Normalized)')
         plt.title(f'Stage Distribution (Bimiodal) (peaks at {peak1}, {peak2}, proportion={peak_ratio_1_2}, std={std})')
         plt.grid(True)
         plt.show()
@@ -141,6 +141,8 @@ def tai_curve_from_dataframes(
     
     # Create interpolation function for the hypsometric curve
     hyps_df = hyps_df.sort_values('depth').reset_index(drop=True)
+
+    # TODO: Normalize stage df
 
     def get_area_at_depth(depth):
         """
@@ -183,7 +185,6 @@ def tai_curve_from_dataframes(
         
         return interpolated_area
 
-
     # Calculate TAI for each water depth
     tai_values = []
 
@@ -220,35 +221,38 @@ def tai_curve_from_dataframes(
         window=window_size, center=True, min_periods=1
     ).mean()
 
+    grouped['smooth_probability'] = grouped['smooth_probability'] * 100
+
     if plot:
         plt.figure(figsize=(10, 6))
         plt.plot(grouped['tai'], grouped['smooth_probability'], 'r-')
         plt.xlabel('TAI (% of Total Area)')
-        plt.ylabel('Probability Density')
-        plt.title(f'TAI Probability Density Function')
+        plt.ylabel('% of Days')
+        plt.title(f'Simulated TAI')
         plt.grid(True)
         plt.show()
     
-    return result[['tai', 'weight']]
+    return grouped[['smooth_probability', 'tai']]
 
-    
 # %%
 
 x, y = generate_logistic_func(
     domain=domain, 
-    inflection_pt=0.8, 
-    k=1.9, 
+    inflection_pt=0.9, 
+    k=3, 
     plot=True
 )
 
 cdf = pd.DataFrame({'depth': x, 'area': y})
 
+cdf_with_dAdh = hypsometry_cdf_to_dAdh(cdf)
+
 x, y = generate_wtr_depth_bimodal(
     domain=domain,
-    peak1=-1,
-    peak2=0.9,
-    peak_ratio_1_2=0.5,
-    std=0.4,
+    peak1=-0.75,
+    peak2=0.3,
+    peak_ratio_1_2=0.45,
+    std=0.25,
     plot=True
 )
 stage_df = pd.DataFrame({'depth': x, 'weight': y})
@@ -262,9 +266,121 @@ tai_results = tai_curve_from_dataframes(
 
 # %%
 
+fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 10))
+
+# Panel 1: Basin Elevation CDF (Spatial) - Hypsometry
+# Normalize the CDF to 0-1 range
+cdf_normalized = cdf['area'] / 100  # Convert percentage to fraction
+ax1.plot(cdf['depth'], cdf_normalized, 'g-', linewidth=2, label='Basin Elevation CDF (Spatial)')
+ax1.set_ylabel('CDF')
+ax1.set_ylim(0, 1)
+ax1.grid(True, alpha=0.3)
+ax1.legend()
+
+# Panel 2: Basin Elevation PDF (Spatial) - dA/dh from hypsometry
+# Calculate the derivative (dA/dh) and normalize
+dAdh_normalized = cdf_with_dAdh['dAdh'].fillna(0)  # Fill NaN with 0
+dAdh_normalized = dAdh_normalized / np.nanmax(dAdh_normalized)  # Normalize to max = 1
+ax2.fill_between(cdf_with_dAdh['depth'], dAdh_normalized, alpha=0.6, 
+                color='orange', label='Basin Elevation PDF (Spatial)')
+ax2.plot(cdf_with_dAdh['depth'], dAdh_normalized, 'orange', linewidth=1)
+ax2.set_ylabel('PDF (Not Normalized)')
+ax2.grid(True, alpha=0.3)
+ax2.legend()
+
+# Panel 3: Water Depth Distribution (Time)
+# Normalize the stage distribution
+stage_normalized = stage_df['weight'] / np.max(stage_df['weight'])
+ax3.fill_between(stage_df['depth'], stage_normalized, alpha=0.6, 
+                color='lightblue', label='Water Depth (Time)')
+ax3.plot(stage_df['depth'], stage_normalized, 'blue', linewidth=1)
+ax3.set_ylabel('PDF (Not Normalized)')
+ax3.set_xlabel('water_depth')
+ax3.grid(True, alpha=0.3)
+ax3.legend()
+
+# Set consistent x-axis limits for all panels
+xlim = (-1.5, 2.5)
+ax1.set_xlim(xlim)
+ax2.set_xlim(xlim)
+ax3.set_xlim(xlim)
+
+plt.tight_layout()
+plt.show()
+
+# %% Quick simulation varrying topographic slope
+
+k_vals = [2, 3.5, 5]
+
+plt.figure(figsize=(8, 5))
+for k in k_vals:
+    x, y = generate_logistic_func(
+        domain=domain,
+        inflection_pt=1,
+        k=k,
+        plot=False
+    )
+    cdf = pd.DataFrame({'depth': x, 'area': y})
+
+    tai_results = tai_curve_from_dataframes(
+        hyps_df=cdf,          
+        stage_df=stage_df,    
+        delta=0.05,           
+        plot=False
+    )
+
+    plt.plot(tai_results['tai'], tai_results['smooth_probability'], label=f'k={k}')
+
+plt.xlabel('TAI (% of Total Area)')
+plt.ylabel('% of Days')
+plt.title('Simulated TAI for Different Hypsometry k')
+plt.grid(True, alpha=0.3)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# %% Quick simulation varrying the proportion of wet vs dry time
+
+ratios = [0.3, 0.5, 0.7]
+
+x, y = generate_logistic_func(
+    domain=domain,
+    inflection_pt=0.8,
+    k=2.7,
+    plot=False
+)
+
+cdf = pd.DataFrame({'depth': x, 'area': y})
+
+plt.figure(figsize=(8, 5))
+for r in ratios:
+    x, y = generate_wtr_depth_bimodal(
+        domain=domain,
+        peak1=-0.75,
+        peak2=0.8,
+        peak_ratio_1_2=r,
+        std=0.5,
+        plot=False
+    )
+    stage_df = pd.DataFrame({'depth': x, 'weight': y})
+
+    tai_results = tai_curve_from_dataframes(
+        hyps_df=cdf,          
+        stage_df=stage_df,    
+        delta=0.05,           
+        plot=False
+    )
+    plt.plot(tai_results['tai'], tai_results['smooth_probability'], label=f'r={r}')
+
+plt.xlabel('TAI (% of Total Area)')
+plt.ylabel('% of Days')
+plt.title('Simulated TAI by Wetness')
+plt.grid(True, alpha=0.3)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
 # %%
-
-
 """
 NOTE: Illustrative code is below. Not really for analysis.
 """
@@ -308,15 +424,16 @@ plt.show()
 
 
 # %%
-ratios = [0.4, 0.5, 0.6]
+ratios = [0.3, 0.5, 0.7]
 
 for r in ratios:
     x, y = generate_wtr_depth_bimodal(
         domain=domain,
-        peak1=-1,
-        peak2=1,
+        peak1=-0.75,
+        peak2=0.8,
         peak_ratio_1_2=r,
         std=0.5,
+        plot=False
     )
     plt.plot(x, y, label=f'ratio={r}')
 

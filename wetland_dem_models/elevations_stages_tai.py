@@ -9,7 +9,7 @@ from basin_attributes import WetlandBasin
 from basin_dynamics import BasinDynamics, WellStageTimeseries
 
 site = 'bradford'
-wetland_id = '14_418'
+wetland_id = '13_271'
 
 source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_veg.tif'
 basins_path = f'D:/depressional_lidar/data/{site}/in_data/{site}_basins_assigned_wetland_ids_KG.shp'
@@ -91,9 +91,9 @@ dynamics = BasinDynamics(
     well_stage=timeseries,
     well_to_dem_offset=0
 )
-dynamics.plot_tai_area_histogram(max_depth=0.05, min_depth=-0.05)
-dynamics.map_tai_stacks(max_depth=0.05, min_depth=-0.05)
-
+dynamics.plot_tai_area_histogram(max_depth=0.05, min_depth=-0.05, as_pct=True)
+dynamics.map_tai_stacks(max_depth=0.05, min_depth=-0.05, show_basin_footprint=True)
+dynamics.map_inundation_stacks(show_basin_footprint=True)
 
 
 # %%
