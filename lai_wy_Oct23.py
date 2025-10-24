@@ -23,10 +23,10 @@ logging_info = pd.DataFrame([
     {'referend_id': '15_409', 'logged_id': '15_268', 'logged_date': '2/15/2024'}, #1
     {'referend_id': '3_34', 'logged_id': '3_173', 'logged_date': '7/15/2023'}, #2
     {'referend_id': '14_612', 'logged_id': '14_500', 'logged_date': '2/15/2024'}, # 3 
-    {'referend_id': '14_15', 'logged_id': '7_626', 'logged_date': '10/15/2022'}, #4
+    {'referend_id': '3_23', 'logged_id': '3_311', 'logged_date': '5/15/2023'}, #4
 ])
 
-select_idx = 4
+select_idx = 0
 logged_id = logging_info.iloc[select_idx]['logged_id']
 reference_id = logging_info.iloc[select_idx]['referend_id']
 logged_date = pd.to_datetime(logging_info.iloc[select_idx]['logged_date'])
@@ -46,7 +46,7 @@ well_point = (
     .query("type in ['core_well', 'wetland_well']")
 )
 
-transect_buffer = 20 # NOTE: Subject to change
+transect_buffer = 35 # NOTE: Subject to change
 # Set up the basin classes
 ref_basin = WetlandBasin(
     wetland_id=reference_id, 
@@ -118,6 +118,7 @@ plot_correlations(
     x_series_name='wetland_depth_ref', 
     y_series_name='wetland_depth_log',
     log_date=logged_date,
+    filter_obs=(0.01, 10)
 )
 
 plot_correlations(
@@ -129,7 +130,7 @@ plot_correlations(
 
 # %% 3.0 Plot the wetland stage double mass curves
 
-from lai_wy_scripts.dmc_vis_functions import plot_dmc
+from lai_wy_scripts.dmc_vis_functions import plot_dmc, plot_dmc_residuals
 
 min_val = 0.01
 filtered = comparison[(
@@ -141,12 +142,22 @@ filtered = comparison[(
 comparison['cum_wetland_depth_ref'] = comparison['wetland_depth_ref'].cumsum()
 comparison['cum_wetland_depth_log'] = comparison['wetland_depth_log'].cumsum()
 
-plot_dmc(
+slope = plot_dmc(
     comparison_df=comparison,
     x_series_name='cum_wetland_depth_ref',
     y_series_name='cum_wetland_depth_log',
     log_date=logged_date
 )
+
+plot_dmc_residuals(
+    comparison_df=comparison,
+    x_series_name='cum_wetland_depth_ref',
+    y_series_name='cum_wetland_depth_log',
+    dmc_slope=slope,
+    log_date=logged_date
+)
+
+
 
 filtered['cum_wetland_depth_ref'] = filtered['wetland_depth_ref'].cumsum()
 filtered['cum_wetland_depth_log'] = filtered['wetland_depth_log'].cumsum()
@@ -157,8 +168,6 @@ plot_dmc(
     y_series_name='cum_wetland_depth_log',
     log_date=logged_date
 )
-
-
 
 
 # %% 4.0 Plot the wetland inundation double mass curves

@@ -171,7 +171,6 @@ def plot_dmc(
     y_pre = pre_logged[y_series_name].to_numpy()
     x_full = comparison_df[x_series_name].to_numpy()
 
-
     result = np.linalg.lstsq(x_pre[:, None], y_pre, rcond=None)
     m = result[0][0]
 
@@ -188,12 +187,68 @@ def plot_dmc(
     return m
 
 
-def plot_dmc_residual(
+def plot_dmc_residuals(
         comparison_df: pd.DataFrame,
         x_series_name: str,
         y_series_name: str,
+        dmc_slope: float,
         log_date: pd.Timestamp
     ):
+    
+    comparison_df = comparison_df.copy()
+    comparison_df['predicted'] = comparison_df[x_series_name] * dmc_slope
+    comparison_df['residual'] = comparison_df[y_series_name] - comparison_df['predicted']
 
-    pass
+    comparison_df = comparison_df.sort_values('day')
+
+    date_range = pd.date_range(start=comparison_df['day'].min(),
+                               end=comparison_df['day'].max(),
+                               freq='D')
+    
+    filled_df = comparison_df.set_index('day').reindex(date_range)
+    filled_df['rolling_residual_change'] = filled_df['residual'].diff(periods=5)
+
+    def _scale_depth(df: pd.DataFrame):
+
+        df = df.copy()
+        df['mean_wetland_depth'] = (df['wetland_depth_ref'] + df['wetland_depth_log']) / 2
+        min_d = df['mean_wetland_depth'].min()
+        max_d = df['mean_wetland_depth'].max()
+        range_d = max_d - min_d
+
+        df['scaled_depth'] = df['mean_wetland_depth'] / range_d
+
+        return df
+
+    filled_df = _scale_depth(filled_df)
+    plot_df = filled_df.reset_index().rename(columns={'index': 'day'})
+
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
+    # Top panel is cummulative residuals
+    ax1.plot(plot_df['day'], plot_df['residual'], linewidth=2.5, marker='o')
+    ax1.axvline(log_date, color='red', linestyle='-', label='Logged Date')
+    ax1.axhline(0, color='black', linestyle='--', linewidth=1)
+    ax1.set_ylabel('Cummulative Residual (m)')
+
+    ax1.xaxis.set_major_locator(mdates.YearLocator())
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+
+    # Bottom panel rolling change in residuals
+    ax2.plot(plot_df['day'], plot_df['rolling_residual_change'], 'g-', linewidth=2.5, marker='o')
+    ax2.axhline(y=0, color='black', linestyle='--', alpha=0.5)
+    ax2.axvline(log_date, color='red', linestyle='-', linewidth=2, label='Logging Date')
+    ax2.set_xlabel('Date')
+    ax2.set_ylabel('3-Day Change in Residuals (m)')
+    ax2.set_title('3-Day Rolling Rate of Change in Residuals')
+    ax2.grid(True, alpha=0.3)
+    ax2.legend()
+    
+    # Format x-axis for dates
+    ax2.xaxis.set_major_locator(mdates.YearLocator())
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+    
+    plt.tight_layout()
+    plt.show()
+    
 
