@@ -22,6 +22,13 @@ all_wetlands = gpd.GeoDataFrame(
 
 all_wetlands.to_crs('EPSG:4326', inplace=True)
 
+well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
+well_points = (gpd.read_file(well_points_path)[['wetland_id', 'type', 'site', 'geometry']]
+               .query("type in ['core_well', 'wetland_well'] and site == 'bradford'")
+)
+well_points['wetland_id'] = well_points['wetland_id'].str.replace('/', '.')
+
+
 # %% Functions for earth engine
 
 def convert_gpd_geom_to_ee(geom, est_utm):
@@ -144,7 +151,7 @@ def build_lai_monthly_composites(ls8_col, measure_mask):
         comp = ee.Image(filtered.reduce(ee.Reducer.mean()))
         first_band = ee.String(comp.bandNames().get(0))
         comp = comp.select([first_band]).rename('LAI')
-        comp = comp.updateMask(measure_mask)
+        #comp = comp.updateMask(measure_mask)
         parts = ym.split('_')
         year = ee.Number.parse(parts.get(0))
         month = ee.Number.parse(parts.get(1))
@@ -177,25 +184,26 @@ def calc_monthly_means(lai_composite, polygon, wetland_id):
 
 # %% Run the functions to produce LAI timeseries for each wetland
 
-def process_wetland_by_year_chunks(wetland_id, start_year, end_year, years_per_chunk=1):
+def process_wetland_by_year_chunks(wetland_id, tgt_shape, start_year, end_year, years_per_chunk=1):
     """
     NOTE: Needed to chunk processing because Earth Engine computation size limtes
     Processing a wetland in smaller time chunks to reduce computation complexity
     """
-    tgt_wetland = target_wetlands[target_wetlands['wetland_id'] == wetland_id]
-    original_geom = tgt_wetland.geometry.iloc[0]
-    buffered_geom = original_geom.buffer(250)
+
+    original_geom = tgt_shape.geometry.iloc[0]
+    buffered_geom = original_geom.buffer(400)
+
     buffered_geom_4326 = gpd.GeoSeries([buffered_geom], crs=target_wetlands.crs).to_crs('EPSG:4326').iloc[0]
 
-    buffer_gdf = gpd.GeoDataFrame([1], geometry=[buffered_geom_4326], crs='EPSG:4326')
-    wetlands_around_buff_geom = gpd.clip(all_wetlands, buffer_gdf)
+    #buffer_gdf = gpd.GeoDataFrame([1], geometry=[buffered_geom_4326], crs='EPSG:4326')
+    #wetlands_around_buff_geom = gpd.clip(all_wetlands, buffer_gdf)
 
     poly = convert_gpd_geom_to_ee(buffered_geom_4326, est_utm='EPSG:4326')
     
     # Generate masks once
     nlcd_mask = make_nlcd_mask(polygon=poly)
-    upland_mask = make_upland_mask(wetland_shapes=wetlands_around_buff_geom)
-    combined_mask = nlcd_mask.And(upland_mask)
+    #upland_mask = make_upland_mask(wetland_shapes=wetlands_around_buff_geom)
+    combined_mask = nlcd_mask #.And(upland_mask)
     
     # Process in year chunks
     for chunk_start in range(start_year, end_year + 1, years_per_chunk):
@@ -215,9 +223,9 @@ def process_wetland_by_year_chunks(wetland_id, start_year, end_year, years_per_c
             # Export with year range in filename
             task = ee.batch.Export.table.toDrive(
                 collection=monthly_data_export,
-                description=f'upland_lai_{wetland_id}_{chunk_start}_{chunk_end}',
-                folder='upland_only_lai_exports',
-                fileNamePrefix=f'upland_lai_{wetland_id}_{chunk_start}_{chunk_end}',
+                description=f'well_buffer_400m_nomasking_{wetland_id}_{chunk_start}_{chunk_end}',
+                folder='well_buffer_400m_nomasking',
+                fileNamePrefix=f'well_buffer_400m_nomasking_{wetland_id}_{chunk_start}_{chunk_end}',
                 fileFormat='CSV'
             )
             task.start()
@@ -226,13 +234,17 @@ def process_wetland_by_year_chunks(wetland_id, start_year, end_year, years_per_c
         except Exception as e:
             print(f"Error processing {wetland_id} for years {chunk_start}-{chunk_end}: {e}")
 
-# Use the chunked processing approach
-for idx, i in enumerate(target_wetlands['wetland_id'].unique()):
-    print(f"Processing wetland {idx+1}/{len(target_wetlands['wetland_id'].unique())}: {i}")
-    process_wetland_by_year_chunks(i, start_year=2015, end_year=2025, years_per_chunk=3)
+# %% Use the chunked processing approach
+target_shapes = well_points
+
+for idx, i in enumerate(target_shapes['wetland_id'].unique()):
+    #print(f"Processing wetland {idx+1}/{len(target_shapes['wetland_id'].unique())}: {i}")
+    tgt_shape = target_shapes[target_shapes['wetland_id'] == i]
+    process_wetland_by_year_chunks(i, tgt_shape=tgt_shape, start_year=2015, end_year=2025, years_per_chunk=3)
 
 
 # %% Scratch code
+
 
 # %% Quick visualization to check masking
 def visualize_masking(wetland_id, year, month):
