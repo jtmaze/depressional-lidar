@@ -67,7 +67,7 @@ def plot_stage_ts(
 
 def remove_flagged_buffer(ts_df, buffer_days=2):
     """
-    Remove ±buffer_days from records where flag != 0
+    Remove ±buffer_days from records where flag ==2
     """
     
     flagged_dates = ts_df[ts_df['flag'] == 2]['day']
@@ -79,9 +79,10 @@ def remove_flagged_buffer(ts_df, buffer_days=2):
             dates_to_remove.add(date + pd.Timedelta(days=offset))
     
     filtered_df = ts_df[~ts_df['day'].isin(dates_to_remove)]
-    
-    print(f"Removed {len(ts_df) - len(filtered_df)} records around bottomed periods")
-    return filtered_df
+
+    print(f"Removed {len(dates_to_remove)} records around bottomed periods")
+
+    return filtered_df, dates_to_remove
 
 def plot_correlations(
         comparison_df: pd.DataFrame, 
@@ -240,14 +241,61 @@ def plot_correlations_from_model(
     print(f"Model summary (n={model_results['model_fit']['n']}):")
     print(f"  Pre-logging:  y = {pre_slope:.3f}x + {pre_intercept:.3f}")
     print(f"  Post-logging: y = {post_slope:.3f}x + {post_intercept:.3f}")
-    print(f"  R² = {model_results['model_fit']['r2']:.3f}")
+    print(f"  R² = {model_results['model_fit']['joint_r2']:.3f}")
     
     if p_slope < 0.05:
         print(f"  *** Significant slope change: {slope_change:+.3f} (p={p_slope:.3f})")
     if p_intercept < 0.05:
         print(f"  *** Significant intercept change: {intercept_change:+.3f} (p={p_intercept:.3f})")
 
-def fit_interaction_model(
+def _prep_arrays_for_regression(
+        comparison_df: pd.DataFrame, 
+        x_series_name: str,
+        y_series_name: str,
+        log_date: pd.Timestamp
+    ):
+    """
+    Preps dataframe into arrays to meet the statsmodels api
+    """
+
+    df = comparison_df.copy()
+    df['pre_logging'] = df['day'] <= log_date
+    df['group'] = (~df['pre_logging']).astype(int)
+    y = df[y_series_name].astype(float).to_numpy()
+    x = df[x_series_name].astype(float).to_numpy()
+    G = df['group'].to_numpy()
+    X = np.column_stack([
+        np.ones_like(x),  # For the dummy and interaction variable    
+        x,                   
+        G,                   
+        x * G  # interaction
+    ])
+
+    return df, X, y
+
+def _compute_pre_post_r2(model, X, y, G):
+    """
+    Used to compute pre-logging and post-logging r-squared values sepperately. Meant to asses
+    the degree to which model fit degrades post-logging. 
+    """
+
+    y_hat = model.fittedvalues
+
+    # Pre
+    mask_pre = (G == 0)
+    y_pre = y[mask_pre]
+    y_hat_pre = y_hat[mask_pre]
+    r2_pre = 1 - np.sum((y_pre - y_hat_pre)**2) / np.sum((y_pre - y_pre.mean())**2)
+
+    # Post 
+    mask_post = (G == 1)
+    y_post = y[mask_post]
+    y_hat_post = y_hat[mask_post]
+    r2_post = 1 - np.sum((y_post - y_hat_post)**2) / np.sum((y_post - y_post.mean())**2)
+
+    return float(r2_pre), float(r2_post)
+
+def fit_interaction_model_ols(
     comparison_df: pd.DataFrame,
     x_series_name: str,
     y_series_name: str,
@@ -258,26 +306,18 @@ def fit_interaction_model(
     Asses the significance and magnitude of logging change on the hydro variable
     """
 
-    df = comparison_df.copy()
-    df["pre_logging"] = df["day"] <= log_date
-    df["group"] = (~df["pre_logging"]).astype(int)  # 0 = pre, 1 = post
+    df, X, y = _prep_arrays_for_regression(comparison_df, x_series_name, y_series_name, log_date)
 
-    y = df[y_series_name].astype(float).to_numpy()
-    x = df[x_series_name].astype(float).to_numpy()
-    G = df["group"].to_numpy()
-
-    X = np.column_stack([
-        np.ones_like(x),  # For the dummy and interaction variable    
-        x,                   
-        G,                   
-        x * G  # interaction
-    ])
     model = sm.OLS(y, X).fit(cov_type=cov_type) 
 
-    b0, b1, bg, bint = model.params
+    b0, m_pre, bg, m_g = model.params
     V = model.cov_params()
     post_intercept = b0 + bg
-    post_slope = b1 + bint
+    post_slope = m_pre + m_g
+    pre_r2, post_r2 = _compute_pre_post_r2(model, X, y, df['group'])
+
+    se_pre_intercept = np.sqrt(V[0,0])
+    se_pre_slope = np.sqrt(V[1,1])
     se_post_intercept = np.sqrt(V[0,0] + V[2,2] + 2*V[0,2])
     se_post_slope = np.sqrt(V[1,1] + V[3,3] + 2*V[1,3])
 
@@ -294,31 +334,235 @@ def fit_interaction_model(
     results = {
         "pre": {
             "intercept": float(b0),
-            "slope": float(b1),
-            "se_intercept": float(np.sqrt(V[0,0])),
-            "se_slope": float(np.sqrt(V[1,1]))
+            "slope": float(m_pre),
+            "se_intercept": float(se_pre_intercept),
+            "se_slope": float(se_pre_slope), 
+            "pre_r2": float(pre_r2)
         },
         "post": {
             "intercept": float(post_intercept),
             "slope": float(post_slope),
             "se_intercept": float(se_post_intercept),
-            "se_slope": float(se_post_slope)
+            "se_slope": float(se_post_slope), 
+            "post_r2": float(post_r2)
         },
         "tests": {
             "p_intercept_diff": float(p_intercept_diff),
             "p_slope_diff": float(p_slope_diff),
             "joint_F": float(joint.fvalue),
-            "joint_df": joint_df,
-            "joint_p": float(joint.pvalue)
         },
         "model_fit": {
-            "r2": float(model.rsquared),
+            "joint_r2": float(model.rsquared),
             "n": int(len(df)),
+            "type": "OLS",
             "cov_type": cov_type
         }
     }
+    return results
 
-    return results, model
+def fit_interaction_model_huber(
+        comparison_df: pd.DataFrame,
+        x_series_name: str, 
+        y_series_name: str,
+        log_date: pd.Timestamp,
+        ):
+    
+    df, X, y = _prep_arrays_for_regression(comparison_df, x_series_name, y_series_name, log_date)
+    #NOTE: 1) Used default value for Huber's t function 2) should I add the option to change the covariance type?
+    model = sm.RLM(y, X, M=sm.robust.norms.HuberT(t=1.345)).fit()
+
+    b0, m_pre, bg, m_g = model.params
+    V = model.cov_params()
+    post_intercept = b0 + bg
+    post_slope = m_pre + m_g
+
+    pre_r2, post_r2 = _compute_pre_post_r2(model, X, y, df['group'])
+
+    se_pre_intercept = float(np.sqrt(V[0,0]))
+    se_pre_slope = float(np.sqrt(V[1,1]))
+    se_post_intercept = np.sqrt(V[0,0] + V[2,2] + 2*V[0,2])
+    se_post_slope = np.sqrt(V[1,1] + V[3,3] + 2*V[1,3])
+
+    # NOTE: this is r-squared is bassed on sum of squared errors, and does not relate to the Huber model's optimization
+    r2 = 1 - np.sum((y - model.fittedvalues) ** 2) / np.sum((y - y.mean())**2)
+
+    results = {
+        'pre': {
+            "intercept": float(b0),
+            "slope": float(m_pre),
+            "se_intercept": float(se_pre_intercept),
+            "se_slope": float(se_pre_slope),
+            "pre_r2": float(pre_r2)
+        },
+        'post': {
+            "intercept": float(post_intercept),
+            "slope": float(post_slope),
+            "se_intercept": float(se_post_intercept),
+            "se_slope": float(se_post_slope),
+            "post_r2": float(post_r2)
+        },
+        'tests': {
+            'p_intercept_diff': float(np.nan),
+            'p_slope_diff': float(np.nan), 
+            'joint_F': float(np.nan)
+        },
+        'model_fit': {
+            'type': 'HuberRLM',
+            'joint_r2': float(r2),
+            'n': int(len(df))
+        }
+    }
+    return results
+
+def compute_residuals(comparison_df: pd.DataFrame,
+                      log_date: pd.Timestamp,
+                      x_series_name: str,
+                      y_series_name: str,
+                      models: dict
+    ):
+    """
+    Calculates the residuals for a given pair's pre and post logging models. 
+    Returns a dataframe with the residuals pre and post logging.
+    """
+
+    comparison_df = comparison_df.copy()
+    comparison_df['logged'] = comparison_df['day'] >= log_date
+
+    # Extract the coefficients
+    pre_model = models['pre']
+    pre_slope = pre_model['slope']
+    pre_int = pre_model['intercept']
+    post_model = models['post']
+    post_slope = post_model['slope']
+    post_int = post_model['intercept']
+
+    # Apply models to get predictions adn residuals. 
+    pre_predicted = comparison_df[x_series_name] * pre_slope + pre_int
+    post_predicted = comparison_df[x_series_name] * post_slope + post_int
+
+    comparison_df['predicted'] = np.where(
+        comparison_df['logged'],
+        post_predicted,
+        pre_predicted
+    )
+
+    comparison_df['residual'] = comparison_df[y_series_name] - comparison_df['predicted']
+
+    return comparison_df[['day', x_series_name, 'predicted', 'residual']]
+
+def visualize_residuals(residuals_df: pd.DataFrame, log_date: pd.Timestamp):
+    """
+    Visualize model residuals with residuals vs predicted plot and Q-Q plot.
+    Separates pre and post logging periods for comparison.
+    """
+    
+    # Add logging period indicator
+    residuals_df = residuals_df.copy()
+    residuals_df['logged'] = residuals_df['day'] >= log_date
+    
+    # Split into pre and post
+    pre_df = residuals_df[~residuals_df['logged']]
+    post_df = residuals_df[residuals_df['logged']]
+    
+    # Create 2x2 subplot figure
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+    # Pre;ogging (top left)
+    axes[0, 0].scatter(pre_df['predicted'], pre_df['residual'], 
+                       alpha=0.6, s=40, color='grey', edgecolors='black', linewidth=0.5)
+    axes[0, 0].axhline(0, color='red', linestyle='--', linewidth=2)
+    axes[0, 0].set_xlabel('Predicted Values [m]', fontsize=11)
+    axes[0, 0].set_ylabel('Residuals [m]', fontsize=11)
+    axes[0, 0].set_title(f'Pre-Logging: Residuals vs Predicted (n={len(pre_df)})', 
+                         fontsize=12, fontweight='bold')
+    axes[0, 0].grid(True, alpha=0.3)
+    
+    # Post-logging (top right)
+    axes[0, 1].scatter(post_df['predicted'], post_df['residual'],
+                       alpha=0.6, s=40, color='coral', edgecolors='black', linewidth=0.5)
+    axes[0, 1].axhline(0, color='red', linestyle='--', linewidth=2)
+    axes[0, 1].set_xlabel('Predicted Values [m]', fontsize=11)
+    axes[0, 1].set_ylabel('Residuals [m]', fontsize=11)
+    axes[0, 1].set_title(f'Post-Logging: Residuals vs Predicted (n={len(post_df)})',
+                         fontsize=12, fontweight='bold')
+    axes[0, 1].grid(True, alpha=0.3)
+
+    # Pre-logging Q-Q (bottom left)
+    stats.probplot(pre_df['residual'], dist="norm", plot=axes[1, 0])
+    axes[1, 0].set_title('Pre-Logging: Normal Q-Q Plot', fontsize=12, fontweight='bold')
+    axes[1, 0].set_xlabel('Theoretical Quantiles', fontsize=11)
+    axes[1, 0].set_ylabel('Sample Quantiles', fontsize=11)
+    axes[1, 0].grid(True, alpha=0.3)
+    axes[1, 0].get_lines()[0].set_markerfacecolor('steelblue')
+    axes[1, 0].get_lines()[0].set_markeredgecolor('black')
+    axes[1, 0].get_lines()[0].set_markersize(5)
+    axes[1, 0].get_lines()[1].set_color('red')
+    axes[1, 0].get_lines()[1].set_linewidth(2)
+    
+    # Post-logging Q-Q (bottom right)
+    stats.probplot(post_df['residual'], dist="norm", plot=axes[1, 1])
+    axes[1, 1].set_title('Post-Logging: Normal Q-Q Plot', fontsize=12, fontweight='bold')
+    axes[1, 1].set_xlabel('Theoretical Quantiles', fontsize=11)
+    axes[1, 1].set_ylabel('Sample Quantiles', fontsize=11)
+    axes[1, 1].grid(True, alpha=0.3)
+    axes[1, 1].get_lines()[0].set_markerfacecolor('coral')
+    axes[1, 1].get_lines()[0].set_markeredgecolor('black')
+    axes[1, 1].get_lines()[0].set_markersize(5)
+    axes[1, 1].get_lines()[1].set_color('red')
+    axes[1, 1].get_lines()[1].set_linewidth(2)
+    
+    plt.suptitle('Residual Diagnostics: Pre vs Post-Logging', 
+                 fontsize=15, fontweight='bold', y=0.995)
+    plt.tight_layout()
+    plt.show()
+
+def flatten_model_results(results: dict,
+                          log_id: str,
+                          log_date: pd.Timestamp,
+                          ref_id: str,
+                          data_set: str
+    ):
+    """
+    Unnests the dictionaries from fit_interaction_model_huber() and fit_interaction_model_ols() 
+    the purpose is to make dataframe/.csv storage more efficient without the nested data structure. 
+    """
+
+    out = {}
+
+    out["log_id"] = log_id
+    out["log_date"] = log_date
+    out["ref_id"] = ref_id
+    out["data_set"] = data_set
+
+    # Pre
+    pre = results["pre"]
+    out["pre_intercept"] = pre["intercept"]
+    out["pre_slope"] = pre["slope"]
+    out["pre_se_intercept"] = pre["se_intercept"]
+    out["pre_se_slope"] = pre["se_slope"]
+    out["pre_r2"] = pre["pre_r2"]
+
+    # Post
+    post = results["post"]
+    out["post_intercept"] = post["intercept"]
+    out["post_slope"] = post["slope"]
+    out["post_se_intercept"] = post["se_intercept"]
+    out["post_se_slope"] = post["se_slope"]
+    out["post_r2"] = post["post_r2"]
+
+    # Tests NOTE: some tests are not valid in Huber models
+    tests = results.get("tests", {})
+    out["p_intercept_diff"] = tests.get("p_intercept_diff", np.nan)
+    out["p_slope_diff"] = tests.get("p_slope_diff", np.nan)
+    out["joint_F"] = tests.get("joint_F", np.nan)
+
+    mf = results.get("model_fit", {})
+    out["r2_joint"] = mf.get("joint_r2", np.nan)
+    out["n"] = mf.get("n", np.nan)
+    out["model_type"] = mf.get("type", None)
+    out["cov_type"] = mf.get("cov_type", None)
+
+    return out
 
 def sample_reference_ts(df: pd.DataFrame, only_pre_log: bool, column_name: str="wetland_depth_ref", n: int=1000):
     """
@@ -346,7 +590,6 @@ def generate_model_distributions(f_dist: np.ndarray, models: dict):
     pre_slope = models['pre']['slope']
     post_intercept = models['post']['intercept']
     post_slope = models['post']['slope']
-    
 
     y_pre = pre_intercept + pre_slope * f_dist
     y_post = post_intercept + post_slope * f_dist
@@ -402,31 +645,13 @@ def summarize_depth_shift(model_distributions: dict):
     pre_mean = pre_model_distributions.mean()
     post_mean = post_model_distributions.mean()
     delta_mean = post_mean - pre_mean
-
+    # TODO: calculate median shift or change in std?
     # TODO: Should I do some bootstrapping for confidence intervals on these estimates??
 
     return {
         "mean_pre": pre_mean,
         "mean_post": post_mean,
         "delta_mean": delta_mean
-    }
-
-def summarize_inundation_shift(model_distributions: dict, z_thresh: float=0.0):
-
-    pre_model_distributions = model_distributions['pre']
-    post_model_distributions = model_distributions['post']
- 
-    pre_above = (pre_model_distributions > z_thresh).mean()
-    post_above = (post_model_distributions > z_thresh).mean()
-    delta_inundation = post_above - pre_above
-
-    # TODO: Should I do some bootstrapping for confidence intervals on these estimates??
-
-    return {
-        'pre_inundation': pre_above,
-        'post_inundation': post_above,
-        'delta_inundation': delta_inundation,
-        'threshold': z_thresh
     }
 
 def plot_dmc(
@@ -584,7 +809,6 @@ def residual_change_vs_depth(residual_df: pd.DataFrame, log_date: pd.Timestamp):
     
     plt.tight_layout()
     plt.show()
-
 
 def plot_storage_curves(logged_hypsometry: pd.DataFrame, reference_hypsometry: pd.DataFrame):
 

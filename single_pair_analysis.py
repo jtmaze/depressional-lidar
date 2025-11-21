@@ -6,9 +6,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from lai_wy_scripts.dmc_vis_functions import (
-    plot_ts, plot_stage_ts, remove_flagged_buffer, plot_correlations, fit_interaction_model, plot_correlations_from_model,
+    plot_ts, plot_stage_ts, remove_flagged_buffer, plot_correlations, fit_interaction_model_huber, plot_correlations_from_model,
     plot_dmc, plot_dmc_residuals, residual_change_vs_depth, sample_reference_ts, generate_model_distributions,
-    plot_hypothetical_distributions, summarize_depth_shift, summarize_inundation_shift
+    plot_hypothetical_distributions, summarize_depth_shift
 )
 
 from lai_wy_scripts.lai_vis_functions import read_concatonate_lai, visualize_lai, lai_comparison_vis
@@ -21,15 +21,24 @@ well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 footprints_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_basins_assigned_wetland_ids_KG.shp'
 lai_dir = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/well_buffer_250m_includes_wetlands/'
 
-
 wetland_pairs_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs.csv'
 wetland_pairs = pd.read_csv(wetland_pairs_path)
 
 # Strong idxs 93, 124, 81, 42, 16
 # Weak idxs 100, 51, 169
-pair = wetland_pairs.iloc[106]
+#pair = wetland_pairs.iloc[93]
+
+low_outliers = pd.DataFrame({
+    'logged_id': ['14_418', '9_439', '14_418'],
+    'reference_id': ['14_616', '14_616', '6_300'],
+    'logging_date': ['2023-11-01', '2023-10-01', '2023-11-01']
+})
+pair = low_outliers.iloc[2]
+
 reference_id = pair['reference_id']
 logged_id = pair['logged_id']
+logged_id = '5_597'
+reference_id = '5a_550'
 logged_date = pd.to_datetime(pair['logging_date'])
 
 
@@ -83,47 +92,9 @@ log_basin.visualize_shape(show_well=True, show_deepest=True)
 
 # %% 2.0 Find correlations between well depths
 
-reference_ts_flag_out = remove_flagged_buffer(reference_ts, buffer_days=1)
-logged_ts_flag_out = remove_flagged_buffer(logged_ts, buffer_days=1)
-
-comparison_flag_out = pd.merge(
-    reference_ts_flag_out, 
-    logged_ts_flag_out, 
-    how='inner', 
-    on='day', 
-    suffixes=('_ref', '_log')
-).drop(columns=['flag_ref', 'flag_log'])
-
-plot_correlations(
-    comparison_flag_out, 
-    x_series_name='well_depth_ref',
-    y_series_name='well_depth_log',
-    log_date=logged_date
-)
-
-r, m = fit_interaction_model(
-    comparison_flag_out,
-    x_series_name='well_depth_ref',
-    y_series_name='well_depth_log',
-    log_date=logged_date,
-    cov_type="HC3"
-)
-
-plot_correlations_from_model(
-    comparison_flag_out, 
-    x_series_name='well_depth_ref', 
-    y_series_name='well_depth_log',
-    log_date=logged_date,
-    model_results=r
-)
-
-ref_sample = sample_reference_ts(df=comparison_flag_out, only_pre_log=False, column_name="well_depth_ref", n=10_000)
-modeled_distributions = generate_model_distributions(f_dist=ref_sample, models=r)
-plot_hypothetical_distributions(model_distributions=modeled_distributions, f_dist=ref_sample, bins=50)
-
-pp.pp(summarize_inundation_shift(modeled_distributions, z_thresh=0))
-pp.pp(summarize_depth_shift(modeled_distributions))
-
+reference_ts, removed_days = remove_flagged_buffer(reference_ts, buffer_days=1)
+logged_ts, removed_days = remove_flagged_buffer(logged_ts, buffer_days=1)
+plot_stage_ts(logged_ts, reference_ts, logged_date, 'Well Depth')
 
 # %% 2.1 Adjust well depth timeseries to wetland depth timeseries
 
@@ -131,10 +102,6 @@ logged_well_diff = log_basin.well_point.elevation_dem - log_basin.deepest_point.
 logged_ts['wetland_depth'] = logged_ts['well_depth'] + logged_well_diff
 ref_well_diff = ref_basin.well_point.elevation_dem - ref_basin.deepest_point.elevation
 reference_ts['wetland_depth'] = reference_ts['well_depth'] + ref_well_diff
-
-# Changing all dry wetland days to zero
-logged_ts['wetland_depth'] = logged_ts['wetland_depth'].clip(lower=0)
-reference_ts['wetland_depth'] = reference_ts['wetland_depth'].clip(lower=0)
 
 
 # %% 2.1 Correlation plot
@@ -148,20 +115,11 @@ comparison = pd.merge(
 ).drop(columns=['flag_ref', 'flag_log'])
 
 
-plot_correlations(
+r = fit_interaction_model_huber(
     comparison,
     x_series_name='wetland_depth_ref',
     y_series_name='wetland_depth_log',
-    log_date=logged_date,
-    filter_obs=None
-)
-
-r, m = fit_interaction_model(
-    comparison,
-    x_series_name='well_depth_ref',
-    y_series_name='well_depth_log',
-    log_date=logged_date,
-    cov_type="HC3"
+    log_date=logged_date
 )
 
 plot_correlations_from_model(
