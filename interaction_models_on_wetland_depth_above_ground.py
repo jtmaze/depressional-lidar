@@ -19,7 +19,7 @@ source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_clea
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 footprints_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_basins_assigned_wetland_ids_KG.shp'
 
-wetland_pairs_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs.csv'
+wetland_pairs_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_all_wells.csv'
 wetland_pairs = pd.read_csv(wetland_pairs_path)
 
 # %% Run the model
@@ -29,7 +29,7 @@ distribution_results = []
 shift_results = []
 residual_results = []
 
-rando_plot_idxs = np.random.choice(len(wetland_pairs), size=5, replace=False)
+rando_plot_idxs = np.random.choice(len(wetland_pairs), size=50, replace=False)
 
 for index, row in wetland_pairs.iterrows():
     # Designate ids and logging date
@@ -136,19 +136,19 @@ for index, row in wetland_pairs.iterrows():
             log_date=logging_date, 
             model_results=r_ols
         )
-        plot_correlations_from_model(
-            comparison,
-            x_series_name='wetland_depth_ref',
-            y_series_name='wetland_depth_log',
-            log_date=logging_date,
-            model_results=r_huber
-        )
+        # plot_correlations_from_model(
+        #     comparison,
+        #     x_series_name='wetland_depth_ref',
+        #     y_series_name='wetland_depth_log',
+        #     log_date=logging_date,
+        #     model_results=r_huber
+        # )
 
         plot_hypothetical_distributions(modeled_distributions_ols, f_dist=ref_sample, bins=50)
-        plot_hypothetical_distributions(modeled_distributions_huber, f_dist=ref_sample, bins=50)
+        #plot_hypothetical_distributions(modeled_distributions_huber, f_dist=ref_sample, bins=50)
 
-        visualize_residuals(residuals_ols, logging_date)
-        visualize_residuals(residuals_huber, logging_date)
+        # visualize_residuals(residuals_ols, logging_date)
+        # visualize_residuals(residuals_huber, logging_date)
 
     r_ols_flat = flatten_model_results(r_ols, logged_id, logging_date, reference_id, "full")
     r_huber_flat = flatten_model_results(r_huber, logged_id, logging_date, reference_id, "full")
@@ -363,10 +363,10 @@ model_results_df = pd.DataFrame(model_results)
 # %% 3.1 Save the results
 
 out_dir = "D:/depressional_lidar/data/bradford/out_data/"
-shift_path = out_dir + 'logging_hypothetical_shift_results.csv'
-distributions_path = out_dir + 'logging_hypothetical_distributions.csv'
-residuals_path = out_dir + 'model_residuals.csv'
-models_path = out_dir + 'pre_post_models.csv'
+shift_path = out_dir + 'logging_hypothetical_shift_results_all_wells.csv'
+distributions_path = out_dir + 'logging_hypothetical_distributions_all_wells.csv'
+residuals_path = out_dir + 'model_residuals_all_wells.csv'
+models_path = out_dir + 'pre_post_models_all_wells.csv'
 
 shift_results_df.to_csv(shift_path, index=False)
 distribution_results_df.to_csv(distributions_path, index=False)

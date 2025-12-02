@@ -96,6 +96,46 @@ summary_df = pd.DataFrame(summary_data)
 print("\nSummary Statistics:")
 print(summary_df.to_string(index=False))
 
+# %% Only plot shift data for a single model and dataset
+
+plot_df = shift_data[
+    (shift_data['model_type'] == 'ols') & (shift_data['data_set'] == 'full')
+]
+
+mean_change = plot_df['mean_depth_change'].mean()
+median_change = plot_df['mean_depth_change'].median()
+std_change = plot_df['mean_depth_change'].std()
+
+
+fig, ax = plt.subplots(figsize=(12, 5))
+
+ax.hist(
+    plot_df['mean_depth_change'], 
+    bins=20, 
+    edgecolor='black', 
+    alpha=0.7, 
+    color='steelblue',
+    linewidth=1.2
+)
+
+ax.axvline(0, color='grey', linestyle='--', linewidth=2, alpha=0.8)
+ax.axvline(mean_change, color='navy', linestyle='--', linewidth=4, alpha=1)
+
+ax.set_title('Modeled Stage Increase (Unlogged - Logged)', fontsize=18, fontweight='bold')
+ax.set_xlabel('Mean Depth Difference [m]', fontsize=16)
+ax.set_ylabel('Number of Pairs', fontsize=18)
+ax.tick_params(axis='both', labelsize=14)  # Add this line to increase tick label size
+
+# Add stats text
+stats_text = f'Mean = {mean_change:.3f}m\nStd = {std_change:.3f}m'
+props = dict(boxstyle='round', facecolor='white', alpha=0.8)
+ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=18,
+        verticalalignment='top', bbox=props)
+
+plt.tight_layout()
+plt.show()
+
+
 # %% LAI change biplot
 
 lai_diffs = []
@@ -157,7 +197,7 @@ shift_data = shift_data.merge(
 
 # %%
 
-model_type = 'huber'  # or 'ols'
+model_type = 'ols'  # or 'ols'
 data_set = 'full'  # or 'full'
 
 plot_df = shift_data[
@@ -188,17 +228,14 @@ y_pred = slope * x_range + intercept
 ax.plot(x_range, y_pred, 'r--', linewidth=2, 
         label=f'y = {slope:.3f}x + {intercept:.3f}\nR² = {r_value**2:.3f}, p = {p_value:.3e}')
 
-
-ax.axhline(0, color='gray', linestyle=':', alpha=0.5)
-ax.axvline(0, color='gray', linestyle=':', alpha=0.5)
-
+ax.axhline(0, color='gray', linestyle=':', alpha=1)
 
 ax.set_xlabel('Relative LAI Decrease (Pre - Post)', fontsize=12)
 ax.set_ylabel('Modeled Stage Increase (Post - Pre) [m]', fontsize=12)
-ax.set_title(f'LAI Loss vs Wetland Depth Change\n{model_type.upper()} Model - {data_set.replace("_", " ").title()} Dataset', 
+ax.set_title(f'LAI Loss vs Wetland Depth Change', 
              fontsize=14, fontweight='bold')
 ax.legend(loc='best', fontsize=11)
-ax.grid(True, alpha=0.3)
+
 
 plt.tight_layout()
 plt.show()
@@ -219,7 +256,11 @@ connected_dict = {
     '7_243': 1,
     '3_311': 0,
     '3_173': 0,
-    '3_244': 0
+    '3_244': 0, 
+    '14.9_601': 2,
+    '9_77': 2,
+    '3_23': 2,
+    '13_267': 1,
 }
 
 # %%
@@ -247,8 +288,7 @@ for connectivity_level, config in connectivity_config.items():
             edgecolors='black', 
             linewidth=0.5,
             color=config['color'],
-            marker=config['marker'],
-            label=f"{config['label']} (n={len(subset)})"
+            marker=config['marker']
         )
     
     slope, intercept, r_value, p_value, std_err = stats.linregress(
@@ -267,7 +307,7 @@ for connectivity_level, config in connectivity_config.items():
 # Formatting
 ax.set_xlabel('Relative LAI Decrease (Pre - Post)', fontsize=12)
 ax.set_ylabel('Modeled Stage Increase (Post - Pre) [m]', fontsize=12)
-ax.set_title(f'LAI Loss vs Wetland Depth Change by Connectivity\n{model_type.upper()} Model - {data_set.replace("_", " ").title()} Dataset', 
+ax.set_title(f'LAI Loss vs Wetland Depth Change by Connectivity', 
             fontsize=14, fontweight='bold')
 ax.legend(loc='best', fontsize=10, framealpha=0.9)
 ax.grid(True, alpha=0.3)

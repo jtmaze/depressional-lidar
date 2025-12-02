@@ -24,7 +24,7 @@ well_point = (
 
 pairs = pd.read_csv(wetland_pairs_path)
 unique_log_ids = pairs['log_id'].unique()
-unique_log_ids = ['14_418']
+unique_log_ids = ['15_268']
 distributions = pd.read_csv(distributions_path)
 
 distributions = distributions[distributions['log_id'].isin(unique_log_ids)]
@@ -32,7 +32,7 @@ distributions = distributions[distributions['log_id'].isin(unique_log_ids)]
 
 # %% Calculate an average hypsometric curve based on the logged_id basins
 
-hypsometric_curves = []
+area_shifts = []
 
 for i in unique_log_ids:
 
@@ -43,7 +43,12 @@ for i in unique_log_ids:
         footprint=None,
         transect_buffer=buffer 
     )
-    b.visualize_shape(show_deepest=False, show_well=True, show_centroid=False)
+    b.visualize_shape(
+        show_deepest=False, 
+        show_well=False, 
+        show_centroid=False, 
+        show_shape=False
+    )
     b.plot_basin_hypsometry()
 
     hypsometry = b.calculate_hypsometry(method="total_cdf")
@@ -60,102 +65,101 @@ for i in unique_log_ids:
     
     hypsometry_df['log_id'] = i
 
-    hypsometric_curves.append(hypsometry_df)
+    distributions_clean = distributions[
+        (distributions['pre'] >= -1) & (distributions['pre'] <= 1.0) &
+        (distributions['post'] >= -1) & (distributions['post'] <= 1.0) &
+        (distributions['log_id'] == i)
+    ].copy()
 
-# %% Calculate an aggregated hypsometric curve
+    pre_data = distributions_clean['pre']
+    kde_pre = stats.gaussian_kde(pre_data)
+    x_pre = np.linspace(pre_data.min(), pre_data.max(), 500).round(2)
+    y_pre = kde_pre(x_pre)
 
-curves_df = pd.concat(hypsometric_curves)
+    pre_dist = pd.DataFrame(
+        {'depth': x_pre,
+        'weight': y_pre}
+    )
 
-summarized_hypsometry = curves_df.groupby('depth_rounded').agg(
-    {'area_scaled': 'mean'}
-)
+    post_data = distributions_clean['post']
+    kde_post = stats.gaussian_kde(post_data)
+    x_post = np.linspace(post_data.min(), post_data.max(), 500).round(2)
+    y_post = kde_post(x_post)
 
-plt.plot(summarized_hypsometry.index, summarized_hypsometry['area_scaled'])
-plt.xlabel('Depth (m)')
-plt.ylabel('Scaled Area (0-1)')
-plt.title('Aggregated Hypsometric Curve')
-plt.show()
+    post_dist = pd.DataFrame(
+        {'depth': x_post,
+        'weight': y_post}
+    )
 
+    pre_dist_merged = pd.merge(
+        pre_dist, 
+        hypsometry_df,
+        how='left',
+        left_on='depth',
+        right_on='depth_rounded'
+    )
+    pre_dist_merged['area_scaled'] = pre_dist_merged['area_scaled'].fillna(0)
 
+    post_dist_merged = pd.merge(
+        post_dist, 
+        hypsometry_df,
+        how='left',
+        left_on='depth',
+        right_on='depth_rounded'
+    )
+
+    post_dist_merged['area_scaled'] = post_dist_merged['area_scaled'].fillna(0)
+    
+    pre_expected_area = np.average(pre_dist_merged['area_scaled'], weights=pre_dist_merged['weight'])
+    post_expected_area = np.average(post_dist_merged['area_scaled'], weights=post_dist_merged['weight'])
+
+    # Calculate proportion of time dry (area_scaled = 0)
+    pre_dry_prob = pre_dist_merged[pre_dist_merged['area_scaled'] == 0]['weight'].sum()
+    post_dry_prob = post_dist_merged[post_dist_merged['area_scaled'] == 0]['weight'].sum()
+
+    # Normalize weights for proper probability
+    pre_dist_merged['weight_norm'] = pre_dist_merged['weight'] / pre_dist_merged['weight'].sum()
+    post_dist_merged['weight_norm'] = post_dist_merged['weight'] / post_dist_merged['weight'].sum()
+
+    # Create visualization
+    fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+
+    # Weighted histogram of inundated area (including zeros)
+    ax.hist(pre_dist_merged['area_scaled'], weights=pre_dist_merged['weight_norm'] * 100,
+        bins=30, alpha=0.6, color='#333333', edgecolor='black',
+        label=f'Pre-logging')
+    ax.hist(post_dist_merged['area_scaled'], weights=post_dist_merged['weight_norm'] * 100,
+        bins=30, alpha=0.6, color='#E69F00', edgecolor='black',
+        label=f'Post-logging')
+    ax.axvline(pre_expected_area, color='#333333', linestyle='--', linewidth=2,
+        label=f'Pre mean: {pre_expected_area:.2f}')
+    ax.axvline(post_expected_area, color='#E69F00', linestyle='--', linewidth=2,
+        label=f'Post mean: {post_expected_area:.2f}')
+    ax.set_xlabel('Inundated Fraction (0 = dry)', fontsize=11)
+    ax.set_ylabel('% of Days', fontsize=11)
+    ax.set_title('Distribution of Inundated Area', fontsize=12, fontweight='bold')
+    ax.legend(fontsize=9)
+    ax.set_xlim(0, 1)
+
+    summary = {
+        'pre_area_mean': pre_expected_area,
+        'post_area_mean': post_expected_area,
+        'logged_id': i
+    }
+    
+    area_shifts.append(summary)
+
+# %% 
+
+results = pd.concat([pd.DataFrame([i]) for i in area_shifts], ignore_index=True)
 # %%
 
-distributions_clean = distributions[
-    (distributions['pre'] >= -1) & (distributions['pre'] <= 1.0) &
-    (distributions['post'] >= -1) & (distributions['post'] <= 1.0)
-].copy()
-
-pre_data = distributions_clean['pre']
-kde_pre = stats.gaussian_kde(pre_data)
-x_pre = np.linspace(pre_data.min(), pre_data.max(), 500).round(2)
-y_pre = kde_pre(x_pre)
-
-pre_dist = pd.DataFrame(
-    {'depth': x_pre,
-     'weight': y_pre}
-)
-
-post_data = distributions_clean['post']
-kde_post = stats.gaussian_kde(post_data)
-x_post = np.linspace(post_data.min(), post_data.max(), 500).round(2)
-y_post = kde_post(x_post)
-
-post_dist = pd.DataFrame(
-    {'depth': x_post,
-     'weight': y_post}
-)
+results['shift_nominal'] = results['post_area_mean'] -  results['pre_area_mean']
+results['shift_relative'] = results['shift_nominal'] / results['pre_area_mean']
 
 # %%
-
-pre_dist_merged = pd.merge(
-    pre_dist, 
-    summarized_hypsometry,
-    how='left',
-    left_on='depth',
-    right_on='depth_rounded'
-)
-pre_dist_merged['area_scaled'] = pre_dist_merged['area_scaled'].fillna(0)
-
-post_dist_merged = pd.merge(
-    post_dist, 
-    summarized_hypsometry,
-    how='left',
-    left_on='depth',
-    right_on='depth_rounded'
-)
-
-post_dist_merged['area_scaled'] = post_dist_merged['area_scaled'].fillna(0)
-
-# %%
-
-pre_expected_area = np.average(pre_dist_merged['area_scaled'], weights=pre_dist['weight'])
-post_expected_area = np.average(post_dist_merged['area_scaled'], weights=post_dist['weight'])
-
-# Calculate proportion of time dry (area_scaled = 0)
-pre_dry_prob = pre_dist_merged[pre_dist_merged['area_scaled'] == 0]['weight'].sum()
-post_dry_prob = post_dist_merged[post_dist_merged['area_scaled'] == 0]['weight'].sum()
-
-# Normalize weights for proper probability
-pre_dist_merged['weight_norm'] = pre_dist_merged['weight'] / pre_dist_merged['weight'].sum()
-post_dist_merged['weight_norm'] = post_dist_merged['weight'] / post_dist_merged['weight'].sum()
-
-# Create visualization
-fig, ax = plt.subplots(1, 1, figsize=(10, 6))
-
-# Weighted histogram of inundated area (including zeros)
-ax.hist(pre_dist_merged['area_scaled'], weights=pre_dist_merged['weight_norm'],
-    bins=30, alpha=0.6, color='steelblue', edgecolor='black',
-    label=f'Pre-logging')
-ax.hist(post_dist_merged['area_scaled'], weights=post_dist_merged['weight_norm'],
-    bins=30, alpha=0.6, color='coral', edgecolor='black',
-    label=f'Post-logging')
-ax.axvline(pre_expected_area, color='darkblue', linestyle='--', linewidth=2,
-       label=f'Pre mean: {pre_expected_area:.3f}')
-ax.axvline(post_expected_area, color='darkred', linestyle='--', linewidth=2,
-       label=f'Post mean: {post_expected_area:.3f}')
-ax.set_xlabel('Inundated Fraction (0 = dry)', fontsize=11)
-ax.set_ylabel('Probability', fontsize=11)
-ax.set_title('Distribution of Inundated Area', fontsize=12, fontweight='bold')
-ax.legend(fontsize=9)
-ax.grid(True, alpha=0.3)
-
+mean_relative = results['shift_relative'].mean() * 100
+mean_nominal = results['shift_nominal'].mean() * 100
+print(mean_nominal)
+print(mean_relative)
 # %%

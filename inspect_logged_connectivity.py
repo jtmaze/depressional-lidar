@@ -6,7 +6,7 @@ from wetland_dem_models.basin_attributes import WetlandBasin
 
 source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-wetland_pairs_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs.csv'
+wetland_pairs_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_all_wells.csv'
 footprints_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_basins_assigned_wetland_ids_KG.shp'
 
 
@@ -21,7 +21,7 @@ well_point = (
     .query("type in ['core_well', 'wetland_well']")
 )
 
-buffer = 250
+buffer = 100
 
 
 # %%

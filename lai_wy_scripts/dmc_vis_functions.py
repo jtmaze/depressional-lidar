@@ -187,7 +187,7 @@ def plot_correlations_from_model(
     ax.scatter(
         pre_df[x_series_name],
         pre_df[y_series_name], 
-        color='black',
+        color= '#333333',
         label='Pre-logging',
         alpha=0.6,
         s=40
@@ -195,7 +195,7 @@ def plot_correlations_from_model(
     ax.scatter(
         post_df[x_series_name],
         post_df[y_series_name], 
-        color='red',
+        color='#E69F00',
         label='Post-logging',
         alpha=0.6,
         s=40
@@ -207,11 +207,11 @@ def plot_correlations_from_model(
     
     # Plot regression lines using model parameters
     ax.plot(x_smooth, pre_slope * x_smooth + pre_intercept, 
-            'black', linewidth=2, linestyle='--',
-            label=f'Pre: m={pre_slope:.3f}, R²={pre_r_sq:.3f}')
+            '#333333', linewidth=2, linestyle='--',
+            label=f'Pre: m={pre_slope:.2f}, b={pre_intercept:.2f}, R²={pre_r_sq:.2f}')
     ax.plot(x_smooth, post_slope * x_smooth + post_intercept, 
-            'red', linewidth=2, linestyle='--',
-            label=f'Post: m={post_slope:.3f}, R²={post_r_sq:.3f}')
+            '#E69F00', linewidth=2, linestyle='--',
+            label=f'Post: m={post_slope:.2f}, b={post_intercept:.2f}, R²={post_r_sq:.2f}')
     
     # Add significance indicators
     p_slope = model_results['tests']['p_slope_diff']
@@ -225,14 +225,14 @@ def plot_correlations_from_model(
     #textstr += f'Joint test p-value: {model_results["tests"]["joint_p"]:.3f}'
     
     props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
-    ax.text(0.02, 0.98, textstr, transform=ax.transAxes, fontsize=10,
-            verticalalignment='top', bbox=props)
+    # ax.text(0.02, 0.98, textstr, transform=ax.transAxes, fontsize=10,
+    #         verticalalignment='top', bbox=props)
     
     # Formatting
-    ax.set_xlabel(x_series_name, fontsize=14)
-    ax.set_ylabel(y_series_name, fontsize=14)
-    ax.legend(loc='lower right')
-    ax.grid(True, alpha=0.3)
+    ax.set_xlabel("Reference Stage (m)", fontsize=18)
+    ax.set_ylabel("Logged Stage (m)", fontsize=18)
+    ax.tick_params(axis='both', which='major', labelsize=14)
+    ax.legend(loc='lower right', fontsize=16, framealpha=1)
     
     plt.tight_layout()
     plt.show()
@@ -610,22 +610,25 @@ def plot_hypothetical_distributions(model_distributions: dict, f_dist: np.ndarra
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(6, 6))
     
     # Top panel: Pre and Post distributions
-    ax1.hist(pre_model_distributions, bins=bins, alpha=0.6, label='Pre Logging Regime', color='black', range=(x_min, x_max))
-    ax1.hist(post_model_distributions, bins=bins, alpha=0.6, label='Post Logging Regime', color='red', range=(x_min, x_max))
-    ax1.axvline(np.mean(pre_model_distributions), color='black', linestyle='--', linewidth=2, label='Pre Mean')
-    ax1.axvline(np.mean(post_model_distributions), color='red', linestyle='--', linewidth=2, label='Post Mean')
+    ax1.hist(pre_model_distributions, bins=bins, alpha=0.8, label='Modeled Pre-Logging Distribution', color='#333333', range=(x_min, x_max), density=True)
+    ax1.hist(post_model_distributions, bins=bins, alpha=0.8, label='Modeled Post-Logging Distribution', color='#E69F00', range=(x_min, x_max), density=True)
+    #ax1.axvline(np.mean(pre_model_distributions), color='#333333', linestyle='--', linewidth=2, label='Pre Mean')
+    #ax1.axvline(np.mean(post_model_distributions), color='#E69F00', linestyle='--', linewidth=2, label='Post Mean')
     ax1.set_xlim(x_min, x_max)
-    ax1.set_ylabel('Density')
-    ax1.tick_params(labelbottom=False)
+    ax1.set_ylabel('% of Days', fontsize=16)
+    ax1.tick_params(labelsize=12)
     
     # Bottom panel: Reference distribution
     if f_dist is not None:
-        ax2.hist(f_dist, bins=bins, alpha=0.6, color='blue', label=' Actual Reference (F)', range=(x_min, x_max))
-        ax2.axvline(np.mean(f_dist), color='blue', linestyle='--', linewidth=2, label='Reference Mean')
+        ax2.hist(f_dist, bins=bins, alpha=0.8, color='blue', label='Reference Distribution', range=(x_min, x_max), density=True)
+        #ax2.axvline(np.mean(f_dist), color='blue', linestyle='--', linewidth=2, label='Reference Mean')
         ax2.set_xlim(x_min, x_max)
-        ax2.set_ylabel('Density')
+        ax2.set_ylabel('% of Days', fontsize=16)
     
-    ax2.set_xlabel('Stage Regimes')
+    ax2.set_xlabel('Stage (m)', fontsize=16)
+    ax1.set_title('Modeled Stage in Logged Wetland', fontsize=14)
+    ax2.set_title('Observed Stage in Reference Wetland', fontsize=14)
+    ax2.tick_params(axis='both', which='major', labelsize=12)
     
     # Collect all legend handles and labels
     handles1, labels1 = ax1.get_legend_handles_labels()
@@ -633,7 +636,7 @@ def plot_hypothetical_distributions(model_distributions: dict, f_dist: np.ndarra
     
     # Create single legend below subplots
     fig.legend(handles1 + handles2, labels1 + labels2, loc='lower center', 
-               ncol=3, bbox_to_anchor=(0.5, -0.15))
+               ncol=1, bbox_to_anchor=(0.5, -0.15), fontsize=12)
     
     plt.tight_layout()
     plt.show()

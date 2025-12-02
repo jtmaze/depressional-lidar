@@ -14,7 +14,7 @@ ref_slope_threshold = -0.055  # LAI / yr
 start_date = '2019-01-01'
 
 # Keep wetlands
-candidate_ids = [
+keep_ids = [
     "15_268", "15_409", "15_516", "15_4",
     "14_418", "14_115", "14_500", "14_538", "14_610", "14_616",
     "5_597", "5a_550", "5a_598", "5_161", "5_510", "5_573", "5_546",
@@ -28,7 +28,7 @@ candidate_ids = [
 # Omit wetlands
 omit_wetlands = [
     "14_612", "14_15", "14.9_527", "14.9_168", "14.9_601",
-    "5_560", "5_231",
+    "5_560", "5_321",
     "9_77", "7_622",
     "3_21", "3_23"
 ]
@@ -37,6 +37,10 @@ omit_wetlands = [
 unsure_wetlands = [
     "5a_582", "9_609", "13_267", "6a_530", "6_629", "7_341"
 ]
+
+candidate_ids = keep_ids + omit_wetlands + unsure_wetlands
+
+print(len(candidate_ids))
 
 
 #print(len(combinations))
@@ -109,7 +113,18 @@ log_ids_dict = {
     '7_243': '2022-10-01',
     '3_311': '2022-12-01',
     '3_173': '2023-02-01',
-    '3_244': '2023-02-01'
+    '3_244': '2023-02-01',
+    # NOTE: Additional logged wetlands, originally not included due to connectivity
+    '14_612': '2020-08-01',
+    '14.9_527': '2020-06-01',
+    '14.9_168': '2020-01-01',
+    '14.9_601': '2023-08-01',
+    '9_77': '2023-03-01',
+    '7_622': '2022-02-01',
+    '3_23': '2023-03-01',
+    '9_609': '2020-01-01',
+    '13_267': '2022-09-01', 
+    '7_341': '2022-01-01',
 }
 
 for i in log_ids:
@@ -147,6 +162,7 @@ for i in log_ids:
     plt.tight_layout()
     plt.show()
 
+print('done')
 
 # %%
 
@@ -173,7 +189,7 @@ for ref_id in ref_ids:
 combinations_df = pd.DataFrame(combinations_list)
  
 combinations_df.to_csv(
-    'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs.csv',
+    'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_all_wells.csv',
     index=False
 )
 

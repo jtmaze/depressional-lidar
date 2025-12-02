@@ -6,8 +6,8 @@ from scipy import stats
 import matplotlib.pyplot as plt
 
 data_dir = "D:/depressional_lidar/data/bradford/out_data/"
-wetland_pairs_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs.csv'
-models_path = data_dir + 'pre_post_models.csv'
+wetland_pairs_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_all_wells.csv'
+models_path = data_dir + 'pre_post_models_all_wells.csv'
 
 wetland_pairs = pd.read_csv(wetland_pairs_path)
 model_data = pd.read_csv(models_path)
@@ -161,5 +161,5 @@ strong_pairs = plot_data[
 
 print(len(strong_pairs))
 
-strong_pairs.to_csv(f'{data_dir}/strong_ols_models.csv', index=False)
+strong_pairs.to_csv(f'{data_dir}/strong_ols_models_all_wells.csv', index=False)
 # %%

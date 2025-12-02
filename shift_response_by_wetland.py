@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 data_dir = "D:/depressional_lidar/data/bradford/out_data/"
-shift_path = data_dir + 'logging_hypothetical_shift_results.csv'
+shift_path = data_dir + 'logging_hypothetical_shift_results_all_wells.csv'
 
 shift_data = pd.read_csv(shift_path)
 plot_data = shift_data[
@@ -21,8 +21,8 @@ groups = [plot_data.loc[plot_data["log_id"] == id, "mean_depth_change"]
 
 ax.boxplot(groups, labels=plot_data["log_id"].unique())
 ax.set_xlabel("log_id")
-ax.set_ylabel("Mean Depth Change (m)")
-ax.set_title("Mean Depth Change by log_id")
+ax.set_ylabel("Depth Change (m)")
+ax.set_title("Modeled Depth Change (post-logging) by log_id")
 plt.xticks(rotation=90)
 
 ax.axhline(y=0, color='red')

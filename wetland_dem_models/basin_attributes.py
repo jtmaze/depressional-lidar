@@ -91,7 +91,8 @@ class WetlandBasin:
             self, 
             show_deepest: bool = False,
             show_centroid: bool = False,
-            show_well: bool = False
+            show_well: bool = False,
+            show_shape: bool = True
         ):
 
 
@@ -123,7 +124,8 @@ class WetlandBasin:
         ax = show(dem_data, transform=dem_transform, ax=ax, cmap='viridis')
         if ax.images:
             plt.colorbar(ax.images[0], ax=ax, label='Elevation (m)')
-        plot_shape.plot(ax=ax, facecolor='none', edgecolor='red')
+        if show_shape:
+            plot_shape.plot(ax=ax, facecolor='none', edgecolor='red')
 
         if self.transect_buffer != 0 and self.footprint is not None:
             plot_shape.geometry.buffer(self.transect_buffer).plot(ax=ax, facecolor='none', edgecolor='red', linestyle='--')
@@ -148,6 +150,8 @@ class WetlandBasin:
         if show_well:
             WellPoint = self.well_point
             if WellPoint:
+                print(len(WellPoint.location))
+                print(WellPoint.location)
                 WellPoint.location.plot(ax=ax, color='violet', marker='o', markersize=100)
                 ax.annotate(f"DEM {WellPoint.elevation_dem:.2f}m", 
                         xy=(WellPoint.location.x.values[0], WellPoint.location.y.values[0]),
@@ -295,18 +299,26 @@ class WetlandBasin:
         """
         Uses well point (lat, long, rtk_elevation) to establish a WellPoint.
         """
+
+        if len(well_point_info) > 1:
+            # Prefer rows with non-null rtk_elevation
+            valid_rtk = well_point_info[well_point_info['rtk_elevation'].notna()]
+            if len(valid_rtk) > 0:
+                well_point_info = valid_rtk.iloc[[0]]
+            else:
+                well_point_info = well_point_info.iloc[[0]]
+
         if well_point_info.crs != self.footprint.crs:
             print("Warning: Well point CRS does not match footprint CRS. Reprojecting...")
             well_point_info = well_point_info.to_crs(self.footprint.crs)
 
         elevation_dem = self._find_point_elevation(well_point_info.geometry)
-
         rtk = float(well_point_info['rtk_elevation'].values[0])
 
         return WellPoint(
             elevation_dem=elevation_dem,
             elevation_rtk=rtk,
-            location=well_point_info.geometry
+            location=well_point_info.geometry.iloc[[0]]
         )
     
     def _establish_well_point_from_source(self) -> WellPoint:
@@ -316,6 +328,16 @@ class WetlandBasin:
         if self.well_point_info is None:
             raise ValueError("well_point_info is required becuase no basin footprint is required")
         
+        # Filter to single point if multiple rows exist
+        well_point_info = self.well_point_info
+        if len(well_point_info) > 1:
+            # Prefer rows with non-null rtk_elevation
+            valid_rtk = well_point_info[well_point_info['rtk_elevation'].notna()]
+            if len(valid_rtk) > 0:
+                well_point_info = valid_rtk.iloc[[0]]
+            else:
+                well_point_info = well_point_info.iloc[[0]]
+
         with rio.open(self.source_dem_path) as dem:
             x = self.well_point_info.geometry.x.values[0]
             y = self.well_point_info.geometry.y.values[0]
@@ -331,7 +353,7 @@ class WetlandBasin:
         return WellPoint(
             elevation_dem=elevation_dem,
             elevation_rtk=rtk,
-            location=self.well_point_info.geometry
+            location=self.well_point_info.geometry.iloc[[0]]
         )
 
     def calculate_hypsometry(self, method: str = "total_cdf"):

@@ -8,10 +8,8 @@ from scipy import stats
 
 data_dir = "D:/depressional_lidar/data/bradford/"
 distributions_path = data_dir + '/out_data/logging_hypothetical_distributions.csv'
-wetland_pairs_path = data_dir + '/out_data/strong_ols_models.csv' # NOTE changed this to only pull pairs above r-squared threshold
-
-
-pairs = pd.read_csv(wetland_pairs_path)
+pairs_path = data_dir + 'out_data/strong_ols_models.csv'
+pairs = pd.read_csv(pairs_path)
 distributions = pd.read_csv(distributions_path)
 
 unique_log_ids = distributions['log_id'].unique()
@@ -28,95 +26,96 @@ unique_ref_ids = distributions['ref_id'].unique()
 pairs['ref_log'] = pairs['ref_id'] + '_' + pairs['log_id']
  
 
-distributions = distributions[distributions['log_id'] == '14_418']
-pairs = pairs[pairs['log_id'] == '14_418']
+distributions = distributions[distributions['log_id'] == '15_268']
+pairs = pairs[pairs['log_id'] == '15_268']
+
 
 # %%
 
-fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+# fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
 
-for idx, row in pairs.iterrows():
+# for idx, row in pairs.iterrows():
 
-    log_id = row['log_id']
-    ref_id = row['ref_id']
+#     log_id = row['log_id']
+#     ref_id = row['ref_id']
     
-    subset = distributions[
-        (distributions['log_id'] == log_id) & (distributions['ref_id'] == ref_id)
-    ].copy()
+#     subset = distributions[
+#         (distributions['log_id'] == log_id) & (distributions['ref_id'] == ref_id)
+#     ].copy()
 
-    pre_dist = subset['pre'].to_numpy()
-    post_dist = subset['post'].to_numpy()
+#     pre_dist = subset['pre'].to_numpy()
+#     post_dist = subset['post'].to_numpy()
 
-    kde_pre = stats.gaussian_kde(pre_dist)
-    x_pre = np.linspace(pre_dist.min(), pre_dist.max(), 200)
-    axes[1].plot(x_pre, kde_pre(x_pre), 
-                color='grey', 
-                linewidth=2.5, 
-                alpha=0.3,
-    )
+#     kde_pre = stats.gaussian_kde(pre_dist)
+#     x_pre = np.linspace(pre_dist.min(), pre_dist.max(), 200)
+#     axes[1].plot(x_pre, kde_pre(x_pre), 
+#                 color='grey', 
+#                 linewidth=2.5, 
+#                 alpha=0.3,
+#     )
 
-    kde_post = stats.gaussian_kde(post_dist)
-    x_post = np.linspace(post_dist.min(), post_dist.max(), 200)
-    axes[0].plot(x_post, kde_post(x_post), 
-                color='red', 
-                linewidth=2.5, 
-                alpha=0.3
-    )
+#     kde_post = stats.gaussian_kde(post_dist)
+#     x_post = np.linspace(post_dist.min(), post_dist.max(), 200)
+#     axes[0].plot(x_post, kde_post(x_post), 
+#                 color='red', 
+#                 linewidth=2.5, 
+#                 alpha=0.3
+#     )
 
-axes[0].set_title('Post-Logging Depth Distribution', fontsize=14, fontweight='bold')
-axes[0].set_ylabel('Density', fontsize=12)
-axes[0].grid(True, alpha=0.3)
+# axes[0].set_title('Post-Logging Depth Distribution', fontsize=14, fontweight='bold')
+# axes[0].set_ylabel('Density', fontsize=12)
+# axes[0].grid(True, alpha=0.3)
 
-axes[1].set_title('Pre-Logging Depth Distribution', fontsize=14, fontweight='bold')
-axes[1].set_xlabel('Depth [m]', fontsize=12)
-axes[1].set_ylabel('Density', fontsize=12)
-axes[1].grid(True, alpha=0.3)
+# axes[1].set_title('Pre-Logging Depth Distribution', fontsize=14, fontweight='bold')
+# axes[1].set_xlabel('Depth [m]', fontsize=12)
+# axes[1].set_ylabel('Density', fontsize=12)
+# axes[1].grid(True, alpha=0.3)
 
-plt.tight_layout()
-plt.xlim(-0.5, 1)
-axes[0].set_ylim(0, 25)
-axes[1].set_ylim(0, 25)
-plt.show()
+# plt.tight_layout()
+# plt.xlim(-0.5, 1)
+# axes[0].set_ylim(0, 25)
+# axes[1].set_ylim(0, 25)
+# plt.show()
     
 # %% Plot the aggregated (over all pairs) pre and post logging distributions
 
 distributions['ref_log'] = distributions['ref_id'] + '_' + distributions['log_id']
 distributions_clean = distributions[distributions['ref_log'].isin(pairs['ref_log'])]
+
 # %%
-fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+
+fig, ax = plt.subplots(1, 1, figsize=(6, 6))
 
 pre_data = distributions_clean['pre']
 post_data = distributions_clean['post']
 
-kde_pre = stats.gaussian_kde(pre_data)
-x_pre = np.linspace(pre_data.min(), pre_data.max(), 1000)
-y_pre = kde_pre(x_pre)
+# Create histograms with normalized counts (% of days)
+bins = 50
+ax.hist(pre_data, bins=bins, alpha=0.6, color='#333333', 
+        edgecolor='black', linewidth=0.5,
+        weights=np.ones(len(pre_data)) / len(pre_data) * 100,
+        label='Pre-logging')
+ax.hist(post_data, bins=bins, alpha=0.6, color='#E69F00',
+        edgecolor='black', linewidth=0.5,
+        weights=np.ones(len(post_data)) / len(post_data) * 100,
+        label='Post-logging')
 
-kde_post = stats.gaussian_kde(post_data)
-x_post = np.linspace(post_data.min(), post_data.max(), 1000)
-y_post = kde_post(x_post)
-
-# Plot both distributions
-ax.plot(x_pre, y_pre, color='grey', linewidth=3, alpha=0.8, label='Pre-logging')
-ax.plot(x_post, y_post, color='red', linewidth=3, alpha=0.8, label='Post-logging')
-
-ax.axvline(pre_data.mean(), color='darkgrey', linestyle='--', linewidth=2, 
-           label=f'Pre mean: {pre_data.mean():.3f}m')
-ax.axvline(post_data.mean(), color='darkred', linestyle='--', linewidth=2,
-           label=f'Post mean: {post_data.mean():.3f}m')
-ax.axvline(0, color='black', linestyle=':', linewidth=4, alpha=1)
+ax.axvline(pre_data.mean(), color='#333333', linestyle='--', linewidth=2, 
+           label=f'Pre mean: {pre_data.mean():.2f}m')
+ax.axvline(post_data.mean(), color='#E69F00', linestyle='--', linewidth=2,
+           label=f'Post mean: {post_data.mean():.2f}m')
 
 # Formatting
-ax.set_title('Wetland Depth Distributions: Pre vs Post-Logging', 
+ax.set_title('Wetland Stage Distributions: Pre vs Post-Logging', 
              fontsize=14, fontweight='bold')
-ax.set_xlabel('Depth [m]', fontsize=12)
-ax.set_ylabel('Density', fontsize=12)
+ax.set_xlabel('Depth [m]', fontsize=14)
+ax.set_ylabel('% of Days', fontsize=14)
 ax.grid(True, alpha=0.3)
-ax.legend(loc='upper right', fontsize=11)
+ax.legend(loc='upper left', fontsize=12)
+ax.tick_params(axis='both', labelsize=12)
 
 plt.tight_layout()
 plt.xlim(-1, 1)
-ax.set_ylim(0, 3)
 plt.show()
 
 # %% Make a Q-Q plot to compare the Pre and Post logging distributions
