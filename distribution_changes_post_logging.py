@@ -84,18 +84,21 @@ distributions_clean = distributions[distributions['ref_log'].isin(pairs['ref_log
 
 # %%
 
-fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+fig, ax = plt.subplots(1, 1, figsize=(10, 5))
 
 pre_data = distributions_clean['pre']
 post_data = distributions_clean['post']
 
 # Create histograms with normalized counts (% of days)
+# Define common bin edges for consistent bin widths
 bins = 50
-ax.hist(pre_data, bins=bins, alpha=0.6, color='#333333', 
+bin_edges = np.linspace(-0.5, 1, bins + 1)
+
+ax.hist(pre_data, bins=bin_edges, alpha=0.8, color='#333333', 
         edgecolor='black', linewidth=0.5,
         weights=np.ones(len(pre_data)) / len(pre_data) * 100,
         label='Pre-logging')
-ax.hist(post_data, bins=bins, alpha=0.6, color='#E69F00',
+ax.hist(post_data, bins=bin_edges, alpha=0.8, color='#E69F00',
         edgecolor='black', linewidth=0.5,
         weights=np.ones(len(post_data)) / len(post_data) * 100,
         label='Post-logging')
@@ -106,16 +109,15 @@ ax.axvline(post_data.mean(), color='#E69F00', linestyle='--', linewidth=2,
            label=f'Post mean: {post_data.mean():.2f}m')
 
 # Formatting
-ax.set_title('Wetland Stage Distributions: Pre vs Post-Logging', 
-             fontsize=14, fontweight='bold')
+ax.set_title('Example Wetland Stage', 
+             fontsize=16, fontweight='bold')
 ax.set_xlabel('Depth [m]', fontsize=14)
 ax.set_ylabel('% of Days', fontsize=14)
-ax.grid(True, alpha=0.3)
 ax.legend(loc='upper left', fontsize=12)
 ax.tick_params(axis='both', labelsize=12)
 
 plt.tight_layout()
-plt.xlim(-1, 1)
+plt.xlim(-0.5, 1)
 plt.show()
 
 # %% Make a Q-Q plot to compare the Pre and Post logging distributions

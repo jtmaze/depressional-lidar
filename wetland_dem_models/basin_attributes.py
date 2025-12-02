@@ -123,7 +123,9 @@ class WetlandBasin:
         fig, ax = plt.subplots(figsize=(10, 8))
         ax = show(dem_data, transform=dem_transform, ax=ax, cmap='viridis')
         if ax.images:
-            plt.colorbar(ax.images[0], ax=ax, label='Elevation (m)')
+                    cbar = plt.colorbar(ax.images[0], ax=ax, label='Elevation (m)')
+                    cbar.ax.tick_params(labelsize=12)
+                    cbar.set_label('Elevation (m)', fontsize=16)
         if show_shape:
             plot_shape.plot(ax=ax, facecolor='none', edgecolor='red')
 
@@ -152,15 +154,17 @@ class WetlandBasin:
             if WellPoint:
                 print(len(WellPoint.location))
                 print(WellPoint.location)
-                WellPoint.location.plot(ax=ax, color='violet', marker='o', markersize=100)
-                ax.annotate(f"DEM {WellPoint.elevation_dem:.2f}m", 
-                        xy=(WellPoint.location.x.values[0], WellPoint.location.y.values[0]),
-                        xytext=(10, 10), textcoords='offset points',
-                        color='white', fontweight='bold')
+                WellPoint.location.plot(ax=ax, color='red', marker='X', markersize=250)
+                # ax.annotate(f"DEM {WellPoint.elevation_dem:.2f}m", 
+                #         xy=(WellPoint.location.x.values[0], WellPoint.location.y.values[0]),
+                #         xytext=(10, 10), textcoords='offset points',
+                #         color='white', fontweight='bold')
 
-        plt.title(f"Wetland Basin: {self.wetland_id}")
-        plt.xlabel("x (meters)")
-        plt.ylabel("y (meters)")
+        #plt.title(f"Wetland Basin: {self.wetland_id}")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_xlabel('')
+        ax.set_ylabel('')
         plt.show()
 
     def get_clipped_dem(self) -> ClippedDEM:

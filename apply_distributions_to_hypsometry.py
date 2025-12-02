@@ -7,7 +7,7 @@ from scipy import stats
 
 from wetland_dem_models.basin_attributes import WetlandBasin
 
-buffer = 50
+buffer = 75
 
 data_dir = "D:/depressional_lidar/data/bradford/"
 source_dem_path = data_dir + '/in_data/bradford_DEM_cleaned_veg.tif'
@@ -45,7 +45,7 @@ for i in unique_log_ids:
     )
     b.visualize_shape(
         show_deepest=False, 
-        show_well=False, 
+        show_well=True, 
         show_centroid=False, 
         show_shape=False
     )
@@ -122,24 +122,26 @@ for i in unique_log_ids:
     post_dist_merged['weight_norm'] = post_dist_merged['weight'] / post_dist_merged['weight'].sum()
 
     # Create visualization
-    fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+    fig, ax = plt.subplots(1, 1, figsize=(10, 5))
 
     # Weighted histogram of inundated area (including zeros)
     ax.hist(pre_dist_merged['area_scaled'], weights=pre_dist_merged['weight_norm'] * 100,
-        bins=30, alpha=0.6, color='#333333', edgecolor='black',
+        bins=30, alpha=0.8, color='#333333', edgecolor='black',
         label=f'Pre-logging')
     ax.hist(post_dist_merged['area_scaled'], weights=post_dist_merged['weight_norm'] * 100,
-        bins=30, alpha=0.6, color='#E69F00', edgecolor='black',
+        bins=30, alpha=0.8, color='#E69F00', edgecolor='black',
         label=f'Post-logging')
     ax.axvline(pre_expected_area, color='#333333', linestyle='--', linewidth=2,
         label=f'Pre mean: {pre_expected_area:.2f}')
     ax.axvline(post_expected_area, color='#E69F00', linestyle='--', linewidth=2,
         label=f'Post mean: {post_expected_area:.2f}')
-    ax.set_xlabel('Inundated Fraction (0 = dry)', fontsize=11)
-    ax.set_ylabel('% of Days', fontsize=11)
-    ax.set_title('Distribution of Inundated Area', fontsize=12, fontweight='bold')
-    ax.legend(fontsize=9)
+    ax.set_xlabel('Inundated Fraction (0-1)', fontsize=14)
+    ax.set_ylabel('% of Days', fontsize=14)
+    ax.set_title('Example Wetland Inundation', fontsize=16, fontweight='bold')
+    ax.legend(fontsize=14)
     ax.set_xlim(0, 1)
+    ax.tick_params(labelsize=12)
+    plt.tight_layout()
 
     summary = {
         'pre_area_mean': pre_expected_area,
