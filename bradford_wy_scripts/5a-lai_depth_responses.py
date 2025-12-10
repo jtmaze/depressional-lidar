@@ -1,12 +1,15 @@
-# %%
-
+# %% 1.0 Libraries, function imports and filepaths
+import sys
 import pandas as pd
 import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
 
-from lai_wy_scripts.lai_vis_functions import read_concatonate_lai
+PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
+from bradford_wy_scripts.functions.lai_vis_functions import read_concatonate_lai
 
 data_dir = "D:/depressional_lidar/data/bradford/out_data/"
 lai_dir = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/well_buffer_250m_includes_wetlands/'

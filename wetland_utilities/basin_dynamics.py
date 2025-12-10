@@ -1,4 +1,8 @@
-# Incorporates the well stage timeseries with basin attributes to model basin dynamics
+# NOTE: T
+import sys
+PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -13,7 +17,7 @@ from rasterio.plot import show
 from shapely.geometry import Point, Polygon
 
 
-from basin_attributes import WetlandBasin, ClippedDEM, WellPoint
+from wetland_utilities.basin_attributes import WetlandBasin, ClippedDEM, WellPoint
 
 
 @dataclass
@@ -414,7 +418,9 @@ class BasinDynamics:
             tai_frequency: np.array = None, 
             max_depth: float = None, 
             min_depth: float = None,
-            show_basin_footprint: bool = False
+            show_basin_footprint: bool = False,
+            cbar_min: float = None,
+            cbar_max: float = None
         ):
         """
         Map the TAI stacks for a given depth range.
@@ -461,9 +467,16 @@ class BasinDynamics:
         plt.tight_layout()
         plt.show()
 
-    def map_inundation_stacks(self, inundation_frequency: np.array = None, show_basin_footprint: bool = False):
+    def map_inundation_stacks(
+            self, 
+            inundation_frequency: np.array = None, 
+            show_basin_footprint: bool = False,
+            cbar_min: float = 0,
+            cbar_max: float = None
+    ):
         """
         Map the inundation stacks.
+        # TODO: Add an argument to make a constant color scale bar
         """
         if inundation_frequency is None:
             inundation_frequency = self.aggregate_inundation_stacks()
@@ -471,6 +484,13 @@ class BasinDynamics:
         dem = self.basin.clipped_dem.dem
         inundation_percent = inundation_frequency * 100
         inundation_percent = np.where(np.isnan(dem), np.nan, inundation_percent)  # Keep NaNs outside the basin boundary as NaNs
+    
+        if cbar_max is None:
+            vmax = np.nanmax(inundation_percent)
+        else:
+            vmax = cbar_max
+
+        # Add the well point
         well_point = self.well_point
         well_point_x = well_point.location.x.values[0]
         well_point_y = well_point.location.y.values[0]
@@ -487,27 +507,31 @@ class BasinDynamics:
             footprint.boundary.plot(ax=ax, color='green', linewidth=2, alpha=0.8, label='Basin Footprint')
         
         # Show inundation frequency (values from 0-1 representing frequency of being inundated)
-        im = show(inundation_percent, ax=ax, cmap=custom_cmap, alpha=0.8,
+        im = show(inundation_percent, ax=ax, cmap=custom_cmap, alpha=1,
                 transform=self.basin.clipped_dem.transform,
-                vmin=0, vmax=np.nanmax(inundation_percent))
+                vmin=cbar_min, vmax=vmax)
 
         # Add colorbar
         cbar = plt.colorbar(im.images[0], ax=ax, shrink=0.8)
-        cbar.set_label('Inundation Frequency (0-100%) of Days', rotation=270, labelpad=20)
+        cbar.set_label('Inundation Frequency % of Days', rotation=270, labelpad=20, fontsize=14)
+        cbar.ax.tick_params(labelsize=12)
 
         # Plot well point
-        ax.scatter(well_point_x, well_point_y, color='green', 
-                marker='x', s=100, linewidths=3,
-                label=f'Well Location @{well_point.elevation_dem:.2f}m')
+        ax.scatter(well_point_x, well_point_y, color='limegreen', 
+                marker='x', s=400, linewidths=7,
+                label=f'Well Location')
         
         # Add legend and labels
-        ax.legend(loc='upper right')
-        ax.set_xlabel('(m)')
-        ax.set_ylabel('(m)')
+        #ax.legend(loc='upper right', fontsize=14)
+        ax.set_xlabel('')
+        ax.set_ylabel('')
         
-        ax.set_title('Inundation Frequency Map')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.set_title('')
 
-        plt.tight_layout()
         plt.show()
 
 

@@ -43,26 +43,35 @@ def plot_stage_ts(
     reference_df = reference_df.sort_values('day')
     logged_df = logged_df.sort_values('day')
 
-    plt.figure(figsize=(8, 6))
+    # Split logged data into pre and post
+    logged_pre = logged_df[logged_df['day'] < logged_date]
+    logged_post = logged_df[logged_df['day'] >= logged_date]
+
+    plt.figure(figsize=(10, 6))
     
-    # Plot with markers and detect gaps
+    # Plot reference series
     plt.plot(reference_df['day'], reference_df[well_depth_col_ref], 
-             label=f'Reference ({reference_id})', marker='o', markersize=2, linewidth=1)
-    plt.plot(logged_df['day'], logged_df[well_depth_col_log], 
-             label=f'Logged ({logged_id})', marker='o', markersize=2, linewidth=1)
+             label=f'Reference', marker='o', markersize=2.5, linestyle='None', color='blue')
     
-    plt.axvline(logged_date, color='red', linestyle='--', label='Logged Date')
-    plt.xlabel('Date')
-    plt.ylabel(f'{y_label}')
-    plt.title(f'{y_label} Time Series - Reference: {reference_id}, Logged: {logged_id}')
-    plt.legend()
-    plt.grid(True)
+    # Plot logged series - pre-logging in grey
+    plt.plot(logged_pre['day'], logged_pre[well_depth_col_log], 
+             label=f'Logged Pre', marker='o', markersize=2.5, linestyle='None', color='#333333')
+    
+    # Plot logged series - post-logging in gold
+    plt.plot(logged_post['day'], logged_post[well_depth_col_log], 
+             label=f'Logged Post', marker='o', markersize=2.5, linestyle='None', color='#E69F00')
+    
+    plt.axvline(logged_date, color='red', linestyle='--', label='Logged Date', linewidth=2.5)
+    plt.xlabel('')
+    plt.ylabel(f'{y_label}', fontsize=14)
+    plt.title('Well Time Series', fontsize=16)
+    plt.legend(fontsize=12)
 
     ax = plt.gca()
     ax.xaxis.set_major_locator(mdates.YearLocator())
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-
-    plt.tight_layout()
+    ax.tick_params(axis='both', labelsize=12)
+    
     plt.show()
 
 def remove_flagged_buffer(ts_df, buffer_days=2):

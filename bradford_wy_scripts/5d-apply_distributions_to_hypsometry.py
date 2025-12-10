@@ -1,11 +1,16 @@
-# %%
+# %% 1.0 Libraries function imports and file paths
+import sys
 import geopandas as gpd
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
 
-from wetland_dem_models.basin_attributes import WetlandBasin
+PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from wetland_utilities.basin_attributes import WetlandBasin
 
 buffer = 75
 
@@ -24,11 +29,10 @@ well_point = (
 
 pairs = pd.read_csv(wetland_pairs_path)
 unique_log_ids = pairs['log_id'].unique()
-unique_log_ids = ['15_268']
+unique_log_ids = ['9_439']
 distributions = pd.read_csv(distributions_path)
 
 distributions = distributions[distributions['log_id'].isin(unique_log_ids)]
-
 
 # %% Calculate an average hypsometric curve based on the logged_id basins
 
@@ -66,8 +70,8 @@ for i in unique_log_ids:
     hypsometry_df['log_id'] = i
 
     distributions_clean = distributions[
-        (distributions['pre'] >= -1) & (distributions['pre'] <= 1.0) &
-        (distributions['post'] >= -1) & (distributions['post'] <= 1.0) &
+        (distributions['pre'] >= -1) & (distributions['pre'] <= 1) &
+        (distributions['post'] >= -1) & (distributions['post'] <= 1) &
         (distributions['log_id'] == i)
     ].copy()
 

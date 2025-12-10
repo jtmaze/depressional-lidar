@@ -7,7 +7,7 @@ import geopandas as gpd
 import pandas as pd
 from basin_attributes import WetlandBasin
 from basin_dynamics import BasinDynamics, WellStageTimeseries
-from wetland_model import WetlandModel, ForcingData
+from wetland_utilities.wetland_water_balance_model import WetlandModel, ForcingData
 
 site = 'bradford'
 forcing = 'ERA-5'

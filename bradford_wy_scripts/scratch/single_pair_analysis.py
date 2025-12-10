@@ -1,19 +1,21 @@
 # %% 1.0 Libraries, function imports and file paths.
-import pprint as pp
+
+import sys
 import pandas as pd
 import geopandas as gpd
-import numpy as np 
-import matplotlib.pyplot as plt
 
-from lai_wy_scripts.dmc_vis_functions import (
-    plot_ts, plot_stage_ts, remove_flagged_buffer, plot_correlations, fit_interaction_model_huber, plot_correlations_from_model,
-    plot_dmc, plot_dmc_residuals, residual_change_vs_depth, sample_reference_ts, generate_model_distributions,
-    plot_hypothetical_distributions, summarize_depth_shift
+PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from bradford_wy_scripts.functions.dmc_vis_functions import (
+    plot_stage_ts, remove_flagged_buffer, fit_interaction_model_huber, plot_correlations_from_model,
+    plot_dmc, plot_dmc_residuals, sample_reference_ts, generate_model_distributions, plot_hypothetical_distributions
 )
 
-from lai_wy_scripts.lai_vis_functions import read_concatonate_lai, visualize_lai, lai_comparison_vis
+from bradford_wy_scripts.functions.lai_vis_functions import read_concatonate_lai, visualize_lai, lai_comparison_vis
 
-from wetland_dem_models.basin_attributes import WetlandBasin
+from wetland_utilities.basin_attributes import WetlandBasin
 
 stage_path = "D:/depressional_lidar/data/bradford/in_data/stage_data/daily_waterlevel_Spring2025.csv"
 source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'

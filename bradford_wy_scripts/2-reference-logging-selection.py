@@ -1,8 +1,14 @@
 # %% Import packages and establish list of wetland ids
+import sys
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import theilslopes
-from lai_wy_scripts.lai_vis_functions import read_concatonate_lai
+
+PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from bradford_wy_scripts.functions.lai_vis_functions import read_concatonate_lai
 
 lai_dir = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/well_buffer_250m_includes_wetlands/'
 lai_method = '250m_no_masking'
@@ -41,7 +47,6 @@ unsure_wetlands = [
 candidate_ids = keep_ids + omit_wetlands + unsure_wetlands
 
 print(len(candidate_ids))
-
 
 #print(len(combinations))
 # %% Read the dfs and deterine which ids are suitable references. 
@@ -193,4 +198,3 @@ combinations_df.to_csv(
     index=False
 )
 
-# %%
