@@ -13,14 +13,14 @@ from rasterio.mask import mask
 
 wbe = wbw.WbEnvironment()
 
-site = 'osbs'
-lidar_data = 'neon_sep2016' # NOTE: 2016 DEM at OSBS has lowest water levels. Still some flooding. 
+site = 'bradford'
+lidar_data = 'USGS' # NOTE: 2016 DEM at OSBS has lowest water levels. Still some flooding. 
 os.chdir(f'D:/depressional_lidar/data/{site}/')
 
 if site == 'bradford':
-    src_path = './in_data/dem_mosaic_basin_all_basins.tif'
+    src_path = './in_data/dem_mosaic_all_basins.tif'
 elif site == 'osbs': 
-    src_path = f'./in_data/dem_mosaic_basin_all_basins_{lidar_data}.tif'
+    src_path = f'./in_data/dem_mosaic_all_basins_{lidar_data}.tif'
 
 processing_dir = r'C:\Users\jtmaz\Documents\temp'
 
@@ -35,7 +35,7 @@ base_name = os.path.basename(src_path)
 temp_file_path = os.path.join(processing_dir, f'./{base_name}')
 
 wbt_off_terrain_path = os.path.join(processing_dir, f'{site}_DEM_wbt_off_terrain.tif')
-final_out_path = os.path.join(processing_dir, f'{site}_DEM_cleaned_veg.tif')
+final_out_path = os.path.join(processing_dir, f'{site}_DEM_cleaned_veg1.tif')
 
 # %% 3.0 Crop the DEM to immediate watershed areas instead of buffered. Imporves processing speeds.
 # Plus, we don't need filtering on the buffered DEM for now. 

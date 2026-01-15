@@ -3,17 +3,18 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
+lai_buffer_dist = 400
 data_dir = "D:/depressional_lidar/data/bradford/out_data/"
-shift_path = data_dir + 'logging_hypothetical_shift_results_all_wells.csv'
+shift_path = data_dir + f'/modeled_logging_stages/shift_results_LAI_{lai_buffer_dist}m.csv'
 
 shift_data = pd.read_csv(shift_path)
 plot_data = shift_data[
     (shift_data['model_type'] == 'ols') &
     (shift_data['data_set'] == 'full')
 ].copy()
-plot_data = plot_data[plot_data['mean_depth_change'] > -0.4]
 
-# %% Boxplot showing depth shifts by log_id
+# %% 2.0 Boxplot showing depth shifts by log_id
+
 fig, ax = plt.subplots(figsize=(10, 5))
 
 groups = [plot_data.loc[plot_data["log_id"] == id, "mean_depth_change"] 

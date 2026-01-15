@@ -1,35 +1,43 @@
-# %%
+# %% 1.0 Libraries and directories
+
+import sys
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import geopandas as gpd
 
-from lai_wy_scripts.dmc_vis_functions import (
+PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from bradford_wy_scripts.functions.dmc_vis_functions import (
     remove_flagged_buffer, fit_interaction_model_ols, fit_interaction_model_huber, plot_correlations_from_model, 
     sample_reference_ts, generate_model_distributions, plot_hypothetical_distributions, summarize_depth_shift, 
     flatten_model_results, compute_residuals, visualize_residuals
 )
 
-from wetland_dem_models.basin_attributes import WetlandBasin
+from wetland_utilities.basin_attributes import WetlandBasin
 
-spatial_buffer = 50
+min_depth_search_radius = 50
+lai_buffer = 400
 
-stage_path = "D:/depressional_lidar/data/bradford/in_data/stage_data/daily_waterlevel_Spring2025.csv"
+stage_path = "D:/depressional_lidar/data/bradford/in_data/stage_data/bradford_daily_stage_Winter2025.csv"
 source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 footprints_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_basins_assigned_wetland_ids_KG.shp'
 
-wetland_pairs_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_all_wells.csv'
+wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer}m.csv'
 wetland_pairs = pd.read_csv(wetland_pairs_path)
 
-# %% Run the model
+# %% 2.0 Run the model
 
 model_results = []
 distribution_results = []
 shift_results = []
 residual_results = []
 
-rando_plot_idxs = np.random.choice(len(wetland_pairs), size=50, replace=False)
+# View plots for random pairs of logged and reference wetlands
+rando_plot_idxs = np.random.choice(len(wetland_pairs), size=len(wetland_pairs), replace=False)
 
 for index, row in wetland_pairs.iterrows():
     # Designate ids and logging date
@@ -41,10 +49,13 @@ for index, row in wetland_pairs.iterrows():
     # Read stage data and remove the flags
     stage_data = pd.read_csv(stage_path)
     stage_data['well_id'] = stage_data['well_id'].str.replace('/', '.')
-    stage_data['day'] = pd.to_datetime(stage_data['day'])
+    stage_data['day'] = pd.to_datetime(stage_data['date'])
+
     logged_ts = stage_data[stage_data['well_id'] == logged_id].copy()
+    logged_ts = logged_ts.dropna(subset=['well_depth_m'])
     logged_ts, removed_log_days = remove_flagged_buffer(logged_ts, buffer_days=0)
     reference_ts = stage_data[stage_data['well_id'] == reference_id].copy()
+    reference_ts = reference_ts.dropna(subset=['well_depth_m'])
     reference_ts, removed_ref_days = remove_flagged_buffer(reference_ts, buffer_days=0)
 
     # Find the record length and proportion of omitted days
@@ -70,21 +81,21 @@ for index, row in wetland_pairs.iterrows():
         well_point_info=well_point[well_point['wetland_id'] == reference_id],
         source_dem_path=source_dem_path, 
         footprint=None,
-        transect_buffer=spatial_buffer
+        transect_buffer=min_depth_search_radius
     )
     log_basin = WetlandBasin(
         wetland_id=logged_id,
         well_point_info=well_point[well_point['wetland_id'] == logged_id],
         source_dem_path=source_dem_path, 
         footprint=None,
-        transect_buffer=spatial_buffer
+        transect_buffer=min_depth_search_radius
     )
 
     # Calculate wetland depth timeseries using the deepest point on the DEM
     logged_well_diff = log_basin.well_point.elevation_dem - log_basin.deepest_point.elevation
-    logged_ts['wetland_depth'] = logged_ts['well_depth'] + logged_well_diff
+    logged_ts['wetland_depth'] = logged_ts['well_depth_m'] + logged_well_diff
     ref_well_diff = ref_basin.well_point.elevation_dem - ref_basin.deepest_point.elevation
-    reference_ts['wetland_depth'] = reference_ts['well_depth'] + ref_well_diff
+    reference_ts['wetland_depth'] = reference_ts['well_depth_m'] + ref_well_diff
 
     """
     FIRST: test OLS and Huber Regression including all data (even poorly correlated below ground data)
@@ -205,153 +216,153 @@ for index, row in wetland_pairs.iterrows():
     SECOND: run the same workflow, but using (stage >= -0.20m) 
     """
 
-    # Filtering based on depth 
-    logged_ts_trunc = logged_ts[logged_ts['wetland_depth'] >= -0.2].copy()
-    reference_ts_trunc = reference_ts[reference_ts['wetland_depth'] >= -0.2].copy()
+    # # Filtering based on depth 
+    # logged_ts_trunc = logged_ts[logged_ts['wetland_depth'] >= -0.2].copy()
+    # reference_ts_trunc = reference_ts[reference_ts['wetland_depth'] >= -0.2].copy()
 
-    comparison_trunc = pd.merge(
-        reference_ts_trunc,
-        logged_ts_trunc,
-        how='inner',
-        on='day',
-        suffixes=('_ref', '_log')
-    ).drop(columns=['flag_ref', 'flag_log'])
+    # comparison_trunc = pd.merge(
+    #     reference_ts_trunc,
+    #     logged_ts_trunc,
+    #     how='inner',
+    #     on='day',
+    #     suffixes=('_ref', '_log')
+    # ).drop(columns=['flag_ref', 'flag_log'])
 
-    r_ols = fit_interaction_model_ols(
-        comparison_df=comparison_trunc,
-        x_series_name='wetland_depth_ref',
-        y_series_name='wetland_depth_log',
-        log_date=logging_date,
-        cov_type='HC3'
-    )
-    r_huber = fit_interaction_model_huber(
-        comparison_df=comparison_trunc, 
-        x_series_name='wetland_depth_ref',
-        y_series_name='wetland_depth_log',
-        log_date=logging_date,
-    )
+    # r_ols = fit_interaction_model_ols(
+    #     comparison_df=comparison_trunc,
+    #     x_series_name='wetland_depth_ref',
+    #     y_series_name='wetland_depth_log',
+    #     log_date=logging_date,
+    #     cov_type='HC3'
+    # )
+    # r_huber = fit_interaction_model_huber(
+    #     comparison_df=comparison_trunc, 
+    #     x_series_name='wetland_depth_ref',
+    #     y_series_name='wetland_depth_log',
+    #     log_date=logging_date,
+    # )
 
-    ref_sample = sample_reference_ts(
-        df=comparison_trunc,
-        only_pre_log=False,
-        column_name='wetland_depth_ref',
-        n=10_000
-    )
+    # ref_sample = sample_reference_ts(
+    #     df=comparison_trunc,
+    #     only_pre_log=False,
+    #     column_name='wetland_depth_ref',
+    #     n=10_000
+    # )
 
-    modeled_distributions_ols = generate_model_distributions(f_dist=ref_sample, models=r_ols)
-    modeled_distributions_huber = generate_model_distributions(f_dist=ref_sample, models=r_huber)
+    # modeled_distributions_ols = generate_model_distributions(f_dist=ref_sample, models=r_ols)
+    # modeled_distributions_huber = generate_model_distributions(f_dist=ref_sample, models=r_huber)
 
-    depth_shift_ols = summarize_depth_shift(model_distributions=modeled_distributions_ols)
-    depth_shift_huber = summarize_depth_shift(model_distributions=modeled_distributions_huber)
+    # depth_shift_ols = summarize_depth_shift(model_distributions=modeled_distributions_ols)
+    # depth_shift_huber = summarize_depth_shift(model_distributions=modeled_distributions_huber)
 
-    r_ols_flat = flatten_model_results(r_ols, logged_id, logging_date, reference_id, "above_-0.2")
-    r_huber_flat = flatten_model_results(r_huber, logged_id, logging_date, reference_id, "above_-0.2")
-    model_results.append(r_ols_flat)
-    model_results.append(r_huber_flat)
+    # r_ols_flat = flatten_model_results(r_ols, logged_id, logging_date, reference_id, "above_-0.2")
+    # r_huber_flat = flatten_model_results(r_huber, logged_id, logging_date, reference_id, "above_-0.2")
+    # model_results.append(r_ols_flat)
+    # model_results.append(r_huber_flat)
 
-    shift_result_ols = {
-        'log_id': logged_id,
-        'ref_id': reference_id,
-        'logging_date': logging_date,
-        'data_set': 'above_-0.2',
-        'model_type': 'ols',
-        'total_obs': total_days,
-        'n_bottomed_out': n_dry_days,
-        'pre_logging_modeled_mean': depth_shift_ols['mean_pre'],
-        'post_logging_modeled_mean': depth_shift_ols['mean_post'], 
-        'mean_depth_change': depth_shift_ols['delta_mean']
-    }
+    # shift_result_ols = {
+    #     'log_id': logged_id,
+    #     'ref_id': reference_id,
+    #     'logging_date': logging_date,
+    #     'data_set': 'above_-0.2',
+    #     'model_type': 'ols',
+    #     'total_obs': total_days,
+    #     'n_bottomed_out': n_dry_days,
+    #     'pre_logging_modeled_mean': depth_shift_ols['mean_pre'],
+    #     'post_logging_modeled_mean': depth_shift_ols['mean_post'], 
+    #     'mean_depth_change': depth_shift_ols['delta_mean']
+    # }
 
-    shift_result_huber = {
-        'log_id': logged_id,
-        'ref_id': reference_id,
-        'logging_date': logging_date,
-        'data_set': 'above_-0.2',
-        'model_type': 'huber',
-        'total_obs': total_days,
-        'n_bottomed_out': n_dry_days,
-        'pre_logging_modeled_mean': depth_shift_huber['mean_pre'],
-        'post_logging_modeled_mean': depth_shift_huber['mean_post'], 
-        'mean_depth_change': depth_shift_huber['delta_mean']
-    }
+    # shift_result_huber = {
+    #     'log_id': logged_id,
+    #     'ref_id': reference_id,
+    #     'logging_date': logging_date,
+    #     'data_set': 'above_-0.2',
+    #     'model_type': 'huber',
+    #     'total_obs': total_days,
+    #     'n_bottomed_out': n_dry_days,
+    #     'pre_logging_modeled_mean': depth_shift_huber['mean_pre'],
+    #     'post_logging_modeled_mean': depth_shift_huber['mean_post'], 
+    #     'mean_depth_change': depth_shift_huber['delta_mean']
+    # }
 
-    shift_results.append(shift_result_ols)
-    shift_results.append(shift_result_huber)
+    # shift_results.append(shift_result_ols)
+    # shift_results.append(shift_result_huber)
 
     """THIRD: run the same workflow, but using (stage >= 0.00m)"""
 
     # Filtering based on depth 
-    logged_ts_trunc = logged_ts[logged_ts['wetland_depth'] >= 0.0].copy()
-    reference_ts_trunc = reference_ts[reference_ts['wetland_depth'] >= 0.0].copy()
+    # logged_ts_trunc = logged_ts[logged_ts['wetland_depth'] >= 0.0].copy()
+    # reference_ts_trunc = reference_ts[reference_ts['wetland_depth'] >= 0.0].copy()
 
-    comparison_trunc = pd.merge(
-        reference_ts_trunc,
-        logged_ts_trunc,
-        how='inner',
-        on='day',
-        suffixes=('_ref', '_log')
-    ).drop(columns=['flag_ref', 'flag_log'])
+    # comparison_trunc = pd.merge(
+    #     reference_ts_trunc,
+    #     logged_ts_trunc,
+    #     how='inner',
+    #     on='day',
+    #     suffixes=('_ref', '_log')
+    # ).drop(columns=['flag_ref', 'flag_log'])
 
-    r_ols = fit_interaction_model_ols(
-        comparison_df=comparison_trunc,
-        x_series_name='wetland_depth_ref',
-        y_series_name='wetland_depth_log',
-        log_date=logging_date,
-        cov_type='HC3'
-    )
-    r_huber = fit_interaction_model_huber(
-        comparison_df=comparison_trunc, 
-        x_series_name='wetland_depth_ref',
-        y_series_name='wetland_depth_log',
-        log_date=logging_date,
-    )
+    # r_ols = fit_interaction_model_ols(
+    #     comparison_df=comparison_trunc,
+    #     x_series_name='wetland_depth_ref',
+    #     y_series_name='wetland_depth_log',
+    #     log_date=logging_date,
+    #     cov_type='HC3'
+    # )
+    # r_huber = fit_interaction_model_huber(
+    #     comparison_df=comparison_trunc, 
+    #     x_series_name='wetland_depth_ref',
+    #     y_series_name='wetland_depth_log',
+    #     log_date=logging_date,
+    # )
 
-    ref_sample = sample_reference_ts(
-        df=comparison_trunc,
-        only_pre_log=False,
-        column_name='wetland_depth_ref',
-        n=10_000
-    )
+    # ref_sample = sample_reference_ts(
+    #     df=comparison_trunc,
+    #     only_pre_log=False,
+    #     column_name='wetland_depth_ref',
+    #     n=10_000
+    # )
 
-    modeled_distributions_ols = generate_model_distributions(f_dist=ref_sample, models=r_ols)
-    modeled_distributions_huber = generate_model_distributions(f_dist=ref_sample, models=r_huber)
+    # modeled_distributions_ols = generate_model_distributions(f_dist=ref_sample, models=r_ols)
+    # modeled_distributions_huber = generate_model_distributions(f_dist=ref_sample, models=r_huber)
 
-    depth_shift_ols = summarize_depth_shift(model_distributions=modeled_distributions_ols)
-    depth_shift_huber = summarize_depth_shift(model_distributions=modeled_distributions_huber)
+    # depth_shift_ols = summarize_depth_shift(model_distributions=modeled_distributions_ols)
+    # depth_shift_huber = summarize_depth_shift(model_distributions=modeled_distributions_huber)
 
-    r_ols_flat = flatten_model_results(r_ols, logged_id, logging_date, reference_id, "above_ground")
-    r_huber_flat = flatten_model_results(r_huber, logged_id, logging_date, reference_id, "above_ground")
-    model_results.append(r_ols_flat)
-    model_results.append(r_huber_flat)
+    # r_ols_flat = flatten_model_results(r_ols, logged_id, logging_date, reference_id, "above_ground")
+    # r_huber_flat = flatten_model_results(r_huber, logged_id, logging_date, reference_id, "above_ground")
+    # model_results.append(r_ols_flat)
+    # model_results.append(r_huber_flat)
 
-    shift_result_ols = {
-        'log_id': logged_id,
-        'ref_id': reference_id,
-        'logging_date': logging_date,
-        'data_set': 'above_ground',
-        'model_type': 'ols',
-        'total_obs': total_days,
-        'n_bottomed_out': n_dry_days,
-        'pre_logging_modeled_mean': depth_shift_ols['mean_pre'],
-        'post_logging_modeled_mean': depth_shift_ols['mean_post'], 
-        'mean_depth_change': depth_shift_ols['delta_mean']
-    }
+    # shift_result_ols = {
+    #     'log_id': logged_id,
+    #     'ref_id': reference_id,
+    #     'logging_date': logging_date,
+    #     'data_set': 'above_ground',
+    #     'model_type': 'ols',
+    #     'total_obs': total_days,
+    #     'n_bottomed_out': n_dry_days,
+    #     'pre_logging_modeled_mean': depth_shift_ols['mean_pre'],
+    #     'post_logging_modeled_mean': depth_shift_ols['mean_post'], 
+    #     'mean_depth_change': depth_shift_ols['delta_mean']
+    # }
 
-    shift_result_huber = {
-        'log_id': logged_id,
-        'ref_id': reference_id,
-        'logging_date': logging_date,
-        'data_set': 'above_ground',
-        'model_type': 'huber',
-        'total_obs': total_days,
-        'n_bottomed_out': n_dry_days,
-        'pre_logging_modeled_mean': depth_shift_huber['mean_pre'],
-        'post_logging_modeled_mean': depth_shift_huber['mean_post'], 
-        'mean_depth_change': depth_shift_huber['delta_mean']
-    }
+    # shift_result_huber = {
+    #     'log_id': logged_id,
+    #     'ref_id': reference_id,
+    #     'logging_date': logging_date,
+    #     'data_set': 'above_ground',
+    #     'model_type': 'huber',
+    #     'total_obs': total_days,
+    #     'n_bottomed_out': n_dry_days,
+    #     'pre_logging_modeled_mean': depth_shift_huber['mean_pre'],
+    #     'post_logging_modeled_mean': depth_shift_huber['mean_post'], 
+    #     'mean_depth_change': depth_shift_huber['delta_mean']
+    # }
 
-    shift_results.append(shift_result_ols)
-    shift_results.append(shift_result_huber)
+    # shift_results.append(shift_result_ols)
+    # shift_results.append(shift_result_huber)
 
 # %% 3.0 Combine the results into a dataframe 
 
@@ -363,10 +374,10 @@ model_results_df = pd.DataFrame(model_results)
 # %% 3.1 Save the results
 
 out_dir = "D:/depressional_lidar/data/bradford/out_data/"
-shift_path = out_dir + 'logging_hypothetical_shift_results_all_wells.csv'
-distributions_path = out_dir + 'logging_hypothetical_distributions_all_wells.csv'
-residuals_path = out_dir + 'model_residuals_all_wells.csv'
-models_path = out_dir + 'pre_post_models_all_wells.csv'
+shift_path = out_dir + f'/modeled_logging_stages/shift_results_LAI_{lai_buffer}m.csv'
+distributions_path = out_dir + f'/modeled_logging_stages/hypothetical_distributions_LAI_{lai_buffer}m.csv'
+residuals_path = out_dir + f'/model_info/residuals_LAI_{lai_buffer}m.csv'
+models_path = out_dir + f'/model_info/model_estimates_LAI_{lai_buffer}m.csv'
 
 shift_results_df.to_csv(shift_path, index=False)
 distribution_results_df.to_csv(distributions_path, index=False)
@@ -376,7 +387,7 @@ model_results_df.to_csv(models_path, index=False)
 # %% 4.0 Plot the shifts in depth
 
 plot_df = shift_results_df.query("data_set == 'full' and model_type == 'huber'")
-
+#plot_df = plot_df[~plot_df['log_id'].isin(['15_516', '3_244'])]
 fig, ax = plt.subplots(figsize=(10, 7))
 
 # Calculate statistics for annotation

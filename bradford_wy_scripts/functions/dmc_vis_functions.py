@@ -79,7 +79,7 @@ def remove_flagged_buffer(ts_df, buffer_days=2):
     Remove ±buffer_days from records where flag ==2
     """
     
-    flagged_dates = ts_df[ts_df['flag'] == 2]['day']
+    flagged_dates = ts_df[ts_df['flag'].isin([2])]['day']
     
     # Create set of dates to remove (±buffer_days around each flagged date)
     dates_to_remove = set()
@@ -238,10 +238,10 @@ def plot_correlations_from_model(
     #         verticalalignment='top', bbox=props)
     
     # Formatting
-    ax.set_xlabel("Reference Stage (m)", fontsize=18)
-    ax.set_ylabel("Logged Stage (m)", fontsize=18)
-    ax.tick_params(axis='both', which='major', labelsize=14)
-    ax.legend(loc='lower right', fontsize=16, framealpha=1)
+    ax.set_xlabel("Reference Stage (m)", fontsize=14)
+    ax.set_ylabel("Logged Stage (m)", fontsize=14)
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    ax.legend(loc='lower right', fontsize=12, framealpha=1)
     
     plt.tight_layout()
     plt.show()

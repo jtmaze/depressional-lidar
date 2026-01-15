@@ -160,7 +160,7 @@ class WetlandBasin:
                 #         xytext=(10, 10), textcoords='offset points',
                 #         color='white', fontweight='bold')
 
-        #plt.title(f"Wetland Basin: {self.wetland_id}")
+        plt.title(f"Wetland Basin: {self.wetland_id}")
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_xlabel('')

@@ -1,4 +1,4 @@
-# %% Libraries and file paths
+# %% 1.0 Libraries and file paths
 
 import ee 
 import geemap
@@ -27,9 +27,10 @@ well_points = (gpd.read_file(well_points_path)[['wetland_id', 'type', 'site', 'g
                .query("type in ['core_well', 'wetland_well'] and site == 'bradford'")
 )
 well_points['wetland_id'] = well_points['wetland_id'].str.replace('/', '.')
+print(len(well_points))
+print(target_wetlands['wetland_id'].unique)
 
-
-# %% Functions for earth engine
+# %% 2.0 Compartmentalized functions for Earth Engine
 
 def convert_gpd_geom_to_ee(geom, est_utm):
     """
@@ -125,16 +126,16 @@ def make_ls8_collection(polygon, start_date, end_date):
         .map(apply_scale_factors)
         .map(rename_ls8_bands)
     )
-
     return ls8
 
 def calc_lai(image):
+        
         SR = image.select('NIR').divide(image.select('R'))
-        LAI = image.expression('(0.332915 * SR) - 0.00212', {'SR': SR}).rename('LAI').clamp(0, 10)
+        LAI = image.expression('(0.332915 * SR) - 0.00212', {'SR': SR}).rename('LAI').clamp(0, 5.6)
+
         return image.addBands(LAI)
 
 def build_lai_monthly_composites(ls8_col, measure_mask):
-    
     ls8_lai = (ls8_col
                .map(calc_lai)
                .select('LAI')
@@ -151,7 +152,8 @@ def build_lai_monthly_composites(ls8_col, measure_mask):
         comp = ee.Image(filtered.reduce(ee.Reducer.mean()))
         first_band = ee.String(comp.bandNames().get(0))
         comp = comp.select([first_band]).rename('LAI')
-        #comp = comp.updateMask(measure_mask)
+        #NOTE: for simplicity's sake, calculate LAI without masking. MJC could veto this descision
+        #comp = comp.updateMask(measure_mask) 
         parts = ym.split('_')
         year = ee.Number.parse(parts.get(0))
         month = ee.Number.parse(parts.get(1))
@@ -182,25 +184,27 @@ def calc_monthly_means(lai_composite, polygon, wetland_id):
     return ee.FeatureCollection(monthly_data)
 
 
-# %% Run the functions to produce LAI timeseries for each wetland
+# %% 3.0 Main function to produce LAI timeseries for each wetland
 
-def process_wetland_by_year_chunks(wetland_id, tgt_shape, start_year, end_year, years_per_chunk=1):
+def process_wetland_by_year_chunks(wetland_id, buffer_size, tgt_shape, start_year, end_year, years_per_chunk=1):
     """
-    NOTE: Needed to chunk processing because Earth Engine computation size limtes
+    NOTE: Needed to chunk processing because Earth Engine computation size limits
     Processing a wetland in smaller time chunks to reduce computation complexity
     """
 
     original_geom = tgt_shape.geometry.iloc[0]
-    buffered_geom = original_geom.buffer(400)
+    # NOTE: Buffer size is subject to change. 
+    buffered_geom = original_geom.buffer(buffer_size)
 
-    buffered_geom_4326 = gpd.GeoSeries([buffered_geom], crs=target_wetlands.crs).to_crs('EPSG:4326').iloc[0]
-
+    buffered_geom_4326 = gpd.GeoSeries([buffered_geom], crs=tgt_shape.crs).to_crs('EPSG:4326').iloc[0]
     #buffer_gdf = gpd.GeoDataFrame([1], geometry=[buffered_geom_4326], crs='EPSG:4326')
+
+    # NOTE: If we want to exclude adjacent wetlands from the LAI calculations
     #wetlands_around_buff_geom = gpd.clip(all_wetlands, buffer_gdf)
 
     poly = convert_gpd_geom_to_ee(buffered_geom_4326, est_utm='EPSG:4326')
     
-    # Generate masks once
+    # Generate a single combined mask with NLCD and nearby wetlands
     nlcd_mask = make_nlcd_mask(polygon=poly)
     #upland_mask = make_upland_mask(wetland_shapes=wetlands_around_buff_geom)
     combined_mask = nlcd_mask #.And(upland_mask)
@@ -210,12 +214,13 @@ def process_wetland_by_year_chunks(wetland_id, tgt_shape, start_year, end_year, 
         chunk_end = min(chunk_start + years_per_chunk - 1, end_year)    
         chunk_start_date = f'{chunk_start}-01-01'
         if chunk_end >= 2025:
-            chunk_end_date = f'{chunk_end}-10-01'
+            chunk_end_date = f'{chunk_end}-12-01'
         else:
             chunk_end_date = f'{chunk_end}-12-31'
         
         try:
             ls8 = make_ls8_collection(polygon=poly, start_date=chunk_start_date, end_date=chunk_end_date)
+            # NOTE: not using the combined mask in build_lai_monthly_composites()
             ls8_lai = build_lai_monthly_composites(ls8_col=ls8, measure_mask=combined_mask)
             monthly_data = calc_monthly_means(lai_composite=ls8_lai, polygon=poly, wetland_id=wetland_id)
             monthly_data_export = monthly_data.select(['year', 'month', 'mean_LAI', 'wetland_id'])
@@ -223,9 +228,9 @@ def process_wetland_by_year_chunks(wetland_id, tgt_shape, start_year, end_year, 
             # Export with year range in filename
             task = ee.batch.Export.table.toDrive(
                 collection=monthly_data_export,
-                description=f'well_buffer_400m_nomasking_{wetland_id}_{chunk_start}_{chunk_end}',
-                folder='well_buffer_400m_nomasking',
-                fileNamePrefix=f'well_buffer_400m_nomasking_{wetland_id}_{chunk_start}_{chunk_end}',
+                description=f'well_buffer_{buffer_size}m_nomasking_{wetland_id}_{chunk_start}_{chunk_end}',
+                folder=f'well_buffer_{buffer_size}m_nomasking',
+                fileNamePrefix=f'well_buffer_{buffer_size}m_nomasking_{wetland_id}_{chunk_start}_{chunk_end}',
                 fileFormat='CSV'
             )
             task.start()
@@ -234,13 +239,21 @@ def process_wetland_by_year_chunks(wetland_id, tgt_shape, start_year, end_year, 
         except Exception as e:
             print(f"Error processing {wetland_id} for years {chunk_start}-{chunk_end}: {e}")
 
-# %% Use the chunked processing approach
+# %% 3.2 Run the LAI timeseries
+
 target_shapes = well_points
 
-for idx, i in enumerate(target_shapes['wetland_id'].unique()):
+for idx, i in enumerate(well_points['wetland_id'].unique()):
     #print(f"Processing wetland {idx+1}/{len(target_shapes['wetland_id'].unique())}: {i}")
-    tgt_shape = target_shapes[target_shapes['wetland_id'] == i]
-    process_wetland_by_year_chunks(i, tgt_shape=tgt_shape, start_year=2015, end_year=2025, years_per_chunk=3)
+    tgt_shape = well_points[well_points['wetland_id'] == i]
+    process_wetland_by_year_chunks(
+        i, 
+        buffer_size=250,
+        tgt_shape=tgt_shape, 
+        start_year=2015, 
+        end_year=2025, 
+        years_per_chunk=3
+    )
 
 
 # %% Scratch code
@@ -332,9 +345,6 @@ def visualize_masking(wetland_id, year, month):
     # m.addLayer(nlcd_raw, nlcd_vis, 'NLCD Landcover')
     m.addLayer(ls8_lai_unmasked, lai_vis, 'LAI Unmasked')
     m.addLayer(ls8_lai_masked, lai_vis, 'LAI Masked')
-    # m.addLayer(nlcd_mask, mask_vis, 'NLCD Mask', opacity=0.5)
-    m.addLayer(upland_mask, mask_vis, 'Upland Mask', opacity=0.5)
-    m.addLayer(combined_mask, mask_vis, 'Combined Mask', opacity=0.5)
 
     # Add the original wetland and buffer boundaries
     m.addLayer(ee.Geometry.Point([buffered_geom_4326.centroid.x, buffered_geom_4326.centroid.y]), 

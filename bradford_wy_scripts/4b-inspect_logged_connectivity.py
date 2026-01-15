@@ -9,9 +9,11 @@ if PROJECT_ROOT not in sys.path:
 
 from wetland_utilities.basin_attributes import WetlandBasin
 
+lai_buff_dist = 400
+
 source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-wetland_pairs_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_all_wells.csv'
+wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buff_dist}m.csv'
 footprints_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_basins_assigned_wetland_ids_KG.shp'
 
 wetland_pairs = pd.read_csv(wetland_pairs_path)
@@ -25,7 +27,7 @@ well_point = (
     .query("type in ['core_well', 'wetland_well']")
 )
 
-buffer = 100
+dem_buffer = 200
 
 # %%
 
@@ -36,7 +38,7 @@ for i in logged_ids:
         well_point_info=well_point[well_point['wetland_id'] == i],
         source_dem_path=source_dem_path, 
         footprint=None,
-        transect_buffer=buffer
+        transect_buffer=dem_buffer
     )
 
     log_basin.visualize_shape(show_well=True, show_deepest=False)

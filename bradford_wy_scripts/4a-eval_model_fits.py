@@ -5,9 +5,11 @@ import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
 
+lai_buffer_dist = 400
+
 data_dir = "D:/depressional_lidar/data/bradford/out_data/"
-wetland_pairs_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_all_wells.csv'
-models_path = data_dir + 'pre_post_models_all_wells.csv'
+wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer_dist}m.csv'
+models_path = data_dir + f'/model_info/model_estimates_LAI_{lai_buffer_dist}m.csv'
 
 wetland_pairs = pd.read_csv(wetland_pairs_path)
 model_data = pd.read_csv(models_path)
@@ -20,7 +22,7 @@ print(len(plot_data))
 
 datasets = plot_data['data_set'].unique()
 
-fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+fig, axes = plt.subplots(1, 2, figsize=(8, 5))
 
 for idx, dataset in enumerate(datasets):
     ax = axes[idx]
@@ -47,9 +49,9 @@ plt.tight_layout()
 plt.show()
 
 
-# %%
+# %% 3.0 Determine if there are differences between the pre and post r-squared values
 
-fig, axes = plt.subplots(3, 2, figsize=(14, 12))
+fig, axes = plt.subplots(2, 2, figsize=(14, 12))
 
 for row_idx, dataset in enumerate(datasets):
     # Filter data for this dataset
@@ -90,8 +92,8 @@ plt.suptitle('Model Fit Quality: Pre vs Post-Logging by Dataset (OLS Models)',
 plt.tight_layout()
 plt.show()
 
-# %% Plot cummulative correlations (r-squared) for each dataset, pre-logging only
 
+# Plot cumlative correlations
 fig, ax = plt.subplots(figsize=(12, 7))
 
 # Color scheme for datasets
@@ -128,38 +130,29 @@ ax.legend(loc='upper left', fontsize=11, framealpha=0.9)
 plt.tight_layout()
 plt.show()
 
-# Print statistics at key thresholds
-print("\n" + "="*70)
-print("PRE-LOGGING R² CUMULATIVE STATISTICS")
-print("="*70)
-
-# thresholds = [0.2, 0.35, 0.5, 0.7]
-
-# for dataset in datasets:
-#     subset = plot_data[plot_data['data_set'] == dataset]
-#     print(f"\n{dataset.replace('_', ' ').title()} (n={len(subset)}):")
-    
-#     for thresh in thresholds:
-#         n_above = (subset['pre_r2'] >= thresh).sum()
-#         pct_above = (n_above / len(subset)) * 100
-#         print(f"  R² ≥ {thresh}: {n_above} ({pct_above:.1f}%)")
-    
-#     print(f"  Median R²: {subset['pre_r2'].median():.3f}")
-#     print(f"  Mean R²: {subset['pre_r2'].mean():.3f}")
-
-# print("="*70)
-
-
-# %%
+# %% 4.0 Filter the well_ids by model quality
 
 # NOTE: These thresholds might change. 
 strong_pairs = plot_data[
     (plot_data['data_set'] == 'full') & 
-    (plot_data['pre_r2'] >= 0.35) &
-    (plot_data['post_r2'] >= 0.35)
+    (plot_data['pre_r2'] >= 0.30) &
+    (plot_data['post_r2'] >= 0.30)
 ][['log_id', 'log_date', 'ref_id']]
 
 print(len(strong_pairs))
 
-strong_pairs.to_csv(f'{data_dir}/strong_ols_models_all_wells.csv', index=False)
+strong_pairs = strong_pairs[
+    ~strong_pairs['log_id'].isin(['15_516','3_244'])
+]
+
+strong_pairs = strong_pairs[
+    ~strong_pairs['ref_id'].isin(['14_616'])
+]
+
+print(len(strong_pairs))
+
+# %% 5.0 Write the output
+
+strong_pairs.to_csv(f'{data_dir}/strong_ols_models_{lai_buffer_dist}m.csv', index=False)
+
 # %%

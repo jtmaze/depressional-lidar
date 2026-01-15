@@ -72,7 +72,7 @@ def apply_moving_averages(lai_df: pd.DataFrame):
     out_df['roll_yr'] = out_df['LAI'].rolling(
         window=12, 
         center=True, 
-        min_periods=5
+        min_periods=7
     ).mean()
 
     return out_df

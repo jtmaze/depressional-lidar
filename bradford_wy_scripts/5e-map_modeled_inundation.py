@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 
-tgt_id = '9_439'
+tgt_id = '14_418'
 
 distributions_path = 'D:/depressional_lidar/data/bradford/out_data/logging_hypothetical_distributions.csv'
 source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'
@@ -40,12 +40,16 @@ basin = WetlandBasin(
 
 dry_days = pd.read_csv(shift_results_path)
 dry_days = dry_days[
-    (dry_days['log_id'] == tgt_id) &
+    #(dry_days['log_id'] == tgt_id) &
     (dry_days['data_set'] == 'full') &
     (dry_days['model_type'] == 'ols') 
 ][['log_id', 'ref_id', 'total_obs', 'n_bottomed_out']].copy()
 
 dry_days['dry_proportion'] = dry_days['n_bottomed_out'] / dry_days['total_obs']
+
+print(dry_days.groupby('log_id')['dry_proportion'].mean())
+print(dry_days.groupby('ref_id')['dry_proportion'].mean())
+
 dry_proportion = dry_days['dry_proportion'].mean()
 
 print(dry_proportion)
@@ -112,13 +116,13 @@ pre_ts = WellStageTimeseries(
 pre_dynamics = BasinDynamics(
     basin=basin,
     well_stage=pre_ts, 
-    well_to_dem_offset=0
+    well_to_dem_offset=0.1
 )
 pre_dynamics.map_inundation_stacks(
     inundation_frequency=None,
     show_basin_footprint=False,
     cbar_min=0,
-    cbar_max=None
+    cbar_max=100
 )
 
 post_ts = WellStageTimeseries(
@@ -129,13 +133,13 @@ post_ts = WellStageTimeseries(
 post_dynamics = BasinDynamics(
     basin=basin,
     well_stage=post_ts,
-    well_to_dem_offset=0
+    well_to_dem_offset=0.1
 )
 post_dynamics.map_inundation_stacks(
     inundation_frequency=None,
     show_basin_footprint=False,
     cbar_min=0,
-    cbar_max=None
+    cbar_max=100
 )
                                    
 
