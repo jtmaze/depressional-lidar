@@ -3,7 +3,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-lai_buffer_dist = 400
+lai_buffer_dist = 150
 data_dir = "D:/depressional_lidar/data/bradford/out_data/"
 shift_path = data_dir + f'/modeled_logging_stages/shift_results_LAI_{lai_buffer_dist}m.csv'
 

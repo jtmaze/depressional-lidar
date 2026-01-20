@@ -88,7 +88,7 @@ rtk_test['elv_diff'] = rtk_test['ortho_ht'] - rtk_test['elv_dem']
 rtk_test['wetland'] = rtk_test['remarks'].str.split('_').str[0]
 
 # Test idea of applying an offset to RTK data
-rtk_test['orth_ht_offset'] = rtk_test['ortho_ht'] + 1
+rtk_test['ortho_ht_offset'] = rtk_test['ortho_ht'] + 0.5
 rtk_test['elv_diff_offset'] = rtk_test['ortho_ht_offset'] - rtk_test['elv_dem']
 
 
@@ -180,7 +180,7 @@ plt.show()
 plt.figure(figsize=(8, 6))
 
 plot_df = rtk_test[
-    (rtk_test['fix_qualit'] == 9901) & (rtk_test['road_control_pt'] == 1)
+    (rtk_test['fix_qualit'] == 9901) 
 ]
 
 wetlands = plot_df['wetland'].fillna('__NA__')

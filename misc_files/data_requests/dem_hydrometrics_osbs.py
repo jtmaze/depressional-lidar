@@ -10,28 +10,63 @@ os.chdir('D:/depressional_lidar/data/')
 
 points_master = gpd.read_file('./rtk_pts_with_dem_elevations.shp')
 
-core_wells = ['13_267', '14_500', '15_409', '6_93', '14_612', '5a_582']
 
-bradford_core_wells = pd.read_csv('./bradford/in_data/stage_data/bradford_daily_stage_Winter2025.csv')
-bradford_core_wells = bradford_core_wells[
-    bradford_core_wells['well_id'].isin(core_wells)
+
+core_wells = ['Devils Den', 'West Ford', 'Brantley North', 'Ross Pond', 'Fish Cove', 'Surprise']
+
+osbs_core_wells = pd.read_csv('./osbs/in_data/stage_data/daily_well_depth_Fall2025.csv')
+osbs_core_wells = osbs_core_wells[
+    osbs_core_wells['well_id'].isin(core_wells)
 ]
 
-print(bradford_core_wells['flag'].unique())
+# NOTE: only using post 2022 data due to coverage discrepancies
+osbs_core_wells = osbs_core_wells[osbs_core_wells['date'] >= '2022-03-09']
+print(osbs_core_wells['flag'].unique())
 
-# %% 2.0 List out bradford wetlands, types and locations
+# Quick check on osbs core well timeseries:
+# import plotly.express as px
 
-points_bradford = points_master[points_master['site'] == 'bradford']
-wetlands_bradford = points_bradford['wetland_id'].unique()
-print(wetlands_bradford)
-types = points_bradford['type'].unique()
-locations = points_bradford['location'].unique()
+# # Create interactive timeseries
+# fig = px.line(
+#     osbs_core_wells.sort_values('date'),
+#     x='date',
+#     y='well_depth_m',
+#     color='well_id',
+#     title='Well Depth Over Time',
+#     markers=True
+# )
+
+# fig.show()
+
+# %% 2.0 List out osbs wetlands, types and locations
+
+points_osbs = points_master[points_master['site'] == 'osbs']
+wetlands_osbs = points_osbs['wetland_id'].unique()
+print(wetlands_osbs)
+types = points_osbs['type'].unique()
+locations = points_osbs['location'].unique()
 print(types)
 
 # Remove wetland and core_well types, only interested in sampling locations
 remove_types = ['core_well', 'wetland_well']
 types = [t for t in types if t not in remove_types]
 print(types)
+
+# %% Line plot of well depth at Ross Pond
+
+import matplotlib.pyplot as plt
+
+ross_pond = osbs_core_wells[osbs_core_wells['well_id'] == 'Ross Pond'].copy()
+ross_pond['date'] = pd.to_datetime(ross_pond['date'])
+plt.figure(figsize=(12, 6))
+plt.plot(ross_pond['date'], ross_pond['well_depth_m'], linewidth=1.5, color='#006994')
+plt.axhline(y=0, color='black', linestyle='--', linewidth=1, alpha=0.5, label='Ground surface')
+plt.xlabel('Date', fontsize=12)
+plt.ylabel('Well Depth (m)', fontsize=12)
+plt.title('Ross Pond - Well Depth', fontsize=14, fontweight='bold')
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
 
 # %% 3.0 Calculate sensor hydrographs based on difference in DEM elevations
 
@@ -40,11 +75,11 @@ point_elevations_dfs = []
 
 for i in core_wells:
 
-    stage = bradford_core_wells[bradford_core_wells['well_id'] == i].copy()
+    stage = osbs_core_wells[osbs_core_wells['well_id'] == i].copy()
     stage = stage[['date', 'well_depth_m', 'well_id']]
-    well_z = points_bradford[
-        (points_bradford['type'] == 'core_well') & 
-        (points_bradford['wetland_id'] == i)
+    well_z = points_osbs[
+        (points_osbs['type'] == 'core_well') & 
+        (points_osbs['wetland_id'] == i)
     ]['elevation_']
 
     well_z = float(well_z.iloc[0])
@@ -52,10 +87,10 @@ for i in core_wells:
     for t in types:
         for l in locations:
 
-            location_pt = points_bradford[
-                (points_bradford['wetland_id'] == i) &
-                (points_bradford['type'] == t) & 
-                (points_bradford['location'] == l)]
+            location_pt = points_osbs[
+                (points_osbs['wetland_id'] == i) &
+                (points_osbs['type'] == t) & 
+                (points_osbs['location'] == l)]
             
             location_z = location_pt['elevation_']
             
@@ -219,38 +254,46 @@ summary = pd.DataFrame(summary_dfs)
 
 # %% 6.0 Write the files
 
-hydrographs_path = './bradford/out_data/misc_stuff/bradford_hydrographs_for_Sunita_Audrey.csv'
-summary_path = './bradford/out_data/misc_stuff/bradford_hydro_summary_for_Sunita_Audrey.csv'
+# hydrographs_path = './osbs/out_data/misc_stuff/osbs_hydrographs_for_Sunita_Audrey.csv'
+# summary_path = './osbs/out_data/misc_stuff/osbs_hydro_summary_for_Sunita_Audrey.csv'
 
-hydrographs.to_csv(hydrographs_path, index=False)
-summary.to_csv(summary_path, index=False)
+# hydrographs.to_csv(hydrographs_path, index=False)
+# summary.to_csv(summary_path, index=False)
 
-# %% 7.0 Quick plot to see how uncertianty translates to metrics. 
-
-import seaborn as sns
+# %% 7.0 Quick plot 
 import matplotlib.pyplot as plt
+import pandas as pd
 
-plot = summary[summary['type'] == 'litter_trap'].copy()
+# Filter for Ross Pond and convert date to datetime
+plot_df = hydrographs[hydrographs['well_id'] == 'Ross Pond'].copy()
+plot_df = plot_df[plot_df['location'] != 'U']
+plot_df['date'] = pd.to_datetime(plot_df['date'])
 
-# Convert location to categorical with desired order
-location_order = ['W4', 'W3', 'W2', 'W1', 'U']
-plot['location'] = pd.Categorical(plot['location'], categories=location_order, ordered=True)
+# Create the timeseries plot
+fig, ax = plt.subplots(figsize=(14, 6))
 
-plt.figure(figsize=(20, 12))
+# Define color scheme: deep blue (wetland) to warm brown (upland)
+colors = {
+    'W1': '#006994',  # Deep ocean blue (wettest)
+    'W2': '#2E8B57',  # Sea green (transitional)
+    'W3': '#8B6914',  # Dark goldenrod (drier)
+    'W4': '#A0522D',  # Sienna (dry)
+    'U': '#654321'    # Dark brown (upland/driest)
+}
 
-# Create subplot grid
-g = sns.FacetGrid(plot, col='well_id', col_wrap=3, height=4, aspect=1.2)
-g.map_dataframe(sns.scatterplot, x='location', y='mean_inundated_duration', hue='uncert', s=100, alpha=0.7)
-g.set_axis_labels('Location', '# continous days')
-g.set_titles('{col_name}')
+# Plot each location with assigned colors
+for location in ['W1', 'W2', 'W3', 'W4', 'U']:
+    if location in plot_df['location'].unique():
+        location_data = plot_df[plot_df['location'] == location].sort_values('date')
+        ax.plot(location_data['date'], location_data['location_depth_m'], 
+                label=f'{location}', linewidth=1.5, alpha=0.8, color=colors[location])
 
-g.fig.legend(g._legend_data.values(), g._legend_data.keys(), 
-             loc='lower center', bbox_to_anchor=(0.5, -0.05), 
-             ncol=3, title='Uncertainty Level')
-
-for ax in g.axes.flat:
-    ax.tick_params(axis='x', rotation=15)
-
+ax.axhline(y=0, color='black', linestyle='--', linewidth=1, alpha=0.5, label='Ground surface')
+ax.set_ylabel('Depth at Location (m)', fontsize=12)
+ax.set_title('Ross Pond - Water Depth Time Series by Location', fontsize=16, fontweight='bold')
+ax.legend(loc='best', ncol=2, fontsize='large')
+ax.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.show()
+
 # %%

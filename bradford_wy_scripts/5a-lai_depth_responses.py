@@ -11,7 +11,7 @@ if PROJECT_ROOT not in sys.path:
 
 from bradford_wy_scripts.functions.lai_vis_functions import read_concatonate_lai
 
-lai_buffer_dist = 400
+lai_buffer_dist = 150
 
 data_dir = "D:/depressional_lidar/data/bradford/out_data/"
 lai_dir = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/well_buffer_{lai_buffer_dist}m_nomasking/'
@@ -21,7 +21,7 @@ shift_path = data_dir + f'/modeled_logging_stages/shift_results_LAI_{lai_buffer_
 distributions_path = data_dir + f'/modeled_logging_stages/hypothetical_distributions_LAI_{lai_buffer_dist}m.csv'
 models_path = data_dir + f'/model_info/model_estimates_LAI_{lai_buffer_dist}m.csv'
 
-wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer_dist}m.csv'
+wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer_dist}m_limited.csv'
 strong_pairs = data_dir + f'strong_ols_models_{lai_buffer_dist}m.csv'
 
 wetland_pairs = pd.read_csv(wetland_pairs_path)

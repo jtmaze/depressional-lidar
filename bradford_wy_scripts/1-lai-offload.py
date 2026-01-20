@@ -248,7 +248,7 @@ for idx, i in enumerate(well_points['wetland_id'].unique()):
     tgt_shape = well_points[well_points['wetland_id'] == i]
     process_wetland_by_year_chunks(
         i, 
-        buffer_size=250,
+        buffer_size=150,
         tgt_shape=tgt_shape, 
         start_year=2015, 
         end_year=2025, 
