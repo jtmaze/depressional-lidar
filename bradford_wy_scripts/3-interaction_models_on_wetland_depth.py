@@ -18,18 +18,20 @@ from bradford_wy_scripts.functions.dmc_vis_functions import (
 
 from wetland_utilities.basin_attributes import WetlandBasin
 
+well_inc = 'all_wells'
 min_depth_search_radius = 50
-lai_buffer = 400
+lai_buffer = 250
 
-stage_path = "D:/depressional_lidar/data/bradford/in_data/stage_data/bradford_daily_stage_Winter2025.csv"
+stage_path = "D:/depressional_lidar/data/bradford/in_data/stage_data/bradford_daily_well_depth_Winter2025.csv"
 source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 footprints_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_basins_assigned_wetland_ids_KG.shp'
 
-wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer}m.csv'
+wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer}m_{well_inc}.csv'
 wetland_pairs = pd.read_csv(wetland_pairs_path)
+wetland_pairs = wetland_pairs[wetland_pairs['logged_hydro_sufficient'] == True] 
 
-# %% 2.0 Run the model
+# %% 2.0 Run the models for each wetland pair
 
 model_results = []
 distribution_results = []
@@ -212,6 +214,8 @@ for index, row in wetland_pairs.iterrows():
     huber_distributions['log_date'] = logging_date
     distribution_results.append(huber_distributions)
 
+# %%
+
     """
     SECOND: run the same workflow, but using (stage >= -0.20m) 
     """
@@ -364,7 +368,7 @@ for index, row in wetland_pairs.iterrows():
     # shift_results.append(shift_result_ols)
     # shift_results.append(shift_result_huber)
 
-# %% 3.0 Combine the results into a dataframe 
+# %% 3.0 Combine the results into a dataframe and save results
 
 shift_results_df = pd.DataFrame(shift_results)
 distribution_results_df = pd.concat(distribution_results)
@@ -374,10 +378,10 @@ model_results_df = pd.DataFrame(model_results)
 # %% 3.1 Save the results
 
 out_dir = "D:/depressional_lidar/data/bradford/out_data/"
-shift_path = out_dir + f'/modeled_logging_stages/shift_results_LAI_{lai_buffer}m.csv'
-distributions_path = out_dir + f'/modeled_logging_stages/hypothetical_distributions_LAI_{lai_buffer}m.csv'
-residuals_path = out_dir + f'/model_info/residuals_LAI_{lai_buffer}m.csv'
-models_path = out_dir + f'/model_info/model_estimates_LAI_{lai_buffer}m.csv'
+shift_path = out_dir + f'/modeled_logging_stages/{well_inc}_shift_results_LAI_{lai_buffer}m.csv'
+distributions_path = out_dir + f'/modeled_logging_stages/{well_inc}_hypothetical_distributions_LAI_{lai_buffer}m.csv'
+residuals_path = out_dir + f'/model_info/{well_inc}_residuals_LAI_{lai_buffer}m.csv'
+models_path = out_dir + f'/model_info/{well_inc}_model_estimates_LAI_{lai_buffer}m.csv'
 
 shift_results_df.to_csv(shift_path, index=False)
 distribution_results_df.to_csv(distributions_path, index=False)

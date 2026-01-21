@@ -27,7 +27,7 @@ wetland_connectivity_key = pd.read_excel(
 
 candidate_ids = wetland_connectivity_key['well_id'].unique()
 
-# %% 3.0 Read the LAI timeseriess and determine which ids are suitable references. 
+# %% 2.0 Read the LAI timeseriess and determine which ids are suitable references. 
 
 ref_dfs = []
 ref_ids = []
@@ -160,7 +160,6 @@ logged_summary = pd.DataFrame.from_dict(
 logged_summary.rename(columns={'index': 'well_id'}, inplace=True)
 logged_summary['hydro_sufficient'] = pd.to_datetime(logged_summary['logging_date']) >= pd.to_datetime('2022-06-01')
 
-#valid_log_ids = logged_summary[logged_summary['hydro_sufficient']]['well_id'].to_list()
 
 # %% 5.0 Generate a combination of every logging and reference wetland. 
 
@@ -185,7 +184,7 @@ for ref_id in ref_ids:
             'logging_date': log_ids_dict[log_id], 
             'ref_connect': ref_connect,
             'log_connect': log_connect,
-            'hydro_sufficient': hydro_sufficient,
+            'logged_hydro_sufficient': hydro_sufficient,
 
         })
 
