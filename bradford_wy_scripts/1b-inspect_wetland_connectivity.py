@@ -9,29 +9,24 @@ if PROJECT_ROOT not in sys.path:
 
 from wetland_utilities.basin_attributes import WetlandBasin
 
-lai_buff_dist = 400
-
 source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buff_dist}m.csv'
 footprints_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_basins_assigned_wetland_ids_KG.shp'
 
-wetland_pairs = pd.read_csv(wetland_pairs_path)
-logged_ids = wetland_pairs['logged_id'].unique()
-print(logged_ids)
 
 footprints = gpd.read_file(footprints_path)
 well_point = (
-    gpd.read_file(well_points_path)[['wetland_id', 'type', 'rtk_elevat', 'geometry']]
+    gpd.read_file(well_points_path)[['wetland_id', 'type', 'rtk_elevat', 'geometry', 'site']]
     .rename(columns={'rtk_elevat': 'rtk_elevation'})
-    .query("type in ['core_well', 'wetland_well']")
+    .query("type in ['core_well', 'wetland_well'] and site == 'bradford'")
 )
 
-dem_buffer = 200
+well_ids = well_point['wetland_id'].unique().tolist()
+dem_buffer = 250
 
-# %%
+# %% 2.0 Visualize the wetland's DEM
 
-for i in logged_ids:
+for i in well_ids:
 
     log_basin = WetlandBasin(
         wetland_id=i,

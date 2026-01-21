@@ -10,7 +10,7 @@ if PROJECT_ROOT not in sys.path:
 
 from bradford_wy_scripts.functions.lai_vis_functions import read_concatonate_lai, visualize_lai
 
-buffer_dist = 150
+buffer_dist = 250
 
 lai_dir = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/well_buffer_{buffer_dist}m_nomasking/'
 lai_method = f'well_buffer_{buffer_dist}m_nomasking'
@@ -74,6 +74,7 @@ log = pd.concat(log_dfs)
 
 print(len(log_ids))
 print(len(ref_ids))
+
 # %% 3.0 Visually estimate the logging dates
 
 aggregate_ref = ref.groupby('date')['roll_yr'].mean().reset_index()
@@ -112,8 +113,6 @@ log_ids_dict = {
     '9_609': '2020-01-01',
     '13_267': '2022-09-01', 
     '7_341': '2022-01-01',
-
-    # 150m extras
 }
 
 for i in log_ids:
@@ -167,11 +166,27 @@ logged_summary['hydro_sufficient'] = pd.to_datetime(logged_summary['logging_date
 
 combinations_list = []
 for ref_id in ref_ids:
-    for log_id in valid_log_ids:
+    for log_id in log_ids:
+
+        # Get hydro data sufficiency and connectivity classification values
+        hydro_sufficient = logged_summary[
+            logged_summary['well_id'] == log_id
+        ].iloc[0]['hydro_sufficient']
+        ref_connect = wetland_connectivity_key[
+            wetland_connectivity_key['well_id'] == ref_id
+        ].iloc[0]['connectivity']
+        log_connect = wetland_connectivity_key[
+            wetland_connectivity_key['well_id'] == log_id
+        ].iloc[0]['connectivity']
+
         combinations_list.append({
             'reference_id': ref_id,
             'logged_id': log_id,
-            'logging_date': log_ids_dict[log_id]
+            'logging_date': log_ids_dict[log_id], 
+            'ref_connect': ref_connect,
+            'log_connect': log_connect,
+            'hydro_sufficient': hydro_sufficient,
+
         })
 
 

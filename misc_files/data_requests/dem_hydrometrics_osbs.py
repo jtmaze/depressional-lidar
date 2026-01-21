@@ -10,8 +10,6 @@ os.chdir('D:/depressional_lidar/data/')
 
 points_master = gpd.read_file('./rtk_pts_with_dem_elevations.shp')
 
-
-
 core_wells = ['Devils Den', 'West Ford', 'Brantley North', 'Ross Pond', 'Fish Cove', 'Surprise']
 
 osbs_core_wells = pd.read_csv('./osbs/in_data/stage_data/daily_well_depth_Fall2025.csv')
@@ -26,7 +24,7 @@ print(osbs_core_wells['flag'].unique())
 # Quick check on osbs core well timeseries:
 # import plotly.express as px
 
-# # Create interactive timeseries
+# # # Create interactive timeseries
 # fig = px.line(
 #     osbs_core_wells.sort_values('date'),
 #     x='date',
@@ -56,14 +54,36 @@ print(types)
 
 import matplotlib.pyplot as plt
 
-ross_pond = osbs_core_wells[osbs_core_wells['well_id'] == 'Ross Pond'].copy()
-ross_pond['date'] = pd.to_datetime(ross_pond['date'])
+# Filter data for Ross Pond and Surprise only
+wells_to_plot = ['Ross Pond', 'Surprise']
+plot_data = osbs_core_wells[osbs_core_wells['well_id'].isin(wells_to_plot)].copy()
+plot_data['date'] = pd.to_datetime(plot_data['date'])
+
 plt.figure(figsize=(12, 6))
-plt.plot(ross_pond['date'], ross_pond['well_depth_m'], linewidth=1.5, color='#006994')
-plt.axhline(y=0, color='black', linestyle='--', linewidth=1, alpha=0.5, label='Ground surface')
-plt.xlabel('Date', fontsize=12)
-plt.ylabel('Well Depth (m)', fontsize=12)
-plt.title('Ross Pond - Well Depth', fontsize=14, fontweight='bold')
+
+# Define colors and depth adjustments for each well
+colors = {
+    'Ross Pond': '#B22222',  # darker red (firebrick)
+    'Surprise': '#1E90FF'    # darker blue (dodgerblue)
+}
+ross_diff = -0.07
+surprise_diff = -1.5
+
+depth_adjustments = {
+    'Ross Pond': ross_diff,
+    'Surprise': surprise_diff
+}
+
+# Plot each well with its color and adjusted depth
+for well_id in wells_to_plot:
+    well_data = plot_data[plot_data['well_id'] == well_id].copy()
+    well_data['adjusted_depth'] = well_data['well_depth_m'] - depth_adjustments[well_id]
+    plt.plot(well_data['date'], well_data['adjusted_depth'], linewidth=1.5, color=colors[well_id], label=well_id)
+
+plt.axhline(y=0, color='black', linestyle='--', linewidth=1, alpha=0.5, label='Deepest point')
+plt.ylabel('Depth at Deepest Point (m)', fontsize=14)
+plt.title('Water Depth at Deepest Point - Ross Pond and Surprise', fontsize=14, fontweight='bold')
+plt.legend(loc='best')
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.show()
