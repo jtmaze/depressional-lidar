@@ -5,22 +5,49 @@ import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
 
-lai_buffer_dist = 400
+lai_buffer_dist = 150
 
 data_dir = "D:/depressional_lidar/data/bradford/out_data/"
-wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer_dist}m.csv'
-models_path = data_dir + f'/model_info/model_estimates_LAI_{lai_buffer_dist}m.csv'
+wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer_dist}m_all_wells.csv'
+models_path = data_dir + f'/model_info/all_wells_model_estimates_LAI_{lai_buffer_dist}m.csv'
 
 wetland_pairs = pd.read_csv(wetland_pairs_path)
 model_data = pd.read_csv(models_path)
+model_data = model_data[model_data['model_type'] == 'OLS']
 
-# %% 2.0 Determine if the model fits (joint r-squared) improve whenever low depths are censored
+# %% 2.0 Filter to strong model fits
 
-# OLS or HuberRLM
-plot_data = model_data[model_data['model_type'] == 'OLS'].copy()
-print(len(plot_data))
+print(len(model_data)) 
 
+# NOTE: These thresholds might change. 
+strong_pairs = model_data[
+    (model_data['data_set'] == 'full') & 
+    (model_data['pre_r2'] >= 0.30) &
+    (model_data['post_r2'] >= 0.30)
+][['log_id', 'log_date', 'ref_id']]
+
+print(len(strong_pairs))
+
+strong_pairs = strong_pairs[
+    ~strong_pairs['log_id'].isin(['15_516','3_244', '3_173'])
+]
+
+strong_pairs = strong_pairs[
+    ~strong_pairs['ref_id'].isin(['14_616'])
+]
+
+print(len(strong_pairs))
+
+# %% 3.0 Write the output
+
+strong_pairs.to_csv(f'{data_dir}/strong_ols_models_{lai_buffer_dist}m_all_wells.csv', index=False)
+
+# %% 4.0 Diagnostic plots of model fits
+
+plot_data = model_data.copy()
 datasets = plot_data['data_set'].unique()
+
+# %% 4.1 Histograms of joint r-squared values for each dataset
 
 fig, axes = plt.subplots(1, 2, figsize=(8, 5))
 
@@ -49,7 +76,7 @@ plt.tight_layout()
 plt.show()
 
 
-# %% 3.0 Determine if there are differences between the pre and post r-squared values
+# %% 4.3 Histograms of pre and post logging r-squared values for each dataset
 
 fig, axes = plt.subplots(2, 2, figsize=(14, 12))
 
@@ -93,7 +120,8 @@ plt.tight_layout()
 plt.show()
 
 
-# Plot cumlative correlations
+# %% 4.4 Cumulative distribution of Pearson's R for each dataset
+
 fig, ax = plt.subplots(figsize=(12, 7))
 
 # Color scheme for datasets
@@ -129,30 +157,4 @@ ax.legend(loc='upper left', fontsize=11, framealpha=0.9)
 
 plt.tight_layout()
 plt.show()
-
-# %% 4.0 Filter the well_ids by model quality
-
-# NOTE: These thresholds might change. 
-strong_pairs = plot_data[
-    (plot_data['data_set'] == 'full') & 
-    (plot_data['pre_r2'] >= 0.30) &
-    (plot_data['post_r2'] >= 0.30)
-][['log_id', 'log_date', 'ref_id']]
-
-print(len(strong_pairs))
-
-strong_pairs = strong_pairs[
-    ~strong_pairs['log_id'].isin(['15_516','3_244'])
-]
-
-strong_pairs = strong_pairs[
-    ~strong_pairs['ref_id'].isin(['14_616'])
-]
-
-print(len(strong_pairs))
-
-# %% 5.0 Write the output
-
-strong_pairs.to_csv(f'{data_dir}/strong_ols_models_{lai_buffer_dist}m.csv', index=False)
-
 # %%

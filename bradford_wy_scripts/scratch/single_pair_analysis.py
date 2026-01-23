@@ -8,7 +8,7 @@ PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from bradford_wy_scripts.functions.dmc_vis_functions import (
+from bradford_wy_scripts.functions.wetland_logging_functions import (
     plot_stage_ts, remove_flagged_buffer, fit_interaction_model_huber, plot_correlations_from_model,
     plot_dmc, plot_dmc_residuals, sample_reference_ts, generate_model_distributions, plot_hypothetical_distributions
 )

@@ -12,7 +12,7 @@ from wetland_utilities.basin_attributes import WetlandBasin
 source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 footprints_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_basins_assigned_wetland_ids_KG.shp'
-
+wetland_connectivity_path = 'D:/depressional_lidar/data/bradford/bradford_wetland_connect_key.xlsx'
 
 footprints = gpd.read_file(footprints_path)
 well_point = (
@@ -22,7 +22,11 @@ well_point = (
 )
 
 well_ids = well_point['wetland_id'].unique().tolist()
+well_ids.remove('wet_wetland_east')
+well_ids.remove('dry_wetland_west')
 dem_buffer = 250
+
+connectivity = pd.read_excel(wetland_connectivity_path)
 
 # %% 2.0 Visualize the wetland's DEM
 
@@ -35,6 +39,9 @@ for i in well_ids:
         footprint=None,
         transect_buffer=dem_buffer
     )
+    connectivity_class = connectivity[connectivity['well_id'] == i].iloc[0]['connectivity']
+    
+    print(f'Well ID: {i}, Connectivity: {connectivity_class}')
 
     log_basin.visualize_shape(show_well=True, show_deepest=False)
 

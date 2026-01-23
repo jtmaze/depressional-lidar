@@ -459,71 +459,71 @@ def compute_residuals(comparison_df: pd.DataFrame,
 
     return comparison_df[['day', x_series_name, 'predicted', 'residual']]
 
-def visualize_residuals(residuals_df: pd.DataFrame, log_date: pd.Timestamp):
-    """
-    Visualize model residuals with residuals vs predicted plot and Q-Q plot.
-    Separates pre and post logging periods for comparison.
-    """
+# def visualize_residuals(residuals_df: pd.DataFrame, log_date: pd.Timestamp):
+#     """
+#     Visualize model residuals with residuals vs predicted plot and Q-Q plot.
+#     Separates pre and post logging periods for comparison.
+#     """
     
-    # Add logging period indicator
-    residuals_df = residuals_df.copy()
-    residuals_df['logged'] = residuals_df['day'] >= log_date
+#     # Add logging period indicator
+#     residuals_df = residuals_df.copy()
+#     residuals_df['logged'] = residuals_df['day'] >= log_date
     
-    # Split into pre and post
-    pre_df = residuals_df[~residuals_df['logged']]
-    post_df = residuals_df[residuals_df['logged']]
+#     # Split into pre and post
+#     pre_df = residuals_df[~residuals_df['logged']]
+#     post_df = residuals_df[residuals_df['logged']]
     
-    # Create 2x2 subplot figure
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+#     # Create 2x2 subplot figure
+#     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
-    # Pre;ogging (top left)
-    axes[0, 0].scatter(pre_df['predicted'], pre_df['residual'], 
-                       alpha=0.6, s=40, color='grey', edgecolors='black', linewidth=0.5)
-    axes[0, 0].axhline(0, color='red', linestyle='--', linewidth=2)
-    axes[0, 0].set_xlabel('Predicted Values [m]', fontsize=11)
-    axes[0, 0].set_ylabel('Residuals [m]', fontsize=11)
-    axes[0, 0].set_title(f'Pre-Logging: Residuals vs Predicted (n={len(pre_df)})', 
-                         fontsize=12, fontweight='bold')
-    axes[0, 0].grid(True, alpha=0.3)
+#     # Pre;ogging (top left)
+#     axes[0, 0].scatter(pre_df['predicted'], pre_df['residual'], 
+#                        alpha=0.6, s=40, color='grey', edgecolors='black', linewidth=0.5)
+#     axes[0, 0].axhline(0, color='red', linestyle='--', linewidth=2)
+#     axes[0, 0].set_xlabel('Predicted Values [m]', fontsize=11)
+#     axes[0, 0].set_ylabel('Residuals [m]', fontsize=11)
+#     axes[0, 0].set_title(f'Pre-Logging: Residuals vs Predicted (n={len(pre_df)})', 
+#                          fontsize=12, fontweight='bold')
+#     axes[0, 0].grid(True, alpha=0.3)
     
-    # Post-logging (top right)
-    axes[0, 1].scatter(post_df['predicted'], post_df['residual'],
-                       alpha=0.6, s=40, color='coral', edgecolors='black', linewidth=0.5)
-    axes[0, 1].axhline(0, color='red', linestyle='--', linewidth=2)
-    axes[0, 1].set_xlabel('Predicted Values [m]', fontsize=11)
-    axes[0, 1].set_ylabel('Residuals [m]', fontsize=11)
-    axes[0, 1].set_title(f'Post-Logging: Residuals vs Predicted (n={len(post_df)})',
-                         fontsize=12, fontweight='bold')
-    axes[0, 1].grid(True, alpha=0.3)
+#     # Post-logging (top right)
+#     axes[0, 1].scatter(post_df['predicted'], post_df['residual'],
+#                        alpha=0.6, s=40, color='coral', edgecolors='black', linewidth=0.5)
+#     axes[0, 1].axhline(0, color='red', linestyle='--', linewidth=2)
+#     axes[0, 1].set_xlabel('Predicted Values [m]', fontsize=11)
+#     axes[0, 1].set_ylabel('Residuals [m]', fontsize=11)
+#     axes[0, 1].set_title(f'Post-Logging: Residuals vs Predicted (n={len(post_df)})',
+#                          fontsize=12, fontweight='bold')
+#     axes[0, 1].grid(True, alpha=0.3)
 
-    # Pre-logging Q-Q (bottom left)
-    stats.probplot(pre_df['residual'], dist="norm", plot=axes[1, 0])
-    axes[1, 0].set_title('Pre-Logging: Normal Q-Q Plot', fontsize=12, fontweight='bold')
-    axes[1, 0].set_xlabel('Theoretical Quantiles', fontsize=11)
-    axes[1, 0].set_ylabel('Sample Quantiles', fontsize=11)
-    axes[1, 0].grid(True, alpha=0.3)
-    axes[1, 0].get_lines()[0].set_markerfacecolor('steelblue')
-    axes[1, 0].get_lines()[0].set_markeredgecolor('black')
-    axes[1, 0].get_lines()[0].set_markersize(5)
-    axes[1, 0].get_lines()[1].set_color('red')
-    axes[1, 0].get_lines()[1].set_linewidth(2)
+#     # Pre-logging Q-Q (bottom left)
+#     stats.probplot(pre_df['residual'], dist="norm", plot=axes[1, 0])
+#     axes[1, 0].set_title('Pre-Logging: Normal Q-Q Plot', fontsize=12, fontweight='bold')
+#     axes[1, 0].set_xlabel('Theoretical Quantiles', fontsize=11)
+#     axes[1, 0].set_ylabel('Sample Quantiles', fontsize=11)
+#     axes[1, 0].grid(True, alpha=0.3)
+#     axes[1, 0].get_lines()[0].set_markerfacecolor('steelblue')
+#     axes[1, 0].get_lines()[0].set_markeredgecolor('black')
+#     axes[1, 0].get_lines()[0].set_markersize(5)
+#     axes[1, 0].get_lines()[1].set_color('red')
+#     axes[1, 0].get_lines()[1].set_linewidth(2)
     
-    # Post-logging Q-Q (bottom right)
-    stats.probplot(post_df['residual'], dist="norm", plot=axes[1, 1])
-    axes[1, 1].set_title('Post-Logging: Normal Q-Q Plot', fontsize=12, fontweight='bold')
-    axes[1, 1].set_xlabel('Theoretical Quantiles', fontsize=11)
-    axes[1, 1].set_ylabel('Sample Quantiles', fontsize=11)
-    axes[1, 1].grid(True, alpha=0.3)
-    axes[1, 1].get_lines()[0].set_markerfacecolor('coral')
-    axes[1, 1].get_lines()[0].set_markeredgecolor('black')
-    axes[1, 1].get_lines()[0].set_markersize(5)
-    axes[1, 1].get_lines()[1].set_color('red')
-    axes[1, 1].get_lines()[1].set_linewidth(2)
+#     # Post-logging Q-Q (bottom right)
+#     stats.probplot(post_df['residual'], dist="norm", plot=axes[1, 1])
+#     axes[1, 1].set_title('Post-Logging: Normal Q-Q Plot', fontsize=12, fontweight='bold')
+#     axes[1, 1].set_xlabel('Theoretical Quantiles', fontsize=11)
+#     axes[1, 1].set_ylabel('Sample Quantiles', fontsize=11)
+#     axes[1, 1].grid(True, alpha=0.3)
+#     axes[1, 1].get_lines()[0].set_markerfacecolor('coral')
+#     axes[1, 1].get_lines()[0].set_markeredgecolor('black')
+#     axes[1, 1].get_lines()[0].set_markersize(5)
+#     axes[1, 1].get_lines()[1].set_color('red')
+#     axes[1, 1].get_lines()[1].set_linewidth(2)
     
-    plt.suptitle('Residual Diagnostics: Pre vs Post-Logging', 
-                 fontsize=15, fontweight='bold', y=0.995)
-    plt.tight_layout()
-    plt.show()
+#     plt.suptitle('Residual Diagnostics: Pre vs Post-Logging', 
+#                  fontsize=15, fontweight='bold', y=0.995)
+#     plt.tight_layout()
+#     plt.show()
 
 def flatten_model_results(results: dict,
                           log_id: str,
@@ -621,8 +621,8 @@ def plot_hypothetical_distributions(model_distributions: dict, f_dist: np.ndarra
     # Top panel: Pre and Post distributions
     ax1.hist(pre_model_distributions, bins=bins, alpha=0.8, label='Modeled Pre-Logging Distribution', color='#333333', range=(x_min, x_max), density=True)
     ax1.hist(post_model_distributions, bins=bins, alpha=0.8, label='Modeled Post-Logging Distribution', color='#E69F00', range=(x_min, x_max), density=True)
-    #ax1.axvline(np.mean(pre_model_distributions), color='#333333', linestyle='--', linewidth=2, label='Pre Mean')
-    #ax1.axvline(np.mean(post_model_distributions), color='#E69F00', linestyle='--', linewidth=2, label='Post Mean')
+    ax1.axvline(np.mean(pre_model_distributions), color='#333333', linestyle='--', linewidth=2, label='Pre Mean')
+    ax1.axvline(np.mean(post_model_distributions), color='#E69F00', linestyle='--', linewidth=2, label='Post Mean')
     ax1.set_xlim(x_min, x_max)
     ax1.set_ylabel('% of Days', fontsize=16)
     ax1.tick_params(labelsize=12)
@@ -666,185 +666,185 @@ def summarize_depth_shift(model_distributions: dict):
         "delta_mean": delta_mean
     }
 
-def plot_dmc(
-        comparison_df: pd.DataFrame, 
-        x_series_name: str, 
-        y_series_name: str, 
-        log_date: pd.Timestamp, 
-    ):
+# def plot_dmc(
+#         comparison_df: pd.DataFrame, 
+#         x_series_name: str, 
+#         y_series_name: str, 
+#         log_date: pd.Timestamp, 
+#     ):
 
-    pre_logged = comparison_df[comparison_df['day'] <= log_date]
-    if log_date in comparison_df['day'].values:
-        log_x_value = comparison_df.loc[comparison_df['day'] == log_date, x_series_name].values[0]
-    else:
-        # Find the nearest date and get its x value
-        nearest_idx = (comparison_df['day'] - log_date).abs().argsort()[0]
-        log_x_value = comparison_df.iloc[nearest_idx][x_series_name]
-        nearest_date = comparison_df.iloc[nearest_idx]['day']
-        print(f"Exact log date not found. Using nearest date: {nearest_date}")
+#     pre_logged = comparison_df[comparison_df['day'] <= log_date]
+#     if log_date in comparison_df['day'].values:
+#         log_x_value = comparison_df.loc[comparison_df['day'] == log_date, x_series_name].values[0]
+#     else:
+#         # Find the nearest date and get its x value
+#         nearest_idx = (comparison_df['day'] - log_date).abs().argsort()[0]
+#         log_x_value = comparison_df.iloc[nearest_idx][x_series_name]
+#         nearest_date = comparison_df.iloc[nearest_idx]['day']
+#         print(f"Exact log date not found. Using nearest date: {nearest_date}")
  
-    x_pre = pre_logged[x_series_name].to_numpy()
-    y_pre = pre_logged[y_series_name].to_numpy()
-    x_full = comparison_df[x_series_name].to_numpy()
+#     x_pre = pre_logged[x_series_name].to_numpy()
+#     y_pre = pre_logged[y_series_name].to_numpy()
+#     x_full = comparison_df[x_series_name].to_numpy()
 
-    result = np.linalg.lstsq(x_pre[:, None], y_pre, rcond=None)
-    m = result[0][0]
+#     result = np.linalg.lstsq(x_pre[:, None], y_pre, rcond=None)
+#     m = result[0][0]
 
-    plt.figure(figsize=(8, 8))
-    plt.scatter(comparison_df[x_series_name], comparison_df[y_series_name], label=f"DMC")
-    plt.plot(x_full, m * x_full, color='black', linestyle='--', label=f'Pre-logging fit')
-    plt.axvline(log_x_value, color='red', linestyle='-', label='logging date')
-    plt.xlabel('Cummulative Reference')
-    plt.ylabel('Cummulative Logged')
-    ax = plt.gca()
-    ax.text(0.02, 0.98, f"m = {m:.3f}", transform=ax.transAxes, ha='left', va='top')
-    plt.show()
+#     plt.figure(figsize=(8, 8))
+#     plt.scatter(comparison_df[x_series_name], comparison_df[y_series_name], label=f"DMC")
+#     plt.plot(x_full, m * x_full, color='black', linestyle='--', label=f'Pre-logging fit')
+#     plt.axvline(log_x_value, color='red', linestyle='-', label='logging date')
+#     plt.xlabel('Cummulative Reference')
+#     plt.ylabel('Cummulative Logged')
+#     ax = plt.gca()
+#     ax.text(0.02, 0.98, f"m = {m:.3f}", transform=ax.transAxes, ha='left', va='top')
+#     plt.show()
 
-    return m
+#     return m
 
-def plot_dmc_residuals(
-        comparison_df: pd.DataFrame,
-        x_series_name: str,
-        y_series_name: str,
-        dmc_slope: float,
-        log_date: pd.Timestamp,
-        stage: bool
-    ):
+# def plot_dmc_residuals(
+#         comparison_df: pd.DataFrame,
+#         x_series_name: str,
+#         y_series_name: str,
+#         dmc_slope: float,
+#         log_date: pd.Timestamp,
+#         stage: bool
+#     ):
     
-    if stage:
-        units = 'm'
-    else:
-        units = 'm3'
+#     if stage:
+#         units = 'm'
+#     else:
+#         units = 'm3'
 
-    comparison_df = comparison_df.copy()
-    comparison_df['predicted'] = comparison_df[x_series_name] * dmc_slope
-    comparison_df['residual'] = comparison_df[y_series_name] - comparison_df['predicted']
+#     comparison_df = comparison_df.copy()
+#     comparison_df['predicted'] = comparison_df[x_series_name] * dmc_slope
+#     comparison_df['residual'] = comparison_df[y_series_name] - comparison_df['predicted']
 
-    comparison_df = comparison_df.sort_values('day')
+#     comparison_df = comparison_df.sort_values('day')
 
-    date_range = pd.date_range(start=comparison_df['day'].min(),
-                               end=comparison_df['day'].max(),
-                               freq='D')
+#     date_range = pd.date_range(start=comparison_df['day'].min(),
+#                                end=comparison_df['day'].max(),
+#                                freq='D')
     
-    filled_df = comparison_df.set_index('day').reindex(date_range)
-    filled_df['rolling_residual_change'] = filled_df['residual'].diff(periods=3) / 3
+#     filled_df = comparison_df.set_index('day').reindex(date_range)
+#     filled_df['rolling_residual_change'] = filled_df['residual'].diff(periods=3) / 3
 
-    def _scale_depth(df: pd.DataFrame):
+#     def _scale_depth(df: pd.DataFrame):
 
-        df = df.copy()
-        df['mean_wetland_depth'] = (df['wetland_depth_ref'] + df['wetland_depth_log']) / 2
-        min_d = df['mean_wetland_depth'].min()
-        max_d = df['mean_wetland_depth'].max()
-        range_d = max_d - min_d
+#         df = df.copy()
+#         df['mean_wetland_depth'] = (df['wetland_depth_ref'] + df['wetland_depth_log']) / 2
+#         min_d = df['mean_wetland_depth'].min()
+#         max_d = df['mean_wetland_depth'].max()
+#         range_d = max_d - min_d
 
-        df['scaled_depth'] = df['mean_wetland_depth'] / range_d
+#         df['scaled_depth'] = df['mean_wetland_depth'] / range_d
 
-        return df
+#         return df
 
-    filled_df = _scale_depth(filled_df)
-    plot_df = filled_df.reset_index().rename(columns={'index': 'day'})
+#     filled_df = _scale_depth(filled_df)
+#     plot_df = filled_df.reset_index().rename(columns={'index': 'day'})
 
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 12))
-    # Top panel is cummulative residuals
-    ax1.plot(plot_df['day'], plot_df['residual'], linewidth=2.5, marker='o')
-    ax1.axvline(log_date, color='red', linestyle='-', label='Logged Date')
-    ax1.axhline(0, color='black', linestyle='--', linewidth=1)
-    ax1.set_ylabel(f'Cummulative Residual ({units})')
-    ax1.grid(True, alpha=0.3)
-    ax1.tick_params(labelbottom=False)
+#     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 12))
+#     # Top panel is cummulative residuals
+#     ax1.plot(plot_df['day'], plot_df['residual'], linewidth=2.5, marker='o')
+#     ax1.axvline(log_date, color='red', linestyle='-', label='Logged Date')
+#     ax1.axhline(0, color='black', linestyle='--', linewidth=1)
+#     ax1.set_ylabel(f'Cummulative Residual ({units})')
+#     ax1.grid(True, alpha=0.3)
+#     ax1.tick_params(labelbottom=False)
 
-    ax2.plot(plot_df['day'], plot_df['rolling_residual_change'], 'g-', linewidth=2.5, marker='o')
-    ax2.axhline(y=0, color='black', linestyle='--', alpha=0.5)
-    ax2.axvline(log_date, color='red', linestyle='-', linewidth=2, label='Logging Date')
-    ax2.set_ylabel(f'3-Day Change in Residuals ({units} / d)')
-    ax2.grid(True, alpha=0.3)
-    ax2.tick_params(labelbottom=False)
+#     ax2.plot(plot_df['day'], plot_df['rolling_residual_change'], 'g-', linewidth=2.5, marker='o')
+#     ax2.axhline(y=0, color='black', linestyle='--', alpha=0.5)
+#     ax2.axvline(log_date, color='red', linestyle='-', linewidth=2, label='Logging Date')
+#     ax2.set_ylabel(f'3-Day Change in Residuals ({units} / d)')
+#     ax2.grid(True, alpha=0.3)
+#     ax2.tick_params(labelbottom=False)
     
-    # Bottom panel rolling change in residuals
-    plot_df_valid = plot_df.dropna(subset=['rolling_residual_change', 'scaled_depth'])
+#     # Bottom panel rolling change in residuals
+#     plot_df_valid = plot_df.dropna(subset=['rolling_residual_change', 'scaled_depth'])
     
-    # Create scatter plot with color mapping
-    scatter = ax3.scatter(
-        plot_df_valid['day'], 
-        plot_df_valid['rolling_residual_change'],
-        c=plot_df_valid['scaled_depth'],
-        cmap='RdYlBu',  
-        s=50,  
-        alpha=1,
-        edgecolors='black',
-    )
+#     # Create scatter plot with color mapping
+#     scatter = ax3.scatter(
+#         plot_df_valid['day'], 
+#         plot_df_valid['rolling_residual_change'],
+#         c=plot_df_valid['scaled_depth'],
+#         cmap='RdYlBu',  
+#         s=50,  
+#         alpha=1,
+#         edgecolors='black',
+#     )
     
-    # Add colorbar
-    cbar = plt.colorbar(scatter, ax=ax3, orientation='horizontal', pad=0.15, aspect=40)
-    cbar.set_label('Scaled Depth (0=dry, 1=max)', labelpad=10)
+#     # Add colorbar
+#     cbar = plt.colorbar(scatter, ax=ax3, orientation='horizontal', pad=0.15, aspect=40)
+#     cbar.set_label('Scaled Depth (0=dry, 1=max)', labelpad=10)
     
-    ax3.axhline(y=0, color='black', linestyle='--', alpha=0.5)
-    ax3.axvline(log_date, color='red', linestyle='-', linewidth=2, label='Logging Date')
-    ax3.set_ylabel(f'3-Day Change in Residuals ({units} / d)')
-    ax3.grid(True, alpha=0.3)
-    ax3.legend()
+#     ax3.axhline(y=0, color='black', linestyle='--', alpha=0.5)
+#     ax3.axvline(log_date, color='red', linestyle='-', linewidth=2, label='Logging Date')
+#     ax3.set_ylabel(f'3-Day Change in Residuals ({units} / d)')
+#     ax3.grid(True, alpha=0.3)
+#     ax3.legend()
     
-    # Format x-axis for dates
-    ax3.xaxis.set_major_locator(mdates.YearLocator())
-    ax3.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+#     # Format x-axis for dates
+#     ax3.xaxis.set_major_locator(mdates.YearLocator())
+#     ax3.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
     
-    plt.tight_layout()
-    plt.show()
+#     plt.tight_layout()
+#     plt.show()
 
-    return plot_df
+#     return plot_df
 
-def residual_change_vs_depth(residual_df: pd.DataFrame, log_date: pd.Timestamp):
-    """ 
-    Plots relationship between depth (scaled 0-1) and the rolling residual change from 
-    the dmc curve. Colored by pre vs. post logging.
-    """
+# def residual_change_vs_depth(residual_df: pd.DataFrame, log_date: pd.Timestamp):
+#     """ 
+#     Plots relationship between depth (scaled 0-1) and the rolling residual change from 
+#     the dmc curve. Colored by pre vs. post logging.
+#     """
 
-    plot_df = residual_df.dropna(subset=['scaled_depth', 'rolling_residual_change']).copy()
-    plot_df['pre_logging'] = plot_df['day'] < log_date
-    pre_df = plot_df[plot_df['pre_logging']]
-    post_df = plot_df[~plot_df['pre_logging']]
+#     plot_df = residual_df.dropna(subset=['scaled_depth', 'rolling_residual_change']).copy()
+#     plot_df['pre_logging'] = plot_df['day'] < log_date
+#     pre_df = plot_df[plot_df['pre_logging']]
+#     post_df = plot_df[~plot_df['pre_logging']]
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+#     fig, ax = plt.subplots(figsize=(10, 8))
 
-    ax.scatter(pre_df['scaled_depth'], pre_df['rolling_residual_change'], 
-                   alpha=0.6, s=50, color='blue', edgecolors='black', 
-                   linewidth=0.5, label='Pre-logging')
-    ax.scatter(post_df['scaled_depth'], post_df['rolling_residual_change'], 
-                   alpha=0.6, s=50, color='red', edgecolors='black', 
-                   linewidth=0.5, label='Post-logging')
-    ax.axhline(0, color='black', linestyle='-', alpha=0.5, linewidth=1.5)
-    ax.set_xlabel('Scaled Depth (0=dry, 1=max)', fontsize=12)
-    ax.set_ylabel('3-Day Change in Residuals (m / d)', fontsize=12)
-    ax.set_title('DMC Residual Change vs Wetland Depth', fontsize=14, fontweight='bold')
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+#     ax.scatter(pre_df['scaled_depth'], pre_df['rolling_residual_change'], 
+#                    alpha=0.6, s=50, color='blue', edgecolors='black', 
+#                    linewidth=0.5, label='Pre-logging')
+#     ax.scatter(post_df['scaled_depth'], post_df['rolling_residual_change'], 
+#                    alpha=0.6, s=50, color='red', edgecolors='black', 
+#                    linewidth=0.5, label='Post-logging')
+#     ax.axhline(0, color='black', linestyle='-', alpha=0.5, linewidth=1.5)
+#     ax.set_xlabel('Scaled Depth (0=dry, 1=max)', fontsize=12)
+#     ax.set_ylabel('3-Day Change in Residuals (m / d)', fontsize=12)
+#     ax.set_title('DMC Residual Change vs Wetland Depth', fontsize=14, fontweight='bold')
+#     ax.grid(True, alpha=0.3)
+#     ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
     
-    plt.tight_layout()
-    plt.show()
+#     plt.tight_layout()
+#     plt.show()
 
-def plot_storage_curves(logged_hypsometry: pd.DataFrame, reference_hypsometry: pd.DataFrame):
+# def plot_storage_curves(logged_hypsometry: pd.DataFrame, reference_hypsometry: pd.DataFrame):
 
-    fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+#     fig, ax = plt.subplots(1, 1, figsize=(8, 6))
 
-    ax.plot(
-        logged_hypsometry['wetland_depth'], 
-        logged_hypsometry['volume_m3'].cumsum(), 
-        label='Logged Basin', 
-        color='tab:orange'
-    )
+#     ax.plot(
+#         logged_hypsometry['wetland_depth'], 
+#         logged_hypsometry['volume_m3'].cumsum(), 
+#         label='Logged Basin', 
+#         color='tab:orange'
+#     )
 
-    ax.plot(
-        reference_hypsometry['wetland_depth'], 
-        reference_hypsometry['volume_m3'].cumsum(), 
-        label='Reference Basin', 
-        color='tab:blue'
-    )
+#     ax.plot(
+#         reference_hypsometry['wetland_depth'], 
+#         reference_hypsometry['volume_m3'].cumsum(), 
+#         label='Reference Basin', 
+#         color='tab:blue'
+#     )
 
-    ax.set_xlabel('Well Depth (m)')
-    ax.set_ylabel('Volume (m³)')
-    ax.set_title('Volume vs Wetland Depth')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+#     ax.set_xlabel('Well Depth (m)')
+#     ax.set_ylabel('Volume (m³)')
+#     ax.set_title('Volume vs Wetland Depth')
+#     ax.legend()
+#     ax.grid(True, alpha=0.3)
 
-    plt.tight_layout()
-    plt.show()
+#     plt.tight_layout()
+#     plt.show()

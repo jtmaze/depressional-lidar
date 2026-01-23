@@ -10,7 +10,7 @@ if PROJECT_ROOT not in sys.path:
 
 from bradford_wy_scripts.functions.lai_vis_functions import read_concatonate_lai, visualize_lai
 
-buffer_dist = 250
+buffer_dist = 150
 
 lai_dir = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/well_buffer_{buffer_dist}m_nomasking/'
 lai_method = f'well_buffer_{buffer_dist}m_nomasking'
@@ -82,26 +82,26 @@ aggregate_ref.rename(columns={'roll_yr': 'roll_yr_ref'}, inplace=True)
 
 log_ids_dict = {
     '15_268': '2023-12-01',
-    '15_516': '2023-03-01',
-    '14_418': '2024-02-01',
+    '15_516': '2023-01-01',
+    '14_418': '2024-01-01',
     '14_115': '2022-05-01',
     '14_500': '2023-10-01',
     '14_610': '2023-09-01',
-    '5_597': '2023-05-01', 
+    '5_597': '2023-03-01', 
     '5a_598': '2021-06-01',
     '5_161': '2020-04-01',
-    '5_510': '2023-08-01',
+    '5_510': '2023-09-01',
     '9_439': '2023-10-01',
     '9_508': '2023-10-01',
-    '13_263': '2022-01-01',
-    '13_271': '2022-11-01',
+    '13_263': '2021-08-01',
+    '13_271': '2022-10-01',
     '6_20': '2021-12-01',
-    '7_626': '2022-07-01',
+    '7_626': '2022-06-01',
     '7_243': '2022-07-01',
-    '3_311': '2023-02-01',
+    '3_311': '2023-01-01',
     '3_173': '2023-03-01',
     '3_244': '2023-02-01', 
-    '6_93': '2024-11-01',
+    '6_93': '2024-09-01',
 
     # Flow-through well_ids
     '14_612': '2020-08-01',
@@ -109,10 +109,13 @@ log_ids_dict = {
     '14.9_601': '2021-10-01',
     '9_77': '2023-04-01',
     '7_622': '2022-03-01',
-    '3_23': '2023-05-01',
+    '3_23': '2023-10-01',
     '9_609': '2020-01-01',
     '13_267': '2022-09-01', 
     '7_341': '2022-01-01',
+
+    '14.9_527': '2020-02-01',
+    '6_300': '2024-02-01'
 }
 
 for i in log_ids:
@@ -125,27 +128,43 @@ for i in log_ids:
     temp['log_diff_1yr'] = temp['roll_yr'] - temp['roll_yr_ref']
     temp = temp[temp['date'] >= start_date]
     
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
     
-    axes[0].plot(temp['date'], temp['log_diff_1yr'])
-    axes[0].set_title(f'Log Difference for {i}')
-    axes[0].set_xlabel('Date')
-    axes[0].set_ylabel('log_diff_1yr')
+    # Top left: Full time series of roll_yr
+    axes[0, 0].plot(temp['date'], temp['roll_yr'])
+    axes[0, 0].set_title(f'Rolling Year LAI for {i}')
+    axes[0, 0].set_xlabel('Date')
+    axes[0, 0].set_ylabel('roll_yr')
     
     logging_date = pd.Timestamp(log_ids_dict[i])
-    axes[0].axvline(logging_date, color='red', linestyle='--', label='Logging Date')
-    axes[0].legend()
+    axes[0, 0].axvline(logging_date, color='red', linestyle='--', label='Logging Date')
+    axes[0, 0].legend()
 
+    # Top right: Zoomed roll_yr
     start_zoom = logging_date - pd.DateOffset(months=8)
     end_zoom = logging_date + pd.DateOffset(months=8)
     temp_zoom = temp[(temp['date'] >= start_zoom) & (temp['date'] <= end_zoom)]
     
-    axes[1].plot(temp_zoom['date'], temp_zoom['log_diff_1yr'])
-    axes[1].axvline(logging_date, color='red', linestyle='--', label='Logging Date')
-    axes[1].set_title(f'Log Difference for {i} (±8 months)')
-    axes[1].set_xlabel('Date')
-    axes[1].set_ylabel('log_diff_1yr')
-    axes[1].legend()
+    axes[0, 1].plot(temp_zoom['date'], temp_zoom['roll_yr'])
+    axes[0, 1].axvline(logging_date, color='red', linestyle='--', label='Logging Date')
+    axes[0, 1].set_title(f'Rolling Year LAI for {i} (±8 months)')
+    axes[0, 1].set_xlabel('Date')
+    axes[0, 1].set_ylabel('Logged 1-yr LAI')
+    axes[0, 1].legend()
+    
+    axes[1, 0].plot(temp['date'], temp['log_diff_1yr'])
+    axes[1, 0].set_title(f'Reference Rolling Year LAI')
+    axes[1, 0].set_xlabel('Date')
+    axes[1, 0].set_ylabel('Reference 1-yr rolling LAI')
+    axes[1, 0].axvline(logging_date, color='red', linestyle='--', label='Logging Date')
+    axes[1, 0].legend()
+    
+    axes[1, 1].plot(temp_zoom['date'], temp_zoom['log_diff_1yr'])
+    axes[1, 1].axvline(logging_date, color='red', linestyle='--', label='Logging Date')
+    axes[1, 1].set_title(f'Reference Rolling Year LAI (±8 months)')
+    axes[1, 1].set_xlabel('Date')
+    axes[1, 1].set_ylabel('Rolling 1yr difference (log - ref)')
+    axes[1, 1].legend()
     
     plt.tight_layout()
     plt.show()
@@ -181,7 +200,7 @@ for ref_id in ref_ids:
         combinations_list.append({
             'reference_id': ref_id,
             'logged_id': log_id,
-            'logging_date': log_ids_dict[log_id], 
+            'estimated_logging_date': log_ids_dict[log_id], 
             'ref_connect': ref_connect,
             'log_connect': log_connect,
             'logged_hydro_sufficient': hydro_sufficient,
