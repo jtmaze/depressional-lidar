@@ -1,7 +1,6 @@
 # %% 1.0 Libraries and file paths
 
 import os
-import datetime as dt
 import pandas as pd
 import numpy as np
 import geopandas as gpd
@@ -50,7 +49,6 @@ remove_types = ['core_well', 'wetland_well']
 types = [t for t in types if t not in remove_types]
 print(types)
 
-
 # %% 3.0 Calculate sensor hydrographs based on difference in DEM elevations
 
 out_dfs = []
@@ -66,22 +64,21 @@ for i in core_wells:
     ]['rtk_z']
 
     well_z = float(well_z.iloc[0])
-
+    print(f'{well_z} meters')
     for t in types:
         for l in locations:
 
             location_pt = points_osbs[
                 (points_osbs['wetland_id'] == i) &
                 (points_osbs['type'] == t) & 
-                (points_osbs['location'] == l)]
-            
+                (points_osbs['location'] == l)
+            ]
             location_z = location_pt['rtk_z']
             elevation_diff = location_pt['rel_h_well']
-            if len(location_z) == 0:
+            
+            if len(elevation_diff) == 0 or elevation_diff.iloc[0] == 'Missing':
                 print(f"Warning -- no data type {t} at location {l} for wetland {i}")
                 continue
-            else:
-                location_z = float(location_z.iloc[0])
 
             print(i, l)
             # elevation_diff = location_z - well_z
@@ -89,9 +86,9 @@ for i in core_wells:
             stage_location = stage.copy()
             stage_location['location'] = l
             stage_location['type'] = t
-            stage_location['location_well_diff_m'] = pd.to_numeric(elevation_diff, errors='coerce') / 100.0  # convert cm to m
+            stage_location['location_well_diff_m'] = float(elevation_diff.iloc[0]) / 100.0  # convert cm to m
             stage_location['location_depth_m'] = stage_location['well_depth_m'] - stage_location['location_well_diff_m']
-            
+            print(stage_location)
             # Convert the stage location
             stage_location['binary_inundated'] = (stage_location['location_depth_m'] >= 0).astype(int)
             stage_location['binary_10cm_under'] = (stage_location['location_depth_m'] >= -0.10).astype(int)
@@ -156,6 +153,7 @@ for i in wetlands:
                              (hydrographs['type'] == t) &
                             (hydrographs['location'] == l)
             ].dropna(subset=['location_depth_m'])
+
             
             if len(ts) == 0:
                 continue

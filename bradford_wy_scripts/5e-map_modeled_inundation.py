@@ -5,12 +5,17 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 
-tgt_id = '14_418'
+tgt_id = '14_610'
+lai_buffer_dist = 150
 
-distributions_path = 'D:/depressional_lidar/data/bradford/out_data/logging_hypothetical_distributions.csv'
-source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'
+data_dir = data_dir = "D:/depressional_lidar/data/bradford/"
+
+distributions_path = data_dir + f'/out_data/modeled_logging_stages/all_wells_hypothetical_distributions_LAI_{lai_buffer_dist}m.csv'
+wetland_pairs_path = data_dir + f'out_data/strong_ols_models_{lai_buffer_dist}m_all_wells.csv'
+
+source_dem_path = data_dir + '/in_data/bradford_DEM_cleaned_veg.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-shift_results_path = 'D:/depressional_lidar/data/bradford/out_data/logging_hypothetical_shift_results.csv'
+shift_results_path = data_dir + f'/out_data/modeled_logging_stages/all_wells_shift_results_LAI_{lai_buffer_dist}m.csv'
 
 PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
 if PROJECT_ROOT not in sys.path:
@@ -22,8 +27,7 @@ from wetland_utilities.basin_dynamics import BasinDynamics, WellStageTimeseries
 # %% 2.0 Establish the Wetland BasinClass
 
 well_pt = (
-    gpd.read_file(well_points_path)[['wetland_id', 'type', 'rtk_elevat', 'geometry']]
-    .rename(columns={'rtk_elevat': 'rtk_elevation'})
+    gpd.read_file(well_points_path)[['wetland_id', 'type', 'rtk_z', 'geometry']]
     .query("type in ['core_well', 'wetland_well']")
 )
 well_pt = well_pt[well_pt['wetland_id'] == tgt_id]
@@ -33,7 +37,7 @@ basin = WetlandBasin(
     source_dem_path=source_dem_path,
     footprint=None,
     well_point_info=well_pt,
-    transect_buffer=100
+    transect_buffer=50
 )
 
 # %% 3.0 Figure out the proportion of days the well was bottomed out
@@ -54,6 +58,7 @@ dry_proportion = dry_days['dry_proportion'].mean()
 
 print(dry_proportion)
 # %% 3.0 Read the modeled distributions and establish the wetland basin class
+
 distributions = pd.read_csv(distributions_path)
 distributions_clean = distributions[
         (distributions['pre'] >= -1) & (distributions['pre'] <= 1) &
@@ -116,7 +121,7 @@ pre_ts = WellStageTimeseries(
 pre_dynamics = BasinDynamics(
     basin=basin,
     well_stage=pre_ts, 
-    well_to_dem_offset=0.1
+    well_to_dem_offset=0
 )
 pre_dynamics.map_inundation_stacks(
     inundation_frequency=None,
@@ -133,7 +138,7 @@ post_ts = WellStageTimeseries(
 post_dynamics = BasinDynamics(
     basin=basin,
     well_stage=post_ts,
-    well_to_dem_offset=0.1
+    well_to_dem_offset=0
 )
 post_dynamics.map_inundation_stacks(
     inundation_frequency=None,

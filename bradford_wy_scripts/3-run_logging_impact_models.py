@@ -52,7 +52,8 @@ def process_wetland_pair(
     stage_data: pd.DataFrame,
     well_point: gpd.GeoDataFrame,
     source_dem_path: str,
-    min_depth_search_radius: int,
+    #NOTE: Consider removing this parameter, because it impacts inundation-frequency curves later on
+    min_depth_search_radius: int, 
     plot: bool = False
 ):
     """
@@ -101,6 +102,8 @@ def process_wetland_pair(
         footprint=None,
         transect_buffer=min_depth_search_radius
     )
+
+    # NOTE: I'll probably get rid of this step later. 
 
     # Calculate wetland depth timeseries using the deepest point on the DEM
     logged_well_diff = log_basin.well_point.elevation_dem - log_basin.deepest_point.elevation
@@ -218,7 +221,8 @@ for index, row in wetland_pairs.iterrows():
         stage_data=stage_data,
         well_point=well_point,
         source_dem_path=source_dem_path,
-        min_depth_search_radius=min_depth_search_radius,
+        # NOTE: Consider removing this parameter, because it impacts inundation-frequency curves.
+        min_depth_search_radius=min_depth_search_radius, 
         plot=(index in rando_plot_idxs)
     )
     

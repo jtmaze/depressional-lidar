@@ -232,68 +232,68 @@ plt.show()
 
 # %% 6.0 A nine-series boxplot showing depth shifts by connectivity pairings
 
-# Define the order of connectivity pairings (logged-reference)
-# pair_order = [
-#     'giw-giw', 'giw-flow', 'giw-first',
-#     'flow-giw', 'flow-flow', 'flow-first',
-#     'first-giw', 'first-flow', 'first-first'
-# ]
+#Define the order of connectivity pairings (logged-reference)
+pair_order = [
+    'giw-giw', 'giw-flow', 'giw-first',
+    'flow-giw', 'flow-flow', 'flow-first',
+    'first-giw', 'first-flow', 'first-first'
+]
 
-# # Create labels for the x-axis
-# pair_labels = [
-#     'GIW→GIW', 'GIW→Flow', 'GIW→1st',
-#     'Flow→GIW', 'Flow→Flow', 'Flow→1st',
-#     '1st→GIW', '1st→Flow', '1st→1st'
-# ]
+# Create labels for the x-axis
+pair_labels = [
+    'GIW→GIW', 'GIW→Flow', 'GIW→1st',
+    'Flow→GIW', 'Flow→Flow', 'Flow→1st',
+    '1st→GIW', '1st→Flow', '1st→1st'
+]
 
-# # Color mapping based on the logged wetland's connectivity
-# pair_colors = {
-#     'giw-giw': 'blue', 'giw-flow': 'blue', 'giw-first': 'blue',
-#     'flow-giw': 'red', 'flow-flow': 'red', 'flow-first': 'red',
-#     'first-giw': 'orange', 'first-flow': 'orange', 'first-first': 'orange'
-# }
+# Color mapping based on the logged wetland's connectivity
+pair_colors = {
+    'giw-giw': 'blue', 'giw-flow': 'blue', 'giw-first': 'blue',
+    'flow-giw': 'red', 'flow-flow': 'red', 'flow-first': 'red',
+    'first-giw': 'orange', 'first-flow': 'orange', 'first-first': 'orange'
+}
 
-# fig, ax = plt.subplots(figsize=(12, 6))
+fig, ax = plt.subplots(figsize=(12, 6))
 
-# # Create boxplot data grouped by connectivity pairing
-# groups = [plot_data.loc[plot_data['pair_connect'] == pair, "mean_depth_change"] 
-#           for pair in pair_order]
+# Create boxplot data grouped by connectivity pairing
+groups = [plot_data.loc[plot_data['pair_connect'] == pair, "mean_depth_change"] 
+          for pair in pair_order]
 
-# # Filter out empty groups and track which pairs have data
-# valid_pairs = [(pair, label, groups[i]) for i, (pair, label) in enumerate(zip(pair_order, pair_labels)) 
-#                if len(groups[i]) > 0]
+# Filter out empty groups and track which pairs have data
+valid_pairs = [(pair, label, groups[i]) for i, (pair, label) in enumerate(zip(pair_order, pair_labels)) 
+               if len(groups[i]) > 0]
 
-# if valid_pairs:
-#     valid_pair_names, valid_labels, valid_groups = zip(*valid_pairs)
+if valid_pairs:
+    valid_pair_names, valid_labels, valid_groups = zip(*valid_pairs)
     
-#     bp = ax.boxplot(valid_groups, tick_labels=valid_labels, patch_artist=True)
+    bp = ax.boxplot(valid_groups, tick_labels=valid_labels, patch_artist=True)
     
-#     # Color boxes based on logged wetland connectivity
-#     for i, pair in enumerate(valid_pair_names):
-#         color = pair_colors[pair]
-#         bp['boxes'][i].set_facecolor(color)
-#         bp['boxes'][i].set_alpha(0.6)
+    # Color boxes based on logged wetland connectivity
+    for i, pair in enumerate(valid_pair_names):
+        color = pair_colors[pair]
+        bp['boxes'][i].set_facecolor(color)
+        bp['boxes'][i].set_alpha(0.6)
     
-#     for median in bp['medians']:
-#         median.set_color('black')
-#         median.set_linewidth(1.5)
+    for median in bp['medians']:
+        median.set_color('black')
+        median.set_linewidth(1.5)
 
-# ax.set_ylabel("Depth Change (m)")
-# ax.set_xlabel("Connectivity Pairing (Logged → Reference)")
-# ax.set_title("Depth Change by Logged-Reference Connectivity Pairing")
-# plt.xticks(rotation=45, ha='right')
+ax.set_ylabel("Depth Change (m)")
+ax.set_xlabel("Connectivity Pairing (Logged → Reference)")
+ax.set_title("Depth Change by Logged-Reference Connectivity Pairing")
+plt.xticks(rotation=45, ha='right')
 
-# ax.axhline(y=0, color='black', linestyle='--', linewidth=1)
+ax.axhline(y=0, color='black', linestyle='--', linewidth=1)
 
-# # Legend showing logged wetland connectivity
-# legend_elements = [Patch(facecolor=connectivity_config[conn]['color'], 
-#                          label=f"Logged: {connectivity_config[conn]['label']}", 
-#                          alpha=0.6) 
-#                    for conn in connectivity_order]
-# ax.legend(handles=legend_elements, loc='best')
+# Legend showing logged wetland connectivity
+legend_elements = [Patch(facecolor=connectivity_config[conn]['color'], 
+                         label=f"Logged: {connectivity_config[conn]['label']}", 
+                         alpha=0.6) 
+                   for conn in connectivity_order]
+ax.legend(handles=legend_elements, loc='best')
 
-# plt.tight_layout()
-# plt.show()
+plt.tight_layout()
+plt.show()
 
 # %% 7.0 Nine-panel histogram of depth shifts by connectivity pairing (same series as 5.0)
 # Rows = logged wetland connectivity (flow-through, first order, giw)

@@ -6,6 +6,8 @@ library(readxl)
 library(rlang)
 library(glue)
 
+rm(list=ls())
+
 soil_core_dir <- 'D:/depressional_lidar/data/osbs/in_data/sampling_elevations/complete_faith_osbs_soilcore_elevations.xlsx'
 soil_core <- read_excel(
   soil_core_dir,
@@ -13,32 +15,26 @@ soil_core <- read_excel(
 )
 print(unique(soil_core$well_id))
 
-stage_dir <- "D:/depressional_lidar/data/osbs/in_data/stage_data/fall2025_processed_well_depth.csv"
-stage <- read_csv(
-  stage_dir
+core_ids <- c('Devils Den', 'Ross Pond', 'West Ford', 'Brantley North', 'Fish Cove', 'Surprise')
+
+stage_dir <- "D:/depressional_lidar/data/osbs/in_data/stage_data/daily_well_depth_Fall2025.csv"
+daily_stage <- read_csv(stage_dir) %>%
   # I filter out early data so we have consistent period of record across wetlands, safe comparison
-) %>% filter(Date >= as.POSIXct('2022-03-09 12:00:00', tz='UTC'))
+   filter(date >= as.POSIXct('2022-03-09 12:00:00', tz='UTC')) %>% 
+   filter(well_id %in% core_ids)
 
 well_id_key <- tibble(
   'Fish Cove' = 'Fishcove',
-  'Ross' = 'Ross Pond', 
   'Surprise' = 'Surprise Pond',
 )
 
-daily_stage <- stage %>% 
-  # Take daily mean water level for easier computation
-  mutate(day = as.Date(Date)) %>% 
-  group_by(day, well_id) %>% 
-  summarise(
-    well_depth_m = mean(water_level, na.rm = TRUE),
-    #max_depth_m = mean(max_depth_m, na.rm = TRUE),
-  ) %>% 
+daily_stage <- daily_stage %>% 
   mutate(
     well_id = recode(well_id, !!!well_id_key, .default=well_id)
-  )
+  ) %>% 
+  rename('day'='date')
   
-  
-print(unique(daily_stage$well_id))
+print(str(daily_stage))
 
 # 2.0 Munge the soil core data into a summary table ----------------------------------------------
 
@@ -209,7 +205,7 @@ p <- ggplot(plot_df,
   geom_col(position="dodge") +   
   labs(
     x="Soil Core ID",
-    y="Stage discrepancy (well logger - core) (m)",
+    y="Stage discrepancy (core check - well logger) (m)",
     fill="Well ID",
     title="Stage discrepancy on sample date between well logger (elevation adjusted) and field measurement @core"
   ) +

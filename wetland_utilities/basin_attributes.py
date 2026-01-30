@@ -362,7 +362,7 @@ class WetlandBasin:
         )
 
     def calculate_hypsometry(self, method: str = "total_cdf"):
-        step = 0.01 # NOTE: Hardcoded this for now
+        step = 0.001 # NOTE: Hardcoded this for now
         dem_data = self.clipped_dem.dem
         flat_dem = dem_data.flatten()
         dem_scale = self.clipped_dem.transform.a 
