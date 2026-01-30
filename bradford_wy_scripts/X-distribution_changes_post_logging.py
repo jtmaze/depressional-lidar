@@ -5,77 +5,32 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats 
 
+lai_buffer_dist = 150
 
 data_dir = "D:/depressional_lidar/data/bradford/"
-distributions_path = data_dir + '/out_data/logging_hypothetical_distributions.csv'
-pairs_path = data_dir + 'out_data/strong_ols_models.csv'
+distributions_path = data_dir + f'/out_data/modeled_logging_stages/all_wells_hypothetical_distributions_LAI_{lai_buffer_dist}m.csv'
+pairs_path = data_dir + f'out_data/strong_ols_models_{lai_buffer_dist}m_all_wells.csv'
 pairs = pd.read_csv(pairs_path)
 distributions = pd.read_csv(distributions_path)
 
 unique_log_ids = distributions['log_id'].unique()
 unique_ref_ids = distributions['ref_id'].unique()
 
-# combinations_list = []
-# for ref_id in unique_ref_ids:
-#     for log_id in unique_log_ids:
-#         combinations_list.append({
-#             'ref_id': ref_id,
-#             'log_id': log_id,
-#         })
-# pairs = pd.DataFrame(combinations_list)
+combinations_list = []
+for ref_id in unique_ref_ids:
+    for log_id in unique_log_ids:
+        combinations_list.append({
+            'ref_id': ref_id,
+            'log_id': log_id,
+        })
+pairs = pd.DataFrame(combinations_list)
+
 pairs['ref_log'] = pairs['ref_id'] + '_' + pairs['log_id']
  
 
 distributions = distributions[distributions['log_id'] == '15_268']
 pairs = pairs[pairs['log_id'] == '15_268']
 
-
-# %%
-
-# fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
-
-# for idx, row in pairs.iterrows():
-
-#     log_id = row['log_id']
-#     ref_id = row['ref_id']
-    
-#     subset = distributions[
-#         (distributions['log_id'] == log_id) & (distributions['ref_id'] == ref_id)
-#     ].copy()
-
-#     pre_dist = subset['pre'].to_numpy()
-#     post_dist = subset['post'].to_numpy()
-
-#     kde_pre = stats.gaussian_kde(pre_dist)
-#     x_pre = np.linspace(pre_dist.min(), pre_dist.max(), 200)
-#     axes[1].plot(x_pre, kde_pre(x_pre), 
-#                 color='grey', 
-#                 linewidth=2.5, 
-#                 alpha=0.3,
-#     )
-
-#     kde_post = stats.gaussian_kde(post_dist)
-#     x_post = np.linspace(post_dist.min(), post_dist.max(), 200)
-#     axes[0].plot(x_post, kde_post(x_post), 
-#                 color='red', 
-#                 linewidth=2.5, 
-#                 alpha=0.3
-#     )
-
-# axes[0].set_title('Post-Logging Depth Distribution', fontsize=14, fontweight='bold')
-# axes[0].set_ylabel('Density', fontsize=12)
-# axes[0].grid(True, alpha=0.3)
-
-# axes[1].set_title('Pre-Logging Depth Distribution', fontsize=14, fontweight='bold')
-# axes[1].set_xlabel('Depth [m]', fontsize=12)
-# axes[1].set_ylabel('Density', fontsize=12)
-# axes[1].grid(True, alpha=0.3)
-
-# plt.tight_layout()
-# plt.xlim(-0.5, 1)
-# axes[0].set_ylim(0, 25)
-# axes[1].set_ylim(0, 25)
-# plt.show()
     
 # %% Plot the aggregated (over all pairs) pre and post logging distributions
 

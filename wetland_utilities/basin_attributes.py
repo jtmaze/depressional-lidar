@@ -301,12 +301,12 @@ class WetlandBasin:
 
     def establish_well_point(self, well_point_info: gpd.GeoSeries) -> WellPoint:
         """
-        Uses well point (lat, long, rtk_elevation) to establish a WellPoint.
+        Uses well point (lat, long, rtk_z) to establish a WellPoint.
         """
 
         if len(well_point_info) > 1:
-            # Prefer rows with non-null rtk_elevation
-            valid_rtk = well_point_info[well_point_info['rtk_elevation'].notna()]
+            # Prefer rows with non-null rtk_z
+            valid_rtk = well_point_info[well_point_info['rtk_z'].notna()]
             if len(valid_rtk) > 0:
                 well_point_info = valid_rtk.iloc[[0]]
             else:
@@ -317,7 +317,7 @@ class WetlandBasin:
             well_point_info = well_point_info.to_crs(self.footprint.crs)
 
         elevation_dem = self._find_point_elevation(well_point_info.geometry)
-        rtk = float(well_point_info['rtk_elevation'].values[0])
+        rtk = float(well_point_info['rtk_z'].values[0])
 
         return WellPoint(
             elevation_dem=elevation_dem,
@@ -335,8 +335,8 @@ class WetlandBasin:
         # Filter to single point if multiple rows exist
         well_point_info = self.well_point_info
         if len(well_point_info) > 1:
-            # Prefer rows with non-null rtk_elevation
-            valid_rtk = well_point_info[well_point_info['rtk_elevation'].notna()]
+            # Prefer rows with non-null rtk_z
+            valid_rtk = well_point_info[well_point_info['rtk_z'].notna()]
             if len(valid_rtk) > 0:
                 well_point_info = valid_rtk.iloc[[0]]
             else:
@@ -352,7 +352,8 @@ class WetlandBasin:
             dem_data = np.where(dem_data==dem.nodata, np.nan, dem_data)
             elevation_dem = float(np.nanmean(dem_data))
 
-        rtk = float(self.well_point_info['rtk_elevation'].values[0])
+        rtk_val = well_point_info['rtk_z'].values[0]
+        rtk = float(rtk_val) if rtk_val is not None else np.nan
         
         return WellPoint(
             elevation_dem=elevation_dem,

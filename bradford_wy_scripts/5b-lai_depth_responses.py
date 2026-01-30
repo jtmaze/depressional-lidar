@@ -275,9 +275,9 @@ from scipy.stats import t
 
 fig, ax = plt.subplots(figsize=(10, 6))
 
-connectivity_levels = ['flow-through', 'giw']
-connectivity_labels = {'flow-through': 'Flow-through', 'giw': 'GIW'}
-connectivity_colors = {'flow-through': 'red', 'giw': 'blue'}
+connectivity_levels = ['flow-through', 'giw', 'first order']
+connectivity_labels = {'flow-through': 'Flow-through', 'giw': 'GIW', 'first order': '1st Order Ditched'}
+connectivity_colors = {'flow-through': 'red', 'giw': 'blue', 'first order': 'orange'}
 
 for conn_level in connectivity_levels:
     subset = plot_df[plot_df['log_connected'] == conn_level]

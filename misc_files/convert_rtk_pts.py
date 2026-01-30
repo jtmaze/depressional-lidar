@@ -99,13 +99,13 @@ def estimate_pts_dem_elevation(
 
 # %% 3.0 Convert Bradford and OSBS RTK points to GeoDataFrames
 
-bradford_gdf = convert_pts_to_gpd(bradford_points, crs='EPSG:4326', latitude_colname='rtk_latitude', longitude_colname='rtk_longitude')
+bradford_gdf = convert_pts_to_gpd(bradford_points, crs='EPSG:4326', latitude_colname='latitude', longitude_colname='longitude')
 bradford_gdf['site'] = 'bradford'
-osbs_gdf = convert_pts_to_gpd(osbs_points, crs='EPSG:4326', latitude_colname='rtk_latitude', longitude_colname='rtk_longitude')
+osbs_gdf = convert_pts_to_gpd(osbs_points, crs='EPSG:4326', latitude_colname='latitude', longitude_colname='longitude')
 osbs_gdf['site'] = 'osbs'
 
 # %% 4.0 Estimate DEM elevation for Bradford and OSBS points
-# Convert to DEM crs for elevation extraction and filter empty geometries
+# Convert to DEM's crs for elevation extraction and filter empty geometries
 bradford_gdf = bradford_gdf.to_crs('EPSG:26917')
 bradford_gdf = bradford_gdf[~bradford_gdf.geometry.is_empty & bradford_gdf.geometry.notna()]
 osbs_gdf = osbs_gdf.to_crs('EPSG:26917')
@@ -114,25 +114,9 @@ osbs_gdf = osbs_gdf[~osbs_gdf.geometry.is_empty & osbs_gdf.geometry.notna()]
 bradford_gdf = estimate_pts_dem_elevation(
     bradford_gdf,
     dem_path='./bradford/in_data/bradford_DEM_cleaned_veg.tif',
-    method='single',
-    window_size=None,
-    elevation_colname='elevation_dem_single'
-)
-
-bradford_gdf = estimate_pts_dem_elevation(
-    bradford_gdf,
-    dem_path='./bradford/in_data/bradford_DEM_cleaned_veg.tif',
     method='window_mean',
     window_size=3,
-    elevation_colname='elevation_dem_windowed'
-)
-
-osbs_gdf = estimate_pts_dem_elevation(
-    osbs_gdf,
-    dem_path='./osbs/in_data/osbs_DEM_cleaned_veg.tif',
-    method='single',
-    window_size=None,
-    elevation_colname='elevation_dem_single'
+    elevation_colname='z_dem'
 )
 
 osbs_gdf = estimate_pts_dem_elevation(
@@ -140,18 +124,19 @@ osbs_gdf = estimate_pts_dem_elevation(
     dem_path='./osbs/in_data/osbs_DEM_cleaned_veg.tif',
     method='window_mean',
     window_size=3,
-    elevation_colname='elevation_dem_windowed'
+    elevation_colname='z_dem'
 )
 
-# %%
+# %% 5.0 Combine and write to file
 
 combined_gdf = pd.concat([bradford_gdf, osbs_gdf], ignore_index=True)
 combined_gdf = gpd.GeoDataFrame(combined_gdf, crs='EPSG:26917')
-combined_gdf['rtk_dem_diff'] = combined_gdf['elevation_dem_single'] - combined_gdf['rtk_elevation']
+combined_gdf['rtk_dem_d'] = combined_gdf['z_dem'] - pd.to_numeric(combined_gdf['rtk_z'], errors='coerce')
 
 combined_gdf.to_file('rtk_pts_with_dem_elevations.shp')
 
 # %%
+
 """
 Plots to explore RTK and DEM efficacy
 """

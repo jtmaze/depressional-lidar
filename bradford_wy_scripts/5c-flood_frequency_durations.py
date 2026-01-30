@@ -12,24 +12,25 @@ if PROJECT_ROOT not in sys.path:
 
 from wetland_utilities.basin_attributes import WetlandBasin
 
-buffer = 75
+buffer = 50
+lai_buffer_dist = 150
 
 data_dir = "D:/depressional_lidar/data/bradford/"
 source_dem_path = data_dir + '/in_data/bradford_DEM_cleaned_veg.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-footprints_path = data_dir + '/in_data/bradford_basins_assigned_wetland_ids_KG.shp'
-distributions_path = data_dir + 'out_data/logging_hypothetical_distributions.csv'
-wetland_pairs_path = data_dir + 'out_data/strong_ols_models.csv'
-footprints = gpd.read_file(footprints_path)
+
+distributions_path = data_dir + f'/out_data/modeled_logging_stages/all_wells_hypothetical_distributions_LAI_{lai_buffer_dist}m.csv'
+wetland_pairs_path = data_dir + f'out_data/strong_ols_models_{lai_buffer_dist}m_all_wells.csv'
+
+
 well_point = (
-    gpd.read_file(well_points_path)[['wetland_id', 'type', 'rtk_elevat', 'geometry']]
-    .rename(columns={'rtk_elevat': 'rtk_elevation'})
+    gpd.read_file(well_points_path)[['wetland_id', 'type', 'rtk_z', 'geometry']]
     .query("type in ['core_well', 'wetland_well']")
 )
 
 pairs = pd.read_csv(wetland_pairs_path)
 unique_log_ids = pairs['log_id'].unique()
-unique_log_ids = ['9_439']
+print(unique_log_ids)
 distributions = pd.read_csv(distributions_path)
 
 distributions = distributions[distributions['log_id'].isin(unique_log_ids)]
@@ -47,13 +48,14 @@ for i in unique_log_ids:
         footprint=None,
         transect_buffer=buffer 
     )
+
     b.visualize_shape(
         show_deepest=False, 
         show_well=True, 
         show_centroid=False, 
         show_shape=False
     )
-    b.plot_basin_hypsometry()
+    b.plot_basin_hypsometry(plot_points=True)
 
     hypsometry = b.calculate_hypsometry(method="total_cdf")
     wetland_min = b.deepest_point.elevation

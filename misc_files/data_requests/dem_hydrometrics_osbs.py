@@ -22,19 +22,19 @@ osbs_core_wells = osbs_core_wells[osbs_core_wells['date'] >= '2022-03-09']
 print(osbs_core_wells['flag'].unique())
 
 # Quick check on osbs core well timeseries:
-# import plotly.express as px
+import plotly.express as px
 
-# # # Create interactive timeseries
-# fig = px.line(
-#     osbs_core_wells.sort_values('date'),
-#     x='date',
-#     y='well_depth_m',
-#     color='well_id',
-#     title='Well Depth Over Time',
-#     markers=True
-# )
+# # Create interactive timeseries
+fig = px.line(
+    osbs_core_wells.sort_values('date'),
+    x='date',
+    y='well_depth_m',
+    color='well_id',
+    title='Well Depth Over Time',
+    markers=True
+)
 
-# fig.show()
+fig.show()
 
 # %% 2.0 List out osbs wetlands, types and locations
 
@@ -50,43 +50,6 @@ remove_types = ['core_well', 'wetland_well']
 types = [t for t in types if t not in remove_types]
 print(types)
 
-# %% Line plot of well depth at Ross Pond
-
-import matplotlib.pyplot as plt
-
-# Filter data for Ross Pond and Surprise only
-wells_to_plot = ['Ross Pond', 'Surprise']
-plot_data = osbs_core_wells[osbs_core_wells['well_id'].isin(wells_to_plot)].copy()
-plot_data['date'] = pd.to_datetime(plot_data['date'])
-
-plt.figure(figsize=(12, 6))
-
-# Define colors and depth adjustments for each well
-colors = {
-    'Ross Pond': '#B22222',  # darker red (firebrick)
-    'Surprise': '#1E90FF'    # darker blue (dodgerblue)
-}
-ross_diff = -0.07
-surprise_diff = -1.5
-
-depth_adjustments = {
-    'Ross Pond': ross_diff,
-    'Surprise': surprise_diff
-}
-
-# Plot each well with its color and adjusted depth
-for well_id in wells_to_plot:
-    well_data = plot_data[plot_data['well_id'] == well_id].copy()
-    well_data['adjusted_depth'] = well_data['well_depth_m'] - depth_adjustments[well_id]
-    plt.plot(well_data['date'], well_data['adjusted_depth'], linewidth=1.5, color=colors[well_id], label=well_id)
-
-plt.axhline(y=0, color='black', linestyle='--', linewidth=1, alpha=0.5, label='Deepest point')
-plt.ylabel('Depth at Deepest Point (m)', fontsize=14)
-plt.title('Water Depth at Deepest Point - Ross Pond and Surprise', fontsize=14, fontweight='bold')
-plt.legend(loc='best')
-plt.grid(True, alpha=0.3)
-plt.tight_layout()
-plt.show()
 
 # %% 3.0 Calculate sensor hydrographs based on difference in DEM elevations
 
@@ -100,7 +63,7 @@ for i in core_wells:
     well_z = points_osbs[
         (points_osbs['type'] == 'core_well') & 
         (points_osbs['wetland_id'] == i)
-    ]['elevation_']
+    ]['rtk_z']
 
     well_z = float(well_z.iloc[0])
 
@@ -112,8 +75,8 @@ for i in core_wells:
                 (points_osbs['type'] == t) & 
                 (points_osbs['location'] == l)]
             
-            location_z = location_pt['elevation_']
-            
+            location_z = location_pt['rtk_z']
+            elevation_diff = location_pt['rel_h_well']
             if len(location_z) == 0:
                 print(f"Warning -- no data type {t} at location {l} for wetland {i}")
                 continue
@@ -121,13 +84,13 @@ for i in core_wells:
                 location_z = float(location_z.iloc[0])
 
             print(i, l)
-            elevation_diff = location_z - well_z
+            # elevation_diff = location_z - well_z
 
             stage_location = stage.copy()
             stage_location['location'] = l
             stage_location['type'] = t
-            stage_location['location_well_diff_m'] = elevation_diff
-            stage_location['location_depth_m'] = stage_location['well_depth_m'] - elevation_diff
+            stage_location['location_well_diff_m'] = pd.to_numeric(elevation_diff, errors='coerce') / 100.0  # convert cm to m
+            stage_location['location_depth_m'] = stage_location['well_depth_m'] - stage_location['location_well_diff_m']
             
             # Convert the stage location
             stage_location['binary_inundated'] = (stage_location['location_depth_m'] >= 0).astype(int)
@@ -164,6 +127,7 @@ for i in core_wells:
             pt_summary = pd.DataFrame({
                 'location_dem_z': [location_z],
                 'well_dem_z': [well_z],
+                'elevation_survey_h_cm': [elevation_diff],
                 'location': [l],
                 'type': [t],
                 'wetland_id': [i],
@@ -274,46 +238,12 @@ summary = pd.DataFrame(summary_dfs)
 
 # %% 6.0 Write the files
 
-# hydrographs_path = './osbs/out_data/misc_stuff/osbs_hydrographs_for_Sunita_Audrey.csv'
-# summary_path = './osbs/out_data/misc_stuff/osbs_hydro_summary_for_Sunita_Audrey.csv'
+hydrographs_path = './osbs/out_data/misc_stuff/FaithSurvey_osbs_hydrographs_for_Sunita_Audrey.csv'
+summary_path = './osbs/out_data/misc_stuff/FaithSurvey_osbs_hydro_summary_for_Sunita_Audrey.csv'
 
-# hydrographs.to_csv(hydrographs_path, index=False)
-# summary.to_csv(summary_path, index=False)
+hydrographs.to_csv(hydrographs_path, index=False)
+summary.to_csv(summary_path, index=False)
 
-# %% 7.0 Quick plot 
-import matplotlib.pyplot as plt
-import pandas as pd
 
-# Filter for Ross Pond and convert date to datetime
-plot_df = hydrographs[hydrographs['well_id'] == 'Ross Pond'].copy()
-plot_df = plot_df[plot_df['location'] != 'U']
-plot_df['date'] = pd.to_datetime(plot_df['date'])
-
-# Create the timeseries plot
-fig, ax = plt.subplots(figsize=(14, 6))
-
-# Define color scheme: deep blue (wetland) to warm brown (upland)
-colors = {
-    'W1': '#006994',  # Deep ocean blue (wettest)
-    'W2': '#2E8B57',  # Sea green (transitional)
-    'W3': '#8B6914',  # Dark goldenrod (drier)
-    'W4': '#A0522D',  # Sienna (dry)
-    'U': '#654321'    # Dark brown (upland/driest)
-}
-
-# Plot each location with assigned colors
-for location in ['W1', 'W2', 'W3', 'W4', 'U']:
-    if location in plot_df['location'].unique():
-        location_data = plot_df[plot_df['location'] == location].sort_values('date')
-        ax.plot(location_data['date'], location_data['location_depth_m'], 
-                label=f'{location}', linewidth=1.5, alpha=0.8, color=colors[location])
-
-ax.axhline(y=0, color='black', linestyle='--', linewidth=1, alpha=0.5, label='Ground surface')
-ax.set_ylabel('Depth at Location (m)', fontsize=12)
-ax.set_title('Ross Pond - Water Depth Time Series by Location', fontsize=16, fontweight='bold')
-ax.legend(loc='best', ncol=2, fontsize='large')
-ax.grid(True, alpha=0.3)
-plt.tight_layout()
-plt.show()
 
 # %%
