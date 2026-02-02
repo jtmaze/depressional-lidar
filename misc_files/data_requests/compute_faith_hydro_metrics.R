@@ -84,7 +84,7 @@ calculate_stage_comp <- function(elevation_temp, stage_temp, core_well_elevation
     ))
   }
   
-  # cm to meters and change convention (negative means below ground)
+  # cm to meters and change sign convention (negative means below ground)
   core_stage <- as.numeric(unique(core_depths_cm)) / -100 
   
   well_stage_on_date <- stage_temp %>% 
@@ -142,8 +142,9 @@ fetch_core_info <- function(stage_df, elevation_df, target_well_id, core_id){
 }
 
 fetch_slice_hydrograph <- function(stage_df, elevation_slice_df, target_well_id, core_id, tgt_depth_slice){
-  # Similar to fetch core info; however, only fetches hydrograph for a given elevation
-  # slice in the soil core. Uses the mid-point of the depth increments to assign the hydrograph
+  # Similar to fetch core info; however, fetches hydrograph for a given elevation
+  # within the soil core. 
+  # Uses the mid-point of the depth increments to assign the hydrograph
   
   stage_temp <- stage_df %>% 
     filter(well_id == target_well_id)
@@ -220,13 +221,13 @@ print(p)
 
 calc_hydrograph_stats <- function(hydrograph, var_name="sample_stage_m") {
   
-  hg <- hydrograph[[var_name]] # Note var_name is dynamic for depth incrmentn metrics later
+  hg <- hydrograph[[var_name]] # Note var_name is dynamic for depth incrmentn midpt metrics later
   stats <- tibble(
-    mean_stage=mean(hg, na.rm=TRUE), 
-    median_stage=median(hg, na.rm=TRUE),
-    sd_stage=sd(hg, na.rm=TRUE),
-    p20_stage=quantile(hg, 0.2, na.rm=TRUE, names=FALSE),
-    p80_stage=quantile(hg, 0.8, na.rm=TRUE, names=FALSE)
+    mean_stage_full_ts=mean(hg, na.rm=TRUE), 
+    median_stage_full_ts=median(hg, na.rm=TRUE),
+    sd_stage_full_ts=sd(hg, na.rm=TRUE),
+    p20_stage_full_ts=quantile(hg, 0.2, na.rm=TRUE, names=FALSE),
+    p80_stage_full_ts=quantile(hg, 0.8, na.rm=TRUE, names=FALSE)
   )
   return(stats)
 }
@@ -248,10 +249,13 @@ soil_core_slice_summary <- soil_core_slice_summary %>%
 # 5.0 Functions for binary hydrometrics ----------------------------------------------
 
 inundated_durations <- function(binary) {
+
+  # run-length encoding function returns vector of lengths and values
   r <- rle(binary)
   # Subset to only the runs with value == 1
   flooded_lengths <- r$lengths[ r$values == 1L ]
   
+  # bail early if always dry
   if (length(flooded_lengths) == 0L) {
     return(tibble(
       max_inundated    = 0,
@@ -290,7 +294,7 @@ wet_dry_events <- function(binary, wet_dry) {
 
 compute_binary_metrics <- function(hydrograph) {
  
- # Remove any na observations to ensure they aren't counted
+ # Remove any NA observations to ensure they aren't counted
  binary <- hydrograph %>% 
    drop_na(sample_stage_m) %>% 
    distinct(day, .keep_all=TRUE) %>% 
@@ -298,20 +302,19 @@ compute_binary_metrics <- function(hydrograph) {
    transmute(day, inundated=as.integer(sample_stage_m >= 0))
  
  hydroperiod_percent <- mean(binary$inundated) * 100
- print(hydroperiod_percent)
  
  durations <- inundated_durations(binary$inundated)
  wet_events <- wet_dry_events(binary$inundated, 'wet')
  dry_events <- wet_dry_events(binary$inundated, 'dry')
  
  binary_metrics = tibble(
-   hydroperiod_percent = hydroperiod_percent,
-   max_inundated_durration = durations$max_inundated,
-   min_inundated_durration = durations$min_inundated,
-   median_inundated_durration = durations$median_inundated,
-   mean_inundated_durration = durations$mean_inundated,
-   wetup_event_count = wet_events,
-   dry_event_count = dry_events
+   pti_full_ts = hydroperiod_percent,
+   max_inundated_durration_full_ts = durations$max_inundated,
+   min_inundated_durration_full_ts = durations$min_inundated,
+   median_inundated_durration_full_ts = durations$median_inundated,
+   mean_inundated_durration_full_ts = durations$mean_inundated,
+   wetup_event_count_full_ts = wet_events,
+   dry_event_count_full_ts = dry_events
  )
 
  return(binary_metrics)
@@ -354,6 +357,29 @@ get_prior_hydrograph_mean <- function(hg, sample_date, look_back){
   
 }
 
+get_prior_hydrograph_inundation <- function(hg, sample_date, look_back){
+  # Helper function for calc_sample_date_info()
+  
+  window_start <- sample_date - days(look_back)
+  
+  hg_binary <- hg %>% 
+    drop_na(sample_stage_m) %>% 
+    distinct(day, .keep_all=TRUE) %>% 
+    arrange(day) %>% 
+    transmute(day, inundated=as.integer(sample_stage_m >= 0))
+  
+  hydroperiod_percent <- mean(hg_binary$inundated) * 100
+  wet_events <- wet_dry_events(hg_binary$inundated, 'wet')
+  dry_events <- wet_dry_events(hg_binary$inundated, 'dry')
+  
+  return(tibble(
+    pti=hydroperiod_percent,
+    wet_events=wet_events,
+    dry_events=dry_events
+  ))
+  
+}
+
 calc_sample_date_info <- function(hydrograph, sample_date) {
   
   days <- as.Date(hydrograph$day)
@@ -365,25 +391,33 @@ calc_sample_date_info <- function(hydrograph, sample_date) {
       mean_30d_stage=NA_real_, 
       mean_60d_stage=NA_real_,
       mean_90d_stage=NA_real_,
+      mean_1yr_stage=NA_real_,
       stage_60d_deviation=NA_real_
     ))
   }
   
   mean_30 <- get_prior_hydrograph_mean(hydrograph, sample_date, 30)
-  mean_60 <- get_prior_hydrograph_mean(hydrograph, sample_date, 60)
   mean_90 <- get_prior_hydrograph_mean(hydrograph, sample_date, 90)
+  mean_1yr_stage <- get_prior_hydrograph_mean(hydrograph, sample_date, 365)
+  
+  inundation_1yr <- get_prior_hydrograph_inundation(hydrograph, sample_date, 365)
+  inundation_90d <- get_prior_hydrograph_inundation(hydrograph, sample_date, 90)
   
   sample_date_stage <- hydrograph %>% 
     filter(day == sample_date) %>% 
     pull()
   
-  print(mean_90)
-  
   sample_date_info = tibble(
     sample_date_stage = sample_date_stage,
     mean_30d_stage = mean_30,
-    mean_60d_stage = mean_60,
     mean_90d_stage = mean_90,
+    mean_1yr_stage = mean_1yr_stage, 
+    pti_1yr = inundation_1yr %>% pull(pti),
+    wet_event_1yr = inundation_1yr %>% pull(wet_events),
+    dry_event_1yr = inundation_1yr %>% pull(dry_events),
+    pti_90d = inundation_90d %>% pull(pti), 
+    wet_event_90d = inundation_90d %>% pull(wet_events),
+    dry_event_90d = inundation_90d %>% pull(dry_events)
   )
   
   return(sample_date_info)
@@ -411,14 +445,16 @@ soil_core_slice_summary <- soil_core_slice_summary %>%
 # ...  6.2 Calculate sample devation from long-term average ----------------------------------------
 
 soil_core_summary <- soil_core_summary %>% 
-  select(-c('core_hydrograph')) %>% 
-  mutate(deviation_60d_from_mean = mean_60d_stage - mean_stage)
+  select(-c('core_hydrograph', 'sample_date_stage')) %>% 
+  mutate(difference_90d_from_full_mean = mean_90d_stage - mean_stage_full_ts) %>% 
+  mutate(zscore_90d = (mean_90d_stage - mean_stage_full_ts) / sd_stage_full_ts)
 
 
 soil_core_slice_summary <- soil_core_slice_summary %>% 
-  select(-c('slice_hydrograph')) %>% 
-  mutate(deviation_60d_from_mean = mean_60d_stage - mean_stage)
-
+  select(-c('slice_hydrograph', 'sample_date_stage')) %>% 
+  mutate(difference_90d_from_full_mean = mean_90d_stage - mean_stage_full_ts) %>% 
+  mutate(zscore_90d = (mean_90d_stage - mean_stage_full_ts) / sd_stage_full_ts)
+  
 # 7.0 Write soil core summary --------------------------------------------
 
 output_cores <- soil_core_summary 
