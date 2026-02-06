@@ -10,14 +10,37 @@ os.chdir('D:/depressional_lidar/data/')
 
 points_master = gpd.read_file('./rtk_pts_with_dem_elevations.shp')
 
-core_wells = ['13_267', '14_500', '15_409', '6_93', '14_612', '5a_582']
+core_wells = ['15_516']
 
-bradford_core_wells = pd.read_csv('./bradford/in_data/stage_data/bradford_daily_stage_Winter2025.csv')
+bradford_core_wells = pd.read_csv('./bradford/in_data/stage_data/bradford_daily_well_depth_Winter2025.csv')
 bradford_core_wells = bradford_core_wells[
     bradford_core_wells['well_id'].isin(core_wells)
 ]
 
 print(bradford_core_wells['flag'].unique())
+
+# %%
+import plotly.express as px
+plot_df = bradford_core_wells[bradford_core_wells['flag'] == 0].copy()
+# # Create interactive timeseries
+fig = px.line(
+    plot_df.sort_values('date'),
+    x='date',
+    y='well_depth_m',
+    color='well_id',
+    title='Well Depth Over Time',
+    markers=True
+)
+
+# Add a horizontal line for the mean of each well
+for well in bradford_core_wells['well_id'].unique():
+    mean_depth = bradford_core_wells[bradford_core_wells['well_id'] == well]['well_depth_m'].mean()
+    fig.add_hline(y=mean_depth, line_dash="dot",
+                  annotation_text=f"Mean {well}", 
+                  annotation_position="bottom right")
+
+
+fig.show()
 
 # %% 2.0 List out bradford wetlands, types and locations
 
@@ -45,7 +68,7 @@ for i in core_wells:
     well_z = points_bradford[
         (points_bradford['type'] == 'core_well') & 
         (points_bradford['wetland_id'] == i)
-    ]['elevation_']
+    ]['z_dem']
 
     well_z = float(well_z.iloc[0])
 
@@ -57,7 +80,7 @@ for i in core_wells:
                 (points_bradford['type'] == t) & 
                 (points_bradford['location'] == l)]
             
-            location_z = location_pt['elevation_']
+            location_z = location_pt['z_dem']
             
             if len(location_z) == 0:
                 print(f"Warning -- no data type {t} at location {l} for wetland {i}")
@@ -121,6 +144,14 @@ for i in core_wells:
 
 hydrographs = pd.concat(out_dfs, ignore_index=True)
 point_elevations = pd.concat(point_elevations_dfs, ignore_index=True)
+
+print(hydrographs)
+
+# %%
+
+above_ground = hydrographs[hydrographs['location_depth_m'] >= 0]
+
+print(len(above_ground)/len(hydrographs))
 
 # %% 5.0 Compute the hydro summary for each sensor
 

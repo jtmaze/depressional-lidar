@@ -7,7 +7,7 @@ from matplotlib.patches import Patch
 lai_buffer_dist = 150
 data_dir = "D:/depressional_lidar/data/bradford/"
 shift_path = data_dir + f'/out_data/modeled_logging_stages/all_wells_shift_results_LAI_{lai_buffer_dist}m.csv'
-connectivity_key_path = data_dir + '/bradford_wetland_connect_key.xlsx'
+connectivity_key_path = data_dir + '/bradford_wetland_connect_logging_key.xlsx'
 strong_pairs_path = data_dir + f'out_data/strong_ols_models_{lai_buffer_dist}m_all_wells.csv'
 
 shift_data = pd.read_csv(shift_path)

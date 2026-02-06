@@ -12,8 +12,6 @@ df = pd.read_csv(input_path).drop(
     columns=['head_m', 'offset_value', 'offset_version', 'notes']
 )
 
-# %%
-
 df['timestamp'] = pd.to_datetime(df['timestamp'])
 df['date'] = df['timestamp'].dt.date
 
@@ -21,7 +19,6 @@ daily_df = df.groupby(['date', 'well_id']).agg({
     'well_depth_m': 'mean',
     'flag': 'max'
 }).reset_index()
-
 
 # %% 3.0 Write the output
 

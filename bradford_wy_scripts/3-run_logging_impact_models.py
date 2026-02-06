@@ -19,7 +19,7 @@ from bradford_wy_scripts.functions.wetland_logging_functions import (
 from wetland_utilities.basin_attributes import WetlandBasin
 
 well_inc = 'all_wells'
-min_depth_search_radius = 50
+min_depth_search_radius = None
 lai_buffer = 150
 
 stage_path = "D:/depressional_lidar/data/bradford/in_data/stage_data/bradford_daily_well_depth_Winter2025.csv"
@@ -29,7 +29,6 @@ footprints_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_basins_a
 
 wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer}m_{well_inc}.csv'
 wetland_pairs = pd.read_csv(wetland_pairs_path)
-wetland_pairs = wetland_pairs[wetland_pairs['logged_hydro_sufficient'] == True]
 
 # %% 2.0 Load the stage data and well coordinates
 
@@ -38,8 +37,7 @@ stage_data['well_id'] = stage_data['well_id'].str.replace('/', '.')
 stage_data['day'] = pd.to_datetime(stage_data['date'])
 
 well_point = (
-    gpd.read_file(well_points_path)[['wetland_id', 'type', 'rtk_elevat', 'geometry']]
-    .rename(columns={'rtk_elevat': 'rtk_elevation'})
+    gpd.read_file(well_points_path)[['wetland_id', 'type', 'geometry', 'rtk_z']]
     .query("type in ['core_well', 'wetland_well']")
 )
 
@@ -47,47 +45,33 @@ well_point = (
 
 # %% 3.1 Wrapper function to process a single wetland pair
 
-def process_wetland_pair(
-    row,
-    stage_data: pd.DataFrame,
+def timeseries_qaqc(df):
+    """ """
+    df = df[df['flag'] != 1]
+    df = df.dropna(subset=['well_depth_m'])
+    min_date = min(df['date'])
+    max_date = max(df['date'])
+    df_cleaned, bottomed_well_days = remove_flagged_buffer(df, buffer_days=0)
+
+    return {
+        'clean_ts': df_cleaned,
+        'bottomed_dates': bottomed_well_days,
+        'min_date': min_date,
+        'max_date': max_date,
+    }
+
+def dem_depth_censor(
+    reference_ts: pd.DataFrame,
+    logged_ts: pd.DataFrame, 
     well_point: gpd.GeoDataFrame,
     source_dem_path: str,
-    #NOTE: Consider removing this parameter, because it impacts inundation-frequency curves later on
-    min_depth_search_radius: int, 
-    plot: bool = False
+    depth_thresh: float = 0.0,
+    min_depth_search_radius = 50
 ):
-    """
-    Process a single logged/reference wetland pair and return model results.
-    
-    Returns:
-        dict with keys: 'model_results', 'shift_results', 'residual_results', 'distribution_results'
-    """
-    logged_id = row['logged_id']
-    reference_id = row['reference_id']
-    logging_date = row['logging_date']
-    print(f"Processing pair: {logged_id} vs {reference_id} (logged: {logging_date})")
-
-    # Filter and clean stage data for this pair
-    logged_ts = stage_data[stage_data['well_id'] == logged_id].copy()
-    logged_ts = logged_ts.dropna(subset=['well_depth_m'])
-    logged_ts, removed_log_days = remove_flagged_buffer(logged_ts, buffer_days=0)
-    
-    reference_ts = stage_data[stage_data['well_id'] == reference_id].copy()
-    reference_ts = reference_ts.dropna(subset=['well_depth_m'])
-    reference_ts, removed_ref_days = remove_flagged_buffer(reference_ts, buffer_days=0)
-
-    # Find the record length and proportion of omitted days
-    common_start = max(logged_ts['day'].min(), reference_ts['day'].min())
-    common_end = min(logged_ts['day'].max(), reference_ts['day'].max())
-    date_range = pd.date_range(start=common_start, end=common_end, freq='D')
-    removed_log_in_range = [d for d in removed_log_days if common_start <= d <= common_end]
-    removed_ref_in_range = [d for d in removed_ref_days if common_start <= d <= common_end]
-    all_removed_days = set(removed_log_in_range) | set(removed_ref_in_range)
-    n_dry_days = len(all_removed_days)
-    total_days = len(date_range)
-    print(f'Bottomed Out Days={n_dry_days} | {(total_days - n_dry_days) / total_days * 100:.1f}% are valid')
-
     # Establish basin classes to get depth estimates
+    reference_id = reference_ts['well_id'].iloc[0]
+    logged_id = logged_ts['well_id'].iloc[0]
+
     ref_basin = WetlandBasin(
         wetland_id=reference_id, 
         well_point_info=well_point[well_point['wetland_id'] == reference_id],
@@ -103,15 +87,63 @@ def process_wetland_pair(
         transect_buffer=min_depth_search_radius
     )
 
-    # NOTE: I'll probably get rid of this step later. 
-
     # Calculate wetland depth timeseries using the deepest point on the DEM
     logged_well_diff = log_basin.well_point.elevation_dem - log_basin.deepest_point.elevation
     logged_ts['wetland_depth'] = logged_ts['well_depth_m'] + logged_well_diff
     ref_well_diff = ref_basin.well_point.elevation_dem - ref_basin.deepest_point.elevation
     reference_ts['wetland_depth'] = reference_ts['well_depth_m'] + ref_well_diff
 
+    pass
+
+def process_wetland_pair(
+    row,
+    stage_data: pd.DataFrame,
+    plot: bool = False, 
+    depth_censor: bool = False,
+    # Optional args if depth censor is True
+    well_point: gpd.GeoDataFrame = None,
+    source_dem_path: str = None,
+    min_depth_search_radius: int = None, 
+):
+    """
+    Process a single logged/reference wetland pair and return model results.
+    Returns:
+        dict with keys: 'model_results', 'shift_results', 'residual_results', 'distribution_results'
+    """
+    logged_id = row['logged_id']
+    reference_id = row['reference_id']
+    logging_date = row['planet_logging_date']
+    print(f"Processing pair: {logged_id} vs {reference_id} (logged: {logging_date})")
+
+    # Filter and clean stage data for this pair
+    logged_raw_ts = stage_data[stage_data['well_id'] == logged_id].copy()
+    logged_qaqc = timeseries_qaqc(logged_raw_ts)
+    reference_raw_ts = stage_data[stage_data['well_id'] == reference_id].copy()
+    reference_qaqc = timeseries_qaqc(reference_raw_ts)
+
+    # Find the record length and proportion of omitted days
+    common_start = max(reference_qaqc['max_date'], logged_qaqc['max_date'])
+    common_end = min(reference_qaqc['min_date'], logged_qaqc['min_date'])
+    date_range = pd.date_range(start=common_start, end=common_end, freq='D')
+    n_dry_days = len(reference_qaqc['bottomed_dates'] | logged_qaqc['bottomed_dates'])
+    total_days = len(date_range)
+
+    if depth_censor:
+        dem_depth_censor(
+            reference_ts=reference_qaqc['clean_ts'],
+            logged_ts=logged_qaqc['clean_ts'],
+            well_point=well_point, 
+            source_dem_path=source_dem_path, 
+            depth_thresh=0.0,
+            min_depth_search_radius=min_depth_search_radius
+        )
+
     # Merge into comparison dataframe
+    reference_ts = reference_qaqc['clean_ts']
+    reference_ts['depth'] = reference_ts['well_depth_m']
+    logged_ts = logged_qaqc['clean_ts']
+    logged_ts['depth'] = logged_ts['well_depth_m']
+
     comparison = pd.merge(
         reference_ts, 
         logged_ts, 
@@ -123,8 +155,7 @@ def process_wetland_pair(
     # Sample reference distribution once for both models
     ref_sample = sample_reference_ts(
         df=comparison,
-        only_pre_log=False,
-        column_name='wetland_depth_ref',
+        column_name='depth_ref',
         n=10_000
     )
 
@@ -143,15 +174,15 @@ def process_wetland_pair(
         # Fit the interaction model
         results = fit_func(
             comparison,
-            x_series_name='wetland_depth_ref',
-            y_series_name='wetland_depth_log',
+            x_series_name='depth_ref',
+            y_series_name='depth_log',
             log_date=logging_date,
             **fit_kwargs
         )
 
         # Generate modeled distributions and compute residuals
         modeled_distributions = generate_model_distributions(f_dist=ref_sample, models=results)
-        residuals = compute_residuals(comparison, logging_date, 'wetland_depth_ref', 'wetland_depth_log', results)
+        residuals = compute_residuals(comparison, logging_date, 'depth_ref', 'depth_log', results)
         depth_shift = summarize_depth_shift(model_distributions=modeled_distributions)
 
         # Flatten and store model results
@@ -177,26 +208,24 @@ def process_wetland_pair(
         residuals['model_type'] = model_label
         residual_results.append(residuals)
 
-        # Store distributions (only for huber)
-        if model_type == 'huber':
-            dist_df = pd.DataFrame(modeled_distributions)
-            dist_df['data_set'] = 'full'
-            dist_df['model_type'] = model_type
-            dist_df['log_id'] = logged_id
-            dist_df['ref_id'] = reference_id
-            dist_df['log_date'] = logging_date
-            distribution_results.append(dist_df)
+        # Store distributions
+        dist_df = pd.DataFrame(modeled_distributions)
+        dist_df['data_set'] = 'full'
+        dist_df['model_type'] = model_type
+        dist_df['log_id'] = logged_id
+        dist_df['ref_id'] = reference_id
+        distribution_results.append(dist_df)
 
         # Plot if requested (only for OLS)
         if plot and model_type == 'ols':
             plot_correlations_from_model(
                 comparison,
-                x_series_name='wetland_depth_ref',
-                y_series_name='wetland_depth_log',
+                x_series_name='depth_ref',
+                y_series_name='depth_log',
                 log_date=logging_date, 
                 model_results=results
             )
-            plot_hypothetical_distributions(modeled_distributions, f_dist=ref_sample, bins=50)
+            #plot_hypothetical_distributions(modeled_distributions, f_dist=ref_sample, bins=50)
 
     return {
         'model_results': model_results,
@@ -213,17 +242,17 @@ shift_results = []
 residual_results = []
 
 # View plots for random pairs of logged and reference wetlands
-rando_plot_idxs = np.random.choice(len(wetland_pairs), size=len(wetland_pairs), replace=False)
+rando_plot_idxs = np.random.choice(len(wetland_pairs), size=150, replace=False)
 
 for index, row in wetland_pairs.iterrows():
     pair_results = process_wetland_pair(
         row=row,
         stage_data=stage_data,
-        well_point=well_point,
-        source_dem_path=source_dem_path,
-        # NOTE: Consider removing this parameter, because it impacts inundation-frequency curves.
-        min_depth_search_radius=min_depth_search_radius, 
-        plot=(index in rando_plot_idxs)
+        plot=(index in rando_plot_idxs),
+        depth_censor=False,
+        well_point=None,
+        source_dem_path=None,
+        min_depth_search_radius=None
     )
     
     model_results.extend(pair_results['model_results'])
@@ -247,8 +276,8 @@ residuals_path = out_dir + f'/model_info/{well_inc}_residuals_LAI_{lai_buffer}m.
 models_path = out_dir + f'/model_info/{well_inc}_model_estimates_LAI_{lai_buffer}m.csv'
 
 shift_results_df.to_csv(shift_path, index=False)
-distribution_results_df.to_csv(distributions_path, index=False)
-residual_results_df.to_csv(residuals_path, index=False)
+#distribution_results_df.to_csv(distributions_path, index=False)
+#residual_results_df.to_csv(residuals_path, index=False)
 model_results_df.to_csv(models_path, index=False)
 
 # %% 4.0 Plot the shifts in depth

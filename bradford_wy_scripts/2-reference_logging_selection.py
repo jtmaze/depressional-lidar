@@ -22,7 +22,7 @@ ref_slope_threshold = -0.05  # LAI / yr
 start_date = '2019-01-01'
 
 wetland_connectivity_key = pd.read_excel(
-    'D:/depressional_lidar/data/bradford/bradford_wetland_connect_key.xlsx'
+    'D:/depressional_lidar/data/bradford/bradford_wetland_connect_logging_key.xlsx'
 )
 
 candidate_ids = wetland_connectivity_key['well_id'].unique()
@@ -77,6 +77,12 @@ print(len(ref_ids))
 
 # %% 3.0 Visually estimate the logging dates
 
+"""
+NOTE: This used this to estimate logging dates based on LAI timeseries. 
+After getting an estimate, we verified the logging date using Planet Imagery.
+
+
+
 aggregate_ref = ref.groupby('date')['roll_yr'].mean().reset_index()
 aggregate_ref.rename(columns={'roll_yr': 'roll_yr_ref'}, inplace=True)
 
@@ -115,7 +121,12 @@ log_ids_dict = {
     '7_341': '2022-01-01',
 
     '14.9_527': '2020-02-01',
-    '6_300': '2024-02-01'
+    '6_300': '2024-02-01',
+
+    # Only at 250m
+    '9_609': '2023-10-01'
+
+
 }
 
 for i in log_ids:
@@ -171,13 +182,12 @@ for i in log_ids:
 
 print('done')
 
+"""
+
 # %% 4.0 Determine if logged wetlands were sufficiently instrumented prior to harvest
 
-logged_summary = pd.DataFrame.from_dict(
-    log_ids_dict, orient='index', columns=['logging_date']
-).reset_index()
-logged_summary.rename(columns={'index': 'well_id'}, inplace=True)
-logged_summary['hydro_sufficient'] = pd.to_datetime(logged_summary['logging_date']) >= pd.to_datetime('2022-06-01')
+logged_summary = wetland_connectivity_key[['well_id', 'planet_log_date']].copy()
+logged_summary['hydro_sufficient'] = pd.to_datetime(logged_summary['planet_log_date']) >= pd.to_datetime('2022-05-01')
 
 
 # %% 5.0 Generate a combination of every logging and reference wetland. 
@@ -190,9 +200,15 @@ for ref_id in ref_ids:
         hydro_sufficient = logged_summary[
             logged_summary['well_id'] == log_id
         ].iloc[0]['hydro_sufficient']
+
+        planet_log = logged_summary[
+            logged_summary['well_id'] == log_id
+        ].iloc[0]['planet_log_date']
+
         ref_connect = wetland_connectivity_key[
             wetland_connectivity_key['well_id'] == ref_id
         ].iloc[0]['connectivity']
+
         log_connect = wetland_connectivity_key[
             wetland_connectivity_key['well_id'] == log_id
         ].iloc[0]['connectivity']
@@ -200,15 +216,31 @@ for ref_id in ref_ids:
         combinations_list.append({
             'reference_id': ref_id,
             'logged_id': log_id,
-            'estimated_logging_date': log_ids_dict[log_id], 
+            'planet_logging_date': planet_log, 
             'ref_connect': ref_connect,
             'log_connect': log_connect,
             'logged_hydro_sufficient': hydro_sufficient,
 
         })
 
-
 combinations_df = pd.DataFrame(combinations_list)
+print(len(combinations_df))
+
+bad_log_ids = [
+    '3_173', # The wetland itself was logged. 
+    '3_244', # The wetland was logged and the well was snapped in the process
+    '13_263', # well position is not stable. 
+]
+
+combinations_df = combinations_df[~combinations_df['logged_id'].isin(bad_log_ids)]
+print(len(combinations_df))
+print(len(combinations_df['logged_id'].unique()))
+print(len(combinations_df['reference_id'].unique()))
+
+combinations_df = combinations_df[combinations_df['logged_hydro_sufficient'] == True]
+print(len(combinations_df))
+print(len(combinations_df['logged_id'].unique()))
+print(len(combinations_df['reference_id'].unique()))
 
 # %% 6.0 Write the output
 

@@ -131,7 +131,7 @@ osbs_gdf = estimate_pts_dem_elevation(
 
 combined_gdf = pd.concat([bradford_gdf, osbs_gdf], ignore_index=True)
 combined_gdf = gpd.GeoDataFrame(combined_gdf, crs='EPSG:26917')
-combined_gdf['rtk_dem_d'] = combined_gdf['z_dem'] - pd.to_numeric(combined_gdf['rtk_z'], errors='coerce')
+combined_gdf['rtk_dem_diff'] = combined_gdf['z_dem'] - pd.to_numeric(combined_gdf['rtk_z'], errors='coerce')
 
 combined_gdf.to_file('rtk_pts_with_dem_elevations.shp')
 

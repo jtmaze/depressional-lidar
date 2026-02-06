@@ -5,7 +5,7 @@ import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
 
-lai_buffer_dist = 150
+lai_buffer_dist = 250
 
 data_dir = "D:/depressional_lidar/data/bradford/out_data/"
 wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer_dist}m_all_wells.csv'
@@ -27,20 +27,11 @@ strong_pairs = model_data[
 ][['log_id', 'log_date', 'ref_id']]
 
 print(len(strong_pairs))
-
-strong_pairs = strong_pairs[
-    ~strong_pairs['log_id'].isin(['15_516','3_244', '3_173'])
-]
-
-strong_pairs = strong_pairs[
-    ~strong_pairs['ref_id'].isin(['14_616'])
-]
-
 print(len(strong_pairs))
 
 # %% 3.0 Write the output
 
-strong_pairs.to_csv(f'{data_dir}/strong_ols_models_{lai_buffer_dist}m_all_wells.csv', index=False)
+#strong_pairs.to_csv(f'{data_dir}/strong_ols_models_{lai_buffer_dist}m_all_wells.csv', index=False)
 
 # %% 4.0 Diagnostic plots of model fits
 
@@ -83,6 +74,7 @@ fig, axes = plt.subplots(2, 2, figsize=(14, 12))
 for row_idx, dataset in enumerate(datasets):
     # Filter data for this dataset
     subset = plot_data[plot_data['data_set'] == dataset]
+    subset = subset[subset['model_type'] == 'OLS']
     
     # Pre R² (left column)
     ax_pre = axes[row_idx, 0]
@@ -122,7 +114,7 @@ plt.show()
 
 # %% 4.4 Cumulative distribution of Pearson's R for each dataset
 
-fig, ax = plt.subplots(figsize=(12, 7))
+fig, ax = plt.subplots(figsize=(12, 5))
 
 # Color scheme for datasets
 colors = {
@@ -133,8 +125,8 @@ colors = {
 
 for dataset in datasets:
     subset = plot_data[plot_data['data_set'] == dataset]
-    
-    r2_sorted = np.sort(subset['pre_r2'].values)
+    subset = subset[subset['model_type'] == 'OLS']
+    r2_sorted = np.sort(subset['r2_joint'].values)
     r_sorted = r2_sorted ** 0.5
     
     cumulative_prob = np.arange(1, len(r_sorted) + 1) / len(r_sorted)
@@ -142,7 +134,7 @@ for dataset in datasets:
     ax.plot(r_sorted, cumulative_prob, 
             color=colors.get(dataset, 'black'),
             linewidth=2.5,
-            label=f'{dataset.replace("_", " ").title()} (n={len(subset)})')
+            label=f'Cummulative Pearsons R')
 
 # Formatting
 ax.set_xlabel('Pearsons R', fontsize=14, fontweight='bold')

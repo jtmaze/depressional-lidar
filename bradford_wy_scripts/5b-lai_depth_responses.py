@@ -21,12 +21,12 @@ lai_dir = data_dir + f'/in_data/hydro_forcings_and_LAI/well_buffer_{lai_buffer_d
 
 # Path to results
 shift_path = data_dir + f'out_data/modeled_logging_stages/all_wells_shift_results_LAI_{lai_buffer_dist}m.csv'
-distributions_path = data_dir + f'out_data/modeled_logging_stages/all_wells_hypothetical_distributions_LAI_{lai_buffer_dist}m.csv'
+#distributions_path = data_dir + f'out_data/modeled_logging_stages/all_wells_hypothetical_distributions_LAI_{lai_buffer_dist}m.csv'
 models_path = data_dir + f'out_data/model_info/all_wells_model_estimates_LAI_{lai_buffer_dist}m.csv'
 
 # Path to wetland pairs, connnectivity key and strong model fits
 wetland_pairs_path = data_dir + f'/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer_dist}m_all_wells.csv'
-connectivity_key_path = data_dir + 'bradford_wetland_connect_key.xlsx'
+connectivity_key_path = data_dir + 'bradford_wetland_connect_logging_key.xlsx'
 strong_pairs = data_dir + f'out_data/strong_ols_models_{lai_buffer_dist}m_all_wells.csv'
 
 wetland_pairs = pd.read_csv(wetland_pairs_path)
@@ -89,7 +89,7 @@ lai_roll_diffs = []
 
 for idx, p in wetland_pairs.iterrows():
 
-    date = p['logging_date']
+    date = p['planet_logging_date']
     log_id = p['logged_id']
     logged_lai = read_concatonate_lai(
         lai_dir,

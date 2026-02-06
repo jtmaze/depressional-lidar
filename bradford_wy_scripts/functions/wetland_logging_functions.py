@@ -79,17 +79,14 @@ def remove_flagged_buffer(ts_df, buffer_days=2):
     Remove ±buffer_days from records where flag ==2
     """
     
-    flagged_dates = ts_df[ts_df['flag'].isin([2])]['day']
-    
-    # Create set of dates to remove (±buffer_days around each flagged date)
+    bottomed_flag_dates = ts_df[ts_df['flag'] == 2]['day']
+    # Create set of dates to remove (±buffer_days around each bottomed-out date)
     dates_to_remove = set()
-    for date in flagged_dates:
+    for date in bottomed_flag_dates:
         for offset in range(-buffer_days, buffer_days + 1):  # -2, -1, 0, 1, 2 days
             dates_to_remove.add(date + pd.Timedelta(days=offset))
     
-    filtered_df = ts_df[~ts_df['day'].isin(dates_to_remove)]
-
-    print(f"Removed {len(dates_to_remove)} records around bottomed periods")
+    filtered_df = ts_df[~ts_df['day'].isin(dates_to_remove)].copy()
 
     return filtered_df, dates_to_remove
 
@@ -525,15 +522,16 @@ def compute_residuals(comparison_df: pd.DataFrame,
 #     plt.tight_layout()
 #     plt.show()
 
-def flatten_model_results(results: dict,
-                          log_id: str,
-                          log_date: pd.Timestamp,
-                          ref_id: str,
-                          data_set: str
+def flatten_model_results(
+        results: dict,
+        log_id: str,
+        log_date: pd.Timestamp,
+        ref_id: str,
+        data_set: str
     ):
     """
     Unnests the dictionaries from fit_interaction_model_huber() and fit_interaction_model_ols() 
-    the purpose is to make dataframe/.csv storage more efficient without the nested data structure. 
+    the purpose is to make dataframe/.csv storage more efficient without the nested data in rows. 
     """
 
     out = {}
@@ -573,17 +571,13 @@ def flatten_model_results(results: dict,
 
     return out
 
-def sample_reference_ts(df: pd.DataFrame, only_pre_log: bool, column_name: str="wetland_depth_ref", n: int=1000):
+def sample_reference_ts(df: pd.DataFrame, column_name: str="wetland_depth_ref", n: int=1000):
     """
     Draw n samples from the empirical distribution F of the reference series.
     Expects columns: 'wetland_depth_ref' and 'pre_logging' (bool).
     """
     
-    if only_pre_log:
-        sample_df = df[df['pre_logging']].copy()
-    else:
-        sample_df = df.copy()
-    
+    sample_df = df.copy()
     sample = np.random.choice(sample_df[column_name].dropna().values, size=n, replace=True)
     
     return sample
@@ -657,7 +651,6 @@ def summarize_depth_shift(model_distributions: dict):
     pre_mean = pre_model_distributions.mean()
     post_mean = post_model_distributions.mean()
     delta_mean = post_mean - pre_mean
-    # TODO: calculate median shift or change in std?
     # TODO: Should I do some bootstrapping for confidence intervals on these estimates??
 
     return {
