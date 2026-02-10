@@ -18,8 +18,7 @@ from bradford_wy_scripts.functions.wetland_logging_functions import (
 
 from wetland_utilities.basin_attributes import WetlandBasin
 
-well_inc = 'all_wells'
-min_depth_search_radius = None
+min_depth_search_radius = None # NOTE: Only used if censoring low water table values. 
 lai_buffer = 150
 
 stage_path = "D:/depressional_lidar/data/bradford/in_data/stage_data/bradford_daily_well_depth_Winter2025.csv"
@@ -27,7 +26,7 @@ source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_clea
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 footprints_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_basins_assigned_wetland_ids_KG.shp'
 
-wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer}m_{well_inc}.csv'
+wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer}m_all_wells.csv'
 wetland_pairs = pd.read_csv(wetland_pairs_path)
 
 # %% 2.0 Load the stage data and well coordinates
@@ -46,12 +45,15 @@ well_point = (
 # %% 3.1 Wrapper function to process a single wetland pair
 
 def timeseries_qaqc(df):
-    """ """
+    """ 
+    First, filters days with water level uncertianty (flag = 1)
+    Then, filters bottomed out days (flag=2), tracking number of bottomed out days.
+    """
     df = df[df['flag'] != 1]
     df = df.dropna(subset=['well_depth_m'])
-    min_date = min(df['date'])
-    max_date = max(df['date'])
-    df_cleaned, bottomed_well_days = remove_flagged_buffer(df, buffer_days=0)
+    min_date = min(df['date'][df['flag'] == 0])
+    max_date = max(df['date'][df['flag'] == 0])
+    df_cleaned, bottomed_well_days = remove_flagged_buffer(df, buffer_days=1)
 
     return {
         'clean_ts': df_cleaned,
@@ -71,7 +73,6 @@ def dem_depth_censor(
     # Establish basin classes to get depth estimates
     reference_id = reference_ts['well_id'].iloc[0]
     logged_id = logged_ts['well_id'].iloc[0]
-
     ref_basin = WetlandBasin(
         wetland_id=reference_id, 
         well_point_info=well_point[well_point['wetland_id'] == reference_id],
@@ -128,6 +129,7 @@ def process_wetland_pair(
     n_dry_days = len(reference_qaqc['bottomed_dates'] | logged_qaqc['bottomed_dates'])
     total_days = len(date_range)
 
+    # TODO: Finish this function call
     if depth_censor:
         dem_depth_censor(
             reference_ts=reference_qaqc['clean_ts'],
@@ -150,7 +152,7 @@ def process_wetland_pair(
         how='inner',
         on='day', 
         suffixes=('_ref', '_log')
-    ).drop(columns=['flag_ref', 'flag_log'])
+    ).drop(columns=['flag_ref', 'flag_log', 'well_depth_m_log', 'well_depth_m_ref'])
 
     # Sample reference distribution once for both models
     ref_sample = sample_reference_ts(
@@ -209,12 +211,13 @@ def process_wetland_pair(
         residual_results.append(residuals)
 
         # Store distributions
-        dist_df = pd.DataFrame(modeled_distributions)
-        dist_df['data_set'] = 'full'
-        dist_df['model_type'] = model_type
-        dist_df['log_id'] = logged_id
-        dist_df['ref_id'] = reference_id
-        distribution_results.append(dist_df)
+        if model_type == 'ols':
+            dist_df = pd.DataFrame(modeled_distributions)
+            dist_df['data_set'] = 'full'
+            dist_df['model_type'] = model_type
+            dist_df['log_id'] = logged_id
+            dist_df['ref_id'] = reference_id
+            distribution_results.append(dist_df)
 
         # Plot if requested (only for OLS)
         if plot and model_type == 'ols':
@@ -225,7 +228,7 @@ def process_wetland_pair(
                 log_date=logging_date, 
                 model_results=results
             )
-            #plot_hypothetical_distributions(modeled_distributions, f_dist=ref_sample, bins=50)
+            plot_hypothetical_distributions(modeled_distributions, f_dist=ref_sample, bins=50)
 
     return {
         'model_results': model_results,
@@ -242,7 +245,7 @@ shift_results = []
 residual_results = []
 
 # View plots for random pairs of logged and reference wetlands
-rando_plot_idxs = np.random.choice(len(wetland_pairs), size=150, replace=False)
+rando_plot_idxs = np.random.choice(len(wetland_pairs), size=75, replace=False)
 
 for index, row in wetland_pairs.iterrows():
     pair_results = process_wetland_pair(
@@ -270,15 +273,15 @@ model_results_df = pd.DataFrame(model_results)
 # %% 3.1 Save the results
 
 out_dir = "D:/depressional_lidar/data/bradford/out_data/"
-shift_path = out_dir + f'/modeled_logging_stages/{well_inc}_shift_results_LAI_{lai_buffer}m.csv'
-distributions_path = out_dir + f'/modeled_logging_stages/{well_inc}_hypothetical_distributions_LAI_{lai_buffer}m.csv'
-residuals_path = out_dir + f'/model_info/{well_inc}_residuals_LAI_{lai_buffer}m.csv'
-models_path = out_dir + f'/model_info/{well_inc}_model_estimates_LAI_{lai_buffer}m.csv'
+shift_path = out_dir + f'/modeled_logging_stages/all_wells_shift_results_LAI_{lai_buffer}m.csv'
+distributions_path = out_dir + f'/modeled_logging_stages/all_wells_hypothetical_distributions_LAI_{lai_buffer}m.csv'
+residuals_path = out_dir + f'/model_info/all_wells_residuals_LAI_{lai_buffer}m.csv'
+models_path = out_dir + f'/model_info/all_wells_model_estimates_LAI_{lai_buffer}m.csv'
 
-shift_results_df.to_csv(shift_path, index=False)
-#distribution_results_df.to_csv(distributions_path, index=False)
-#residual_results_df.to_csv(residuals_path, index=False)
-model_results_df.to_csv(models_path, index=False)
+# shift_results_df.to_csv(shift_path, index=False)
+# distribution_results_df.to_csv(distributions_path, index=False)
+# residual_results_df.to_csv(residuals_path, index=False)
+# model_results_df.to_csv(models_path, index=False)
 
 # %% 4.0 Plot the shifts in depth
 

@@ -17,7 +17,7 @@ lai_buffer_dist = 150
 data_dir = "D:/depressional_lidar/data/bradford/"
 source_dem_path = data_dir + '/in_data/bradford_DEM_cleaned_veg.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-connectivity_key_path = connectivity_key_path = data_dir + 'bradford_wetland_connect_key.xlsx'
+connectivity_key_path = connectivity_key_path = data_dir + 'bradford_wetland_connect_logging_key.xlsx'
 distributions_path = data_dir + f'/out_data/modeled_logging_stages/all_wells_hypothetical_distributions_LAI_{lai_buffer_dist}m.csv'
 wetland_pairs_path = data_dir + f'out_data/strong_ols_models_{lai_buffer_dist}m_all_wells.csv'
 
@@ -38,7 +38,6 @@ distributions = distributions.merge(
     how='inner'
 )
 
-
 # %% 3.0 Calculate the flood frequency curve for each basin
 
 fd_results = []
@@ -58,24 +57,24 @@ for i in unique_log_ids:
         'area': h[0],
         'elevation': h[1]
     })
-    hypsometry['depth'] = hypsometry['elevation'] - b_f.deepest_point.elevation
+    hypsometry['depth'] = hypsometry['elevation'] - b_f.well_point.elevation_dem
     hypsometry['rel_area'] = (hypsometry['area'] / hypsometry['area'].max()).round(2)
 
     # ----------------------------------------------------------------------
     # NOTE: This step will go away in revised version of analysis
-    b50_min = WetlandBasin(
-        wetland_id=i,
-        well_point_info=well_point[well_point['wetland_id'] == i],
-        source_dem_path=source_dem_path,
-        footprint=None,
-        transect_buffer=50 
-    ).deepest_point.elevation
+    # b50_min = WetlandBasin(
+    #     wetland_id=i,
+    #     well_point_info=well_point[well_point['wetland_id'] == i],
+    #     source_dem_path=source_dem_path,
+    #     footprint=None,
+    #     transect_buffer=50 
+    # ).deepest_point.elevation
 
-    diff = b50_min - b_f.deepest_point.elevation
-    print(diff)
-    well_dist = distributions[distributions['log_id'] == i].copy()
-    well_dist['pre'] = well_dist['pre'] + diff
-    well_dist['post'] = well_dist['post'] + diff
+    # diff = b50_min - b_f.deepest_point.elevation
+    # print(diff)
+    # well_dist = distributions[distributions['log_id'] == i].copy()
+    # well_dist['pre'] = well_dist['pre'] + diff
+    # well_dist['post'] = well_dist['post'] + diff
     # ----------------------------------------------------------------------
 
     def calc_exceedance_curve(depths, hypsometry):
@@ -113,7 +112,7 @@ for i in unique_log_ids:
     post_curve = calc_exceedance_curve(well_dist['post'], hypsometry) 
     post_curve['pre_post'] = 'post'
 
-    """
+  
     # Quick plot to observe depth curves
     plt.figure(figsize=(8, 6))
     plt.plot(pre_curve['probability'], pre_curve['depth'], label='Pre-logging', color='blue')
@@ -135,7 +134,7 @@ for i in unique_log_ids:
     plt.legend()
     plt.grid(True)
     plt.show()
-    """
+  
     result = pd.concat([post_curve, pre_curve])
     result['log_id'] = i
 
@@ -222,7 +221,7 @@ for log_id in unique_log_ids:
 
 pre_interp = np.array(pre_interp)
 pre_mean = np.mean(pre_interp, axis=0)
-pre_std = np.std(pre_interp, axis=0)
+pre_se = np.std(pre_interp, axis=0) / np.sqrt(pre_interp.shape[0])
 
 # Aggregate post-logging curves across all log_ids
 post_data = inundate_freq[inundate_freq['pre_post'] == 'post']
@@ -234,28 +233,71 @@ for log_id in unique_log_ids:
 
 post_interp = np.array(post_interp)
 post_mean = np.mean(post_interp, axis=0)
-post_std = np.std(post_interp, axis=0)
+post_se = np.std(post_interp, axis=0) / np.sqrt(post_interp.shape[0])
 
-# Plot pre-logging mean and std dev lines
-ax.plot(prob_bins, pre_mean, color=pre_color, linewidth=5, label='Pre-logging Mean')
-ax.plot(prob_bins, pre_mean - pre_std, color=pre_color, linewidth=2.5, linestyle='--', alpha=0.35, label='Pre-logging ±1 SD')
-ax.plot(prob_bins, pre_mean + pre_std, color=pre_color, linewidth=2.5, linestyle='--', alpha=0.35)
+# Plot pre-logging mean and standard error lines
+ax.plot(prob_bins, pre_mean * 100, color=pre_color, linewidth=5, label='Pre-logging Mean')
+ax.plot(prob_bins, (pre_mean - pre_se) * 100, color=pre_color, linewidth=2.5, linestyle='--', alpha=0.35, label='Pre-logging ±1 SE')
+ax.plot(prob_bins, (pre_mean + pre_se) * 100, color=pre_color, linewidth=2.5, linestyle='--', alpha=0.35)
 
-# Plot post-logging mean and std dev lines
-ax.plot(prob_bins, post_mean, color=post_color, linewidth=5, label='Post-logging Mean')
-ax.plot(prob_bins, post_mean - post_std, color=post_color, linewidth=2.5, linestyle='--', alpha=0.35, label='Post-logging ±1 SD')
-ax.plot(prob_bins, post_mean + post_std, color=post_color, linewidth=2.5, linestyle='--', alpha=0.35)
+# Plot post-logging mean and standard error lines
+ax.plot(prob_bins, post_mean * 100, color=post_color, linewidth=5, label='Post-logging Mean')
+ax.plot(prob_bins, (post_mean - post_se)* 100, color=post_color, linewidth=2.5, linestyle='--', alpha=0.35, label='Post-logging ±1 SE')
+ax.plot(prob_bins, (post_mean + post_se) * 100, color=post_color, linewidth=2.5, linestyle='--', alpha=0.35)
+
+ax.axvline(x=0.5, color='maroon', alpha=0.7, linewidth=2.5, label="P=0.5")
 
 ax.set_xlabel('Exceedance Probability', fontsize=16)
-ax.set_ylabel('Inundated Fraction', fontsize=16)
-ax.set_title('Avg Flood Duration Curves All Wetlands', fontsize=14)
+ax.set_ylabel('Inundated Fraction (%)', fontsize=16)
+ax.set_title('Flood Duration Curves All Wetlands', fontsize=18)
 ax.grid(True, alpha=0.3)
 ax.set_xlim(0, 1)
-ax.set_ylim(0, 1)
+ax.set_ylim(0, 100)
 ax.legend(fontsize=16)
+
+ax.tick_params(axis='both', which='major', labelsize=14)
+
 
 plt.tight_layout()
 plt.show()
 
+
+# %% 6.0 Print the median (p50) inundated fraction shift for each well_id
+
+p50_results = []
+
+for log_id in unique_log_ids:
+    well_data = inundate_freq[inundate_freq['log_id'] == log_id]
+    connectivity = well_data['connectivity'].iloc[0]
+
+    pre = well_data[well_data['pre_post'] == 'pre'].sort_values('probability')
+    post = well_data[well_data['pre_post'] == 'post'].sort_values('probability')
+
+    pre_p50 = np.interp(0.5, pre['probability'], pre['inundated_fraction'])
+    post_p50 = np.interp(0.5, post['probability'], post['inundated_fraction'])
+    shift = post_p50 - pre_p50
+
+    p50_results.append({
+        'log_id': log_id,
+        'connectivity': connectivity,
+        'pre_p50': round(pre_p50 * 100, 2),
+        'post_p50': round(post_p50 * 100, 2),
+        'shift_pct': round(shift * 100, 2)
+    })
+
+p50_df = pd.DataFrame(p50_results).sort_values('shift_pct', ascending=False)
+print(p50_df.to_string(index=False))
+
+# Aggregate summary
+print(f"\nAggregate median inundated fraction shift:")
+print(f"  Pre P50 Mean:   {p50_df['pre_p50'].mean():.2f}%")
+print(f"  Post P50 Mean:   {p50_df['post_p50'].mean():.2f}%")
+print(f"  Mean shift:   {p50_df['shift_pct'].mean():.2f}%")
+print(f"  Median shift: {p50_df['shift_pct'].median():.2f}%")
+print(f"  Std shift:    {p50_df['shift_pct'].std():.2f}%")
+
+# By connectivity class
+print("\nBy connectivity class:")
+print(p50_df.groupby('connectivity')['shift_pct'].agg(['mean', 'median', 'std', 'count']).to_string())
 
 # %%

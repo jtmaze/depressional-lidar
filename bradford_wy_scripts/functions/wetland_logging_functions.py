@@ -74,7 +74,7 @@ def plot_stage_ts(
     
     plt.show()
 
-def remove_flagged_buffer(ts_df, buffer_days=2):
+def remove_flagged_buffer(ts_df, buffer_days=1):
     """
     Remove ±buffer_days from records where flag ==2
     """

@@ -76,8 +76,8 @@ def calc_lai_composite(collection, polygon):
 polygon = geemap.geopandas_to_ee(bradford_shapefile).geometry()
 
 # Set date range
-start_date = '2023-03-01'
-end_date = '2023-05-30'
+start_date = '2025-06-01'
+end_date = '2025-12-31'
 
 # Create Landsat 8 collection and calculate LAI composite
 ls8_collection = make_ls8_collection(polygon, start_date, end_date)
@@ -104,5 +104,33 @@ Map.add_colorbar(lai_vis, label='Leaf Area Index (LAI)')
 
 Map
 
+# %% 5.0 Function to write composite image to Google Drive
+
+drive_folder = 'landsat_lai_image_exports'
+
+def export_composite_to_drive(image, region, description, folder, scale=30, crs='EPSG:4326'):
+    """
+    Quick export function
+    """
+    task = ee.batch.Export.image.toDrive(
+        image=image,
+        description=description,
+        folder=folder,
+        region=region,
+        scale=scale,
+        crs=crs,
+        maxPixels=1e13,
+        fileFormat='GeoTIFF'
+    )
+    task.start()
+    print(f"Export started: '{description}' -> Drive folder '{folder}'")
+    return task
+
+# Example usage:
+task = export_composite_to_drive(
+    lai_composite, polygon,
+    description=f'LAI_composite_{start_date}_to_{end_date}',
+    folder=drive_folder,
+)
 
 # %%

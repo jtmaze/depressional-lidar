@@ -42,6 +42,7 @@ shift_data = shift_data.merge(
 )
 
 print(len(shift_data))
+print(len(strong_pairs))
 
 # %% 2.0 Histogram of inundation shift data for a specific model and dataset
 
@@ -163,9 +164,9 @@ ax.scatter(
 )
 
 # Add text labels for each point
-for idx, row in plot_df.iterrows():
-    ax.text(row['roll_diff_change'], row['mean_depth_change'], 
-            str(row['log_id']), fontsize=8, alpha=0.7)
+# for idx, row in plot_df.iterrows():
+#     ax.text(row['roll_diff_change'], row['mean_depth_change'], 
+#             str(row['log_id']), fontsize=8, alpha=0.7)
 
 x_range = np.linspace(plot_df['roll_diff_change'].min(), plot_df['roll_diff_change'].max(), 100)
 y_pred = slope * x_range + intercept
@@ -173,10 +174,11 @@ ax.plot(x_range, y_pred, 'r--', linewidth=2,
         label=f'y = {slope:.3f}x + {intercept:.3f}\nR² = {r_value**2:.3f}, p = {p_value:.3f}')
 
 ax.axhline(0, color='gray', linestyle=':', alpha=1)
+ax.axhline(plot_df['mean_depth_change'].mean(), color='blue', linestyle=':', linewidth=2, alpha=0.8, label=f'Mean Stage Increase {plot_df['mean_depth_change'].mean():.2f} [m]')
 
 ax.set_xlabel('Relative LAI Decrease (Pre - Post)', fontsize=12)
 ax.set_ylabel('Modeled Stage Increase (Post - Pre) [m]', fontsize=12)
-ax.set_title(f'LAI Loss vs Wetland Depth Change', 
+ax.set_title(f'LAI Loss vs Wetland Depth Change (n={len(strong_pairs)} pairs)', 
              fontsize=14, fontweight='bold')
 ax.legend(loc='best', fontsize=11)
 
@@ -200,12 +202,11 @@ print(plot_df['log_connected'].value_counts())
 # %% 4.1 Make the connectivity biplot
 
 connectivity_config = {
-    'flow-through': {'color': 'red', 'label': 'Flow-through', 'marker': 'o'},
-    'first order': {'color': 'orange', 'label': '1st Order Ditched', 'marker': 's'},
-    'giw': {'color': 'blue', 'label': 'GIW', 'marker': '^'}
+    'first order': {'color': 'navy', 'label': '1st Order Ditched', 'marker': 's'},
+    'giw': {'color': 'green', 'label': 'GIW', 'marker': '^'}
 }
 
-fig, ax = plt.subplots(figsize=(12, 8))
+fig, ax = plt.subplots(figsize=(10, 8))
 
 for connectivity_level, config in connectivity_config.items():
     subset = plot_df[plot_df['log_connected'] == connectivity_level]
@@ -232,14 +233,15 @@ for connectivity_level, config in connectivity_config.items():
     y_pred = slope * x_range + intercept
     
     ax.plot(x_range, y_pred, '--', linewidth=2, color=config['color'],
-            label=f"{config['label']}")
+            label=f"{config['label']}: slope={slope:.3f}, R²={r_value**2:.3f}")
 
 # Formatting
-ax.set_xlabel('Relative LAI Decrease (Pre - Post)', fontsize=12)
-ax.set_ylabel('Modeled Stage Increase (Post - Pre) [m]', fontsize=12)
+ax.set_xlabel('Relative LAI Decrease (Pre - Post)', fontsize=18)
+ax.set_ylabel('Modeled Stage Increase (Post - Pre) [m]', fontsize=18)
 ax.set_title(f'LAI Loss vs Wetland Depth Change by Connectivity', 
-            fontsize=14, fontweight='bold')
-ax.legend(loc='best', fontsize=10, framealpha=0.9)
+            fontsize=20, fontweight='bold')
+ax.tick_params(axis='both', labelsize=14)
+ax.legend(loc='best', fontsize=14, framealpha=0.9)
 ax.grid(True, alpha=0.3)
 
 plt.tight_layout()
@@ -273,11 +275,11 @@ print("="*70)
 
 from scipy.stats import t
 
-fig, ax = plt.subplots(figsize=(10, 6))
+fig, ax = plt.subplots(figsize=(10, 8))
 
-connectivity_levels = ['flow-through', 'giw', 'first order']
-connectivity_labels = {'flow-through': 'Flow-through', 'giw': 'GIW', 'first order': '1st Order Ditched'}
-connectivity_colors = {'flow-through': 'red', 'giw': 'blue', 'first order': 'orange'}
+connectivity_levels = ['giw', 'first order']
+connectivity_labels = {'giw': 'GIW', 'first order': '1st Order Ditched'}
+connectivity_colors = {'giw': 'green', 'first order': 'navy'}
 
 for conn_level in connectivity_levels:
     subset = plot_df[plot_df['log_connected'] == conn_level]
@@ -302,9 +304,9 @@ for conn_level in connectivity_levels:
     se = s_res * np.sqrt(1/n + (x_range - x_mean)**2 / sxx)
     ci = t_val * se
     
-    ax.plot(x_range, y_pred, '-', linewidth=3, 
+    ax.plot(x_range, y_pred, '--', linewidth=2, 
             color=connectivity_colors[conn_level],
-            label=f"{connectivity_labels[conn_level]}: slope={slope:.2f}, R²={r_value**2:.2f}, p={p_value:.4f}")
+            label=f"{connectivity_labels[conn_level]}: slope={slope:.3f}, R²={r_value**2:.3f}")
     
     # Plot confidence interval
     ax.fill_between(x_range, y_pred - ci, y_pred + ci, 
@@ -312,9 +314,12 @@ for conn_level in connectivity_levels:
 
 ax.set_xlabel('Relative LAI Decrease (Pre - Post)', fontsize=18)
 ax.set_ylabel('Modeled Stage Increase (Post - Pre) [m]', fontsize=18)
+ax.set_title(f'LAI Loss vs Wetland Depth Change by Connectivity', 
+            fontsize=20, fontweight='bold')
 ax.tick_params(axis='both', labelsize=14)
-
 ax.legend(loc='best', fontsize=14, framealpha=0.9)
+ax.grid(True, alpha=0.3)
+
 plt.tight_layout()
 plt.show()
 

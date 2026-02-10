@@ -12,12 +12,12 @@ from wetland_utilities.basin_attributes import WetlandBasin
 source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 footprints_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_basins_assigned_wetland_ids_KG.shp'
-wetland_connectivity_path = 'D:/depressional_lidar/data/bradford/bradford_wetland_connect_key.xlsx'
+wetland_connectivity_path = 'D:/depressional_lidar/data/bradford/bradford_wetland_connect_logging_key.xlsx'
 
 footprints = gpd.read_file(footprints_path)
 well_point = (
-    gpd.read_file(well_points_path)[['wetland_id', 'type', 'rtk_elevat', 'geometry', 'site']]
-    .rename(columns={'rtk_elevat': 'rtk_elevation'})
+    gpd.read_file(well_points_path)[['wetland_id', 'type', 'rtk_z', 'geometry', 'site']]
+    .rename(columns={'rtk_z': 'rtk_z'})
     .query("type in ['core_well', 'wetland_well'] and site == 'bradford'")
 )
 
@@ -43,6 +43,6 @@ for i in well_ids:
     
     print(f'Well ID: {i}, Connectivity: {connectivity_class}')
 
-    log_basin.visualize_shape(show_well=True, show_deepest=False)
+    log_basin.visualize_shape(show_shape=False, show_well=True, show_deepest=False)
 
 # %%

@@ -75,6 +75,36 @@ log = pd.concat(log_dfs)
 print(len(log_ids))
 print(len(ref_ids))
 
+# %% 2.1 Timeseries plot for roll_yr LAI. Use all well_ids color by log and ref
+fig, ax = plt.subplots(figsize=(10, 8))
+
+# Plot individual lines as dashed
+for wid in log_ids:
+    df_w = log[log['well_id'] == wid].sort_values('date')
+    df_w = df_w[df_w['date'] >= '2019-01-01']
+    ax.plot(df_w['date'], df_w['roll_yr'], color='red', alpha=0.4, linewidth=1.5, linestyle='--')
+
+for wid in ref_ids:
+    df_w = ref[ref['well_id'] == wid].sort_values('date')
+    df_w = df_w[df_w['date'] >= '2019-01-01']
+    ax.plot(df_w['date'], df_w['roll_yr'], color='blue', alpha=0.4, linewidth=1.5, linestyle='--')
+
+# Calculate and plot averages as thick solid lines
+log_avg = log[log['date'] >= '2019-01-01'].groupby('date')['roll_yr'].mean().reset_index()
+ref_avg = ref[ref['date'] >= '2019-01-01'].groupby('date')['roll_yr'].mean().reset_index()
+
+ax.plot(log_avg['date'], log_avg['roll_yr'], color='red', linewidth=3, label=f'Logged Average (n={len(log_ids)})')
+ax.plot(ref_avg['date'], ref_avg['roll_yr'], color='blue', linewidth=3, label=f'Reference Average (n={len(ref_ids)})')
+
+ax.set_title('LAI by Well ID', fontsize=18, fontweight='bold')
+ax.set_xlabel('Date', fontsize=16)
+ax.set_ylabel('Landsat 8 LAI', fontsize=16)
+ax.legend(frameon=True, fancybox=True, shadow=True, fontsize=14)
+ax.tick_params(axis='both', which='major', labelsize=14)
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+
 # %% 3.0 Visually estimate the logging dates
 
 """

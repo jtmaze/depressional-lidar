@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 import rasterio as rio
 
 os.chdir('D:/depressional_lidar/data/')
-bradford_points = pd.read_excel('doe_point_data_master.xlsx', sheet_name='Bradford')
-osbs_points = pd.read_excel('doe_point_data_master.xlsx', sheet_name='OSBS')
+bradford_points = pd.read_excel('doe_point_data_initial.xlsx', sheet_name='Bradford')
+osbs_points = pd.read_excel('doe_point_data_initial.xlsx', sheet_name='OSBS')
 
 # %% 2.0 Define functions to covert pts to gpd and find elevations
 
@@ -99,10 +99,8 @@ def estimate_pts_dem_elevation(
 
 # %% 3.0 Convert Bradford and OSBS RTK points to GeoDataFrames
 
-bradford_gdf = convert_pts_to_gpd(bradford_points, crs='EPSG:4326', latitude_colname='latitude', longitude_colname='longitude')
-bradford_gdf['site'] = 'bradford'
-osbs_gdf = convert_pts_to_gpd(osbs_points, crs='EPSG:4326', latitude_colname='latitude', longitude_colname='longitude')
-osbs_gdf['site'] = 'osbs'
+bradford_gdf = convert_pts_to_gpd(bradford_points, crs='EPSG:4326', latitude_colname='lat_coord', longitude_colname='long_coord')
+osbs_gdf = convert_pts_to_gpd(osbs_points, crs='EPSG:4326', latitude_colname='lat_coord', longitude_colname='long_coord')
 
 # %% 4.0 Estimate DEM elevation for Bradford and OSBS points
 # Convert to DEM's crs for elevation extraction and filter empty geometries
@@ -133,110 +131,13 @@ combined_gdf = pd.concat([bradford_gdf, osbs_gdf], ignore_index=True)
 combined_gdf = gpd.GeoDataFrame(combined_gdf, crs='EPSG:26917')
 combined_gdf['rtk_dem_diff'] = combined_gdf['z_dem'] - pd.to_numeric(combined_gdf['rtk_z'], errors='coerce')
 
+combined_gdf['long_proj'] = combined_gdf.geometry.x
+combined_gdf['lat_proj'] = combined_gdf.geometry.y
+
+# %% 6.0  Write the files
+
 combined_gdf.to_file('rtk_pts_with_dem_elevations.shp')
+combined_df = combined_gdf.drop(columns=['geometry'])
+combined_df.to_excel('doe_point_data_master.xlsx', index=False)
 
 # %%
-
-"""
-Plots to explore RTK and DEM efficacy
-"""
-
-# Create figure and axis
-plt.figure(figsize=(10, 6))
-
-# Plot histograms for each site
-plt.hist([
-    pd.to_numeric(combined_gdf[combined_gdf['site'] == 'bradford']['rtk_vert_accuracy'], errors='coerce') / 1_000,
-    pd.to_numeric(combined_gdf[combined_gdf['site'] == 'osbs']['rtk_vert_accuracy'], errors='coerce') / 1_000   
-], bins=50, label=['Bradford', 'OSBS'], edgecolor='black', alpha=0.7)
-
-plt.title('Vertical Accuracy reported by RTK GPS by Site')
-plt.xlabel('RTK reported accuracy (meters)')
-plt.ylabel('Observations')
-plt.legend()
-plt.show()
-
-# %%
-reasonable_observations = combined_gdf[
-    (pd.to_numeric(combined_gdf['rtk_vert_accuracy'], errors='coerce') / 1_000) < 0.5
-]
-
-plt.figure(figsize=(10, 6))
-
-# Plot histograms for each site
-plt.hist([
-    pd.to_numeric(reasonable_observations[reasonable_observations['site'] == 'bradford']['rtk_vert_accuracy'], errors='coerce') / 1_000,
-    pd.to_numeric(reasonable_observations[reasonable_observations['site'] == 'osbs']['rtk_vert_accuracy'], errors='coerce') / 1_000   
-], bins=30, label=['Bradford', 'OSBS'], edgecolor='black', alpha=0.7)
-
-plt.title('Vertical Accuracy reported by RTK GPS by Site (filtered < 0.5m)')
-plt.xlabel('RTK reported accuracy (meters)')
-plt.ylabel('Observations')
-plt.legend()
-plt.show()
-
-# %% Plot the DEM RTK elevation difference color-coded by site
-plot_df = combined_gdf[abs(combined_gdf['rtk_dem_diff']) < 100]
-plt.figure(figsize=(10, 6))
-
-# Plot histograms for each site
-plt.hist([
-    plot_df[plot_df['site'] == 'bradford']['rtk_dem_diff'],
-    plot_df[plot_df['site'] == 'osbs']['rtk_dem_diff']
-], bins=30, label=['Bradford', 'OSBS'], edgecolor='black', alpha=0.7)
-
-plt.axvline(0, color='red', linestyle='--', linewidth=1, label='No Difference')
-plt.title('Difference between DEM and RTK Elevations by Site')
-plt.xlabel('DEM - RTK Elevation Difference (m)')
-plt.ylabel('Observations')
-plt.legend()
-plt.show()
-
-# %% ..
-
-combined_gdf['abs_dem_diff'] = abs(combined_gdf['rtk_dem_diff'])
-combined_gdf = combined_gdf[combined_gdf['abs_dem_diff'] < 2]
-combined_gdf['rtk_dem_diff'] = combined_gdf['rtk_dem_diff'].astype(float)
-
-
-
-
-# %% 
-
-def plot_well_elevations(
-    gdf: gpd.GeoDataFrame,
-    tgt_well: str
-):
-    well_data = gdf[gdf['nearest_well_id'] == tgt_well]
-    well_data['observation_index'] = well_data['nearest_well_id'].astype(str) + '_' + well_data['type'] + '_' + well_data['location']
-    well_data = well_data.sort_values(by='rtk_elevation')
-    if well_data.empty:
-        print(f"No data found for well: {tgt_well}")
-        return
-
-    plt.figure(figsize=(10, 6))
-    x_positions = range(len(well_data))
-    plt.scatter(x_positions, well_data['elevation_dem_single'], label='Approx DEM Elevation (Single Cell)', color='blue')
-    plt.scatter(x_positions, well_data['elevation_dem_windowed'], label='Approx DEM Elevation (Windowed 3x3)', color='green')
-    plt.scatter(x_positions, well_data['rtk_elevation'], label='RTK Elevation', color='red')
-    plt.xticks(x_positions, well_data['observation_index'], rotation=45, ha='right')
-    plt.title(f'Elevation Comparison for Well: {tgt_well}')
-    plt.ylabel('Elevation (m)')
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-
-
-# %%
-plot_df = combined_gdf[combined_gdf['type'] == 'sensor_transect']
-plot_well_elevations(plot_df, tgt_well='Brantley North')
-
-# %%
-
-['litter_trap' 'ghg_flux' 'core_well' 'wetland_well'
- 'soil_moisture_sensor' 'sensor_transect']
-
-['15_409' '14_612' '13_267' '6_93' '5a_582' '14_500' '14.9_601' '14_115'
- '15_4' '5_161' '5_510' '5_546' '5_573' '5a_598' 'Brantley North'
- 'Devils Den' 'Fish Cove' 'Ross' 'West Ford']
-

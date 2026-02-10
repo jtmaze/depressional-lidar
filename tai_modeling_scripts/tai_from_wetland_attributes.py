@@ -1,12 +1,17 @@
 # %% 
+import sys
 import numpy as np
 import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from basin_attributes import WetlandBasin
-from basin_dynamics import BasinDynamics, WellStageTimeseries
+PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from wetland_utilities.basin_attributes import WetlandBasin
+from wetland_utilities.basin_dynamics import WellStageTimeseries, BasinDynamics
 
 site = 'bradford'
 wetland_id = '13_271'
