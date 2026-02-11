@@ -153,9 +153,10 @@ def process_wetland_pair(
     reference_qaqc = timeseries_qaqc(reference_raw_ts)
 
     # Find the record length and proportion of omitted days
-    common_start = max(reference_qaqc['max_date'], logged_qaqc['max_date'])
-    common_end = min(reference_qaqc['min_date'], logged_qaqc['min_date'])
+    common_end = min(reference_qaqc['max_date'], logged_qaqc['max_date'])
+    common_start = max(reference_qaqc['min_date'], logged_qaqc['min_date'])
     date_range = pd.date_range(start=common_start, end=common_end, freq='D')
+    print(date_range)
     n_dry_days = len(reference_qaqc['bottomed_dates'] | logged_qaqc['bottomed_dates'])
     total_days = len(date_range)
     print(f'proportion of bottomed-out days {(n_dry_days / total_days * 100):.2f}')
@@ -210,10 +211,10 @@ def process_wetland_pair(
         print(f"post={len(common_comparison[~common_comparison['pre_logging']])}")
 
         data_limited = pd.DataFrame({
-            'log_id': logged_id,
-            'ref_id': reference_id,
-            'post_days': len(common_comparison[~common_comparison['pre_logging']])
-            'pre_days': len(common_comparison[common_comparison['pre_logging']])
+            'log_id': [logged_id],
+            'ref_id': [reference_id],
+            'post_days': [len(common_comparison[~common_comparison['pre_logging']])],
+            'pre_days': [len(common_comparison[common_comparison['pre_logging']])]
         })
 
         return {
@@ -223,8 +224,6 @@ def process_wetland_pair(
             'distribution_results': None,
             'data_limited_pairs': data_limited
         }
-
-
 
     for model_type, model_label, fit_func, fit_kwargs in model_configs:
 
@@ -299,7 +298,7 @@ def process_wetland_pair(
         'shift_results': shift_results,
         'residual_results': residual_results,
         'distribution_results': distribution_results,
-        'data_limited_pairs': data_limited
+        'data_limited_pairs': None
     }
 
 # %% 2.0 Run the models for each wetland pair
@@ -308,6 +307,7 @@ model_results = []
 distribution_results = []
 shift_results = []
 residual_results = []
+data_limited_pairs = []
 
 # View plots for random pairs of logged and reference wetlands
 rando_plot_idxs = np.random.choice(len(wetland_pairs), size=42, replace=False)
@@ -329,6 +329,7 @@ for index, row in wetland_pairs.iterrows():
     shift_results.extend(pair_results['shift_results'])
     residual_results.extend(pair_results['residual_results'])
     distribution_results.extend(pair_results['distribution_results'])
+    data_limited_pairs.extend(pair_results['data_limited_pairs'])
 
 # %% 3.0 Combine the results into a dataframe and save results
 
@@ -336,6 +337,7 @@ shift_results_df = pd.DataFrame(shift_results)
 distribution_results_df = pd.concat(distribution_results)
 residual_results_df = pd.concat(residual_results)
 model_results_df = pd.DataFrame(model_results)
+data_limited_pairs_df = pd.DataFrame(data_limited_pairs)
 
 # %% 3.1 Save the results
 
