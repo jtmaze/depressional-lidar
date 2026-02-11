@@ -14,7 +14,7 @@ from bradford_wy_scripts.functions.lai_vis_functions import read_concatonate_lai
 
 lai_buffer_dist = 150
 model_type = 'ols'  # or 'ols'
-data_set = 'full'  # or 'full'
+data_set = 'no_dry_days'  # or 'full'
 
 data_dir = "D:/depressional_lidar/data/bradford/"
 lai_dir = data_dir + f'/in_data/hydro_forcings_and_LAI/well_buffer_{lai_buffer_dist}m_nomasking/'

@@ -20,8 +20,8 @@ model_data = model_data[model_data['model_type'] == 'OLS']
 print(len(model_data)) 
 
 strong_pairs = model_data[
-    (model_data['data_set'] == 'full') & 
-    (model_data['r2_joint'] >= 0.50)
+    (model_data['data_set'] == 'no_dry_days') & 
+    (model_data['r2_joint'] >= 0.30)
 ][['log_id', 'log_date', 'ref_id']]
 
 print(len(strong_pairs))

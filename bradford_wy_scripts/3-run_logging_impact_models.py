@@ -86,8 +86,8 @@ def check_domain_overlap(comp_df, log_date):
 
     return {
         'common_comp': common_comp,
-        'unfiltered_domain_days': initial_obs_cnt,
-        'domain_filtered_days': filtered_obs_cnt
+        'initial_domain_days': initial_obs_cnt,
+        'filtered_domain_days': filtered_obs_cnt
     }
 
 def dem_depth_censor(
@@ -156,7 +156,6 @@ def process_wetland_pair(
     common_end = min(reference_qaqc['max_date'], logged_qaqc['max_date'])
     common_start = max(reference_qaqc['min_date'], logged_qaqc['min_date'])
     date_range = pd.date_range(start=common_start, end=common_end, freq='D')
-    print(date_range)
     n_dry_days = len(reference_qaqc['bottomed_dates'] | logged_qaqc['bottomed_dates'])
     total_days = len(date_range)
     print(f'proportion of bottomed-out days {(n_dry_days / total_days * 100):.2f}')
@@ -202,7 +201,7 @@ def process_wetland_pair(
     )
 
     common_comparison = domain_comparison['common_comp']
-    domain_days = domain_comparison['unfiltered_domain_days']
+    initial_domain_days = domain_comparison['initial_domain_days']
     filtered_domain_days = domain_comparison['filtered_domain_days']
 
     if len(common_comparison[~common_comparison['pre_logging']]) < 50 or len(common_comparison[common_comparison['pre_logging']]) < 50:
@@ -218,10 +217,10 @@ def process_wetland_pair(
         })
 
         return {
-            'model_results': None,
-            'shift_results': None,
-            'residual_results': None,
-            'distribution_results': None,
+            'model_results': [],
+            'shift_results': [],
+            'residual_results': [],
+            'distribution_results': [],
             'data_limited_pairs': data_limited
         }
 
@@ -260,8 +259,8 @@ def process_wetland_pair(
             'model_type': model_type,
             'total_obs': total_days,
             'n_bottomed_out': n_dry_days,
-            'domain_days': domain_days,
-            'domain_filtered_days': filtered_domain_days,
+            'initial_domain_days': initial_domain_days,
+            'filtered_domain_days': filtered_domain_days,
             'pre_logging_modeled_mean': depth_shift['mean_pre'],
             'post_logging_modeled_mean': depth_shift['mean_post'], 
             'mean_depth_change': depth_shift['delta_mean'], 
@@ -298,7 +297,7 @@ def process_wetland_pair(
         'shift_results': shift_results,
         'residual_results': residual_results,
         'distribution_results': distribution_results,
-        'data_limited_pairs': None
+        'data_limited_pairs': []
     }
 
 # %% 2.0 Run the models for each wetland pair
@@ -334,8 +333,8 @@ for index, row in wetland_pairs.iterrows():
 # %% 3.0 Combine the results into a dataframe and save results
 
 shift_results_df = pd.DataFrame(shift_results)
-distribution_results_df = pd.concat(distribution_results)
-residual_results_df = pd.concat(residual_results)
+# distribution_results_df = pd.concat(distribution_results)
+# residual_results_df = pd.concat(residual_results)
 model_results_df = pd.DataFrame(model_results)
 data_limited_pairs_df = pd.DataFrame(data_limited_pairs)
 
@@ -354,8 +353,8 @@ model_results_df.to_csv(models_path, index=False)
 
 # %% 4.0 Plot the shifts in depth
 
-plot_df = shift_results_df.query("data_set == 'full' and model_type == 'ols'")
-plot_df = plot_df[plot_df['mean_depth_change'] < 0.5]
+plot_df = shift_results_df.query("data_set == 'no_dry_days' and model_type == 'ols'")
+
 
 #plot_df = plot_df[~plot_df['log_id'].isin(['15_516', '3_244'])]
 fig, ax = plt.subplots(figsize=(10, 7))
