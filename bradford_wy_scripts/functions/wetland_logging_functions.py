@@ -389,7 +389,7 @@ def fit_interaction_model_huber(
     se_post_intercept = np.sqrt(V[0,0] + V[2,2] + 2*V[0,2])
     se_post_slope = np.sqrt(V[1,1] + V[3,3] + 2*V[1,3])
 
-    # NOTE: this is r-squared is bassed on sum of squared errors, and does not relate to the Huber model's optimization
+    # NOTE: this is r-squared is determined by sum of squared errors, and does not relate to the Huber model's optimization
     r2 = 1 - np.sum((y - model.fittedvalues) ** 2) / np.sum((y - y.mean())**2)
 
     results = {
@@ -420,11 +420,12 @@ def fit_interaction_model_huber(
     }
     return results
 
-def compute_residuals(comparison_df: pd.DataFrame,
-                      log_date: pd.Timestamp,
-                      x_series_name: str,
-                      y_series_name: str,
-                      models: dict
+def compute_residuals(
+        comparison_df: pd.DataFrame,
+        log_date: pd.Timestamp,
+        x_series_name: str,
+        y_series_name: str,
+        models: dict
     ):
     """
     Calculates the residuals for a given pair's pre and post logging models. 

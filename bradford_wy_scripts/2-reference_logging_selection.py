@@ -219,7 +219,6 @@ print('done')
 logged_summary = wetland_connectivity_key[['well_id', 'planet_log_date']].copy()
 logged_summary['hydro_sufficient'] = pd.to_datetime(logged_summary['planet_log_date']) >= pd.to_datetime('2022-05-01')
 
-
 # %% 5.0 Generate a combination of every logging and reference wetland. 
 
 combinations_list = []

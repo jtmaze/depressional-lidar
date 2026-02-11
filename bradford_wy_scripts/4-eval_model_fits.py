@@ -5,7 +5,7 @@ import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
 
-lai_buffer_dist = 250
+lai_buffer_dist = 150
 
 data_dir = "D:/depressional_lidar/data/bradford/out_data/"
 wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer_dist}m_all_wells.csv'
@@ -19,19 +19,16 @@ model_data = model_data[model_data['model_type'] == 'OLS']
 
 print(len(model_data)) 
 
-# NOTE: These thresholds might change. 
 strong_pairs = model_data[
     (model_data['data_set'] == 'full') & 
-    (model_data['pre_r2'] >= 0.30) &
-    (model_data['post_r2'] >= 0.30)
+    (model_data['r2_joint'] >= 0.50)
 ][['log_id', 'log_date', 'ref_id']]
 
-print(len(strong_pairs))
 print(len(strong_pairs))
 
 # %% 3.0 Write the output
 
-#strong_pairs.to_csv(f'{data_dir}/strong_ols_models_{lai_buffer_dist}m_all_wells.csv', index=False)
+strong_pairs.to_csv(f'{data_dir}/strong_ols_models_{lai_buffer_dist}m_all_wells.csv', index=False)
 
 # %% 4.0 Diagnostic plots of model fits
 

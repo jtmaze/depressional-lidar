@@ -20,6 +20,7 @@ from wetland_utilities.basin_attributes import WetlandBasin
 
 min_depth_search_radius = None # NOTE: Only used if censoring low water table values. 
 lai_buffer = 150
+data_set = 'no_dry_days'
 
 stage_path = "D:/depressional_lidar/data/bradford/in_data/stage_data/bradford_daily_well_depth_Winter2025.csv"
 source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'
@@ -53,13 +54,40 @@ def timeseries_qaqc(df):
     df = df.dropna(subset=['well_depth_m'])
     min_date = min(df['date'][df['flag'] == 0])
     max_date = max(df['date'][df['flag'] == 0])
-    df_cleaned, bottomed_well_days = remove_flagged_buffer(df, buffer_days=1)
+    df_cleaned, bottomed_well_days = remove_flagged_buffer(df, buffer_days=2)
 
     return {
         'clean_ts': df_cleaned,
         'bottomed_dates': bottomed_well_days,
         'min_date': min_date,
         'max_date': max_date,
+    }
+
+def check_domain_overlap(comp_df, log_date):
+    
+    """
+    Filters the logging and reference data to ensure they have the same domain for interaction models
+    Calculates the proportion of observations outside the domain. 
+    """
+    common_comp = comp_df.copy().dropna(subset=['depth_ref', 'depth_log'])
+    initial_obs_cnt = len(common_comp)
+    common_comp['pre_logging'] = common_comp['day'] <= log_date
+    max_common = min(
+        common_comp['depth_ref'][common_comp['pre_logging']].max(), 
+        common_comp['depth_ref'][~common_comp['pre_logging']].max()
+    )
+    min_common = max(
+        common_comp['depth_ref'][common_comp['pre_logging']].min(), 
+        common_comp['depth_ref'][~common_comp['pre_logging']].min()
+    )
+    common_comp = common_comp[common_comp['depth_ref'].between(min_common, max_common)]
+    filtered_obs_cnt = len(common_comp)
+    print(f'Domain % Overlap: {(filtered_obs_cnt / initial_obs_cnt * 100):.2f}')
+
+    return {
+        'common_comp': common_comp,
+        'unfiltered_domain_days': initial_obs_cnt,
+        'domain_filtered_days': filtered_obs_cnt
     }
 
 def dem_depth_censor(
@@ -94,12 +122,14 @@ def dem_depth_censor(
     ref_well_diff = ref_basin.well_point.elevation_dem - ref_basin.deepest_point.elevation
     reference_ts['wetland_depth'] = reference_ts['well_depth_m'] + ref_well_diff
 
+    # TODO: finish function later
     pass
 
 def process_wetland_pair(
     row,
     stage_data: pd.DataFrame,
     plot: bool = False, 
+    data_set: str = None,
     depth_censor: bool = False,
     # Optional args if depth censor is True
     well_point: gpd.GeoDataFrame = None,
@@ -128,8 +158,8 @@ def process_wetland_pair(
     date_range = pd.date_range(start=common_start, end=common_end, freq='D')
     n_dry_days = len(reference_qaqc['bottomed_dates'] | logged_qaqc['bottomed_dates'])
     total_days = len(date_range)
+    print(f'proportion of bottomed-out days {(n_dry_days / total_days * 100):.2f}')
 
-    # TODO: Finish this function call
     if depth_censor:
         dem_depth_censor(
             reference_ts=reference_qaqc['clean_ts'],
@@ -154,13 +184,6 @@ def process_wetland_pair(
         suffixes=('_ref', '_log')
     ).drop(columns=['flag_ref', 'flag_log', 'well_depth_m_log', 'well_depth_m_ref'])
 
-    # Sample reference distribution once for both models
-    ref_sample = sample_reference_ts(
-        df=comparison,
-        column_name='depth_ref',
-        n=10_000
-    )
-
     # Run both OLS and Huber models
     model_configs = [
         ('ols', 'OLS', fit_interaction_model_ols, {"cov_type": "HC3"}),
@@ -172,10 +195,49 @@ def process_wetland_pair(
     residual_results = []
     distribution_results = []
 
+    domain_comparison = check_domain_overlap(
+        comparison,
+        log_date=logging_date
+    )
+
+    common_comparison = domain_comparison['common_comp']
+    domain_days = domain_comparison['unfiltered_domain_days']
+    filtered_domain_days = domain_comparison['filtered_domain_days']
+
+    if len(common_comparison[~common_comparison['pre_logging']]) < 50 or len(common_comparison[common_comparison['pre_logging']]) < 50:
+        print(f"WARNING: Insufficient Post-Logging Sample Counts")
+        print(f"pre={len(common_comparison[common_comparison['pre_logging']])}")
+        print(f"post={len(common_comparison[~common_comparison['pre_logging']])}")
+
+        data_limited = pd.DataFrame({
+            'log_id': logged_id,
+            'ref_id': reference_id,
+            'post_days': len(common_comparison[~common_comparison['pre_logging']])
+            'pre_days': len(common_comparison[common_comparison['pre_logging']])
+        })
+
+        return {
+            'model_results': None,
+            'shift_results': None,
+            'residual_results': None,
+            'distribution_results': None,
+            'data_limited_pairs': data_limited
+        }
+
+
+
     for model_type, model_label, fit_func, fit_kwargs in model_configs:
+
+        # Sample reference distribution 
+        ref_sample = sample_reference_ts(
+            df=common_comparison,
+            column_name='depth_ref',
+            n=10_000
+        )
+
         # Fit the interaction model
         results = fit_func(
-            comparison,
+            common_comparison,
             x_series_name='depth_ref',
             y_series_name='depth_log',
             log_date=logging_date,
@@ -184,21 +246,23 @@ def process_wetland_pair(
 
         # Generate modeled distributions and compute residuals
         modeled_distributions = generate_model_distributions(f_dist=ref_sample, models=results)
-        residuals = compute_residuals(comparison, logging_date, 'depth_ref', 'depth_log', results)
+        residuals = compute_residuals(common_comparison, logging_date, 'depth_ref', 'depth_log', results)
         depth_shift = summarize_depth_shift(model_distributions=modeled_distributions)
 
         # Flatten and store model results
-        model_results.append(flatten_model_results(results, logged_id, logging_date, reference_id, "full"))
+        model_results.append(flatten_model_results(results, logged_id, logging_date, reference_id, data_set))
 
         # Store shift results
         shift_results.append({
             'log_id': logged_id,
             'ref_id': reference_id,
             'logging_date': logging_date,
-            'data_set': 'full',
+            'data_set': data_set,
             'model_type': model_type,
             'total_obs': total_days,
             'n_bottomed_out': n_dry_days,
+            'domain_days': domain_days,
+            'domain_filtered_days': filtered_domain_days,
             'pre_logging_modeled_mean': depth_shift['mean_pre'],
             'post_logging_modeled_mean': depth_shift['mean_post'], 
             'mean_depth_change': depth_shift['delta_mean'], 
@@ -208,33 +272,34 @@ def process_wetland_pair(
         residuals['log_id'] = logged_id
         residuals['ref_id'] = reference_id
         residuals['model_type'] = model_label
+        residuals['data_set'] = data_set
         residual_results.append(residuals)
 
         # Store distributions
-        if model_type == 'ols':
-            dist_df = pd.DataFrame(modeled_distributions)
-            dist_df['data_set'] = 'full'
-            dist_df['model_type'] = model_type
-            dist_df['log_id'] = logged_id
-            dist_df['ref_id'] = reference_id
-            distribution_results.append(dist_df)
+        dist_df = pd.DataFrame(modeled_distributions)
+        dist_df['data_set'] = data_set
+        dist_df['model_type'] = model_type
+        dist_df['log_id'] = logged_id
+        dist_df['ref_id'] = reference_id
+        distribution_results.append(dist_df)
 
         # Plot if requested (only for OLS)
-        if plot and model_type == 'ols':
+        if plot:
             plot_correlations_from_model(
-                comparison,
+                common_comparison,
                 x_series_name='depth_ref',
                 y_series_name='depth_log',
                 log_date=logging_date, 
                 model_results=results
             )
-            plot_hypothetical_distributions(modeled_distributions, f_dist=ref_sample, bins=50)
+            #plot_hypothetical_distributions(modeled_distributions, f_dist=ref_sample, bins=50)
 
     return {
         'model_results': model_results,
         'shift_results': shift_results,
         'residual_results': residual_results,
-        'distribution_results': distribution_results
+        'distribution_results': distribution_results,
+        'data_limited_pairs': data_limited
     }
 
 # %% 2.0 Run the models for each wetland pair
@@ -245,14 +310,16 @@ shift_results = []
 residual_results = []
 
 # View plots for random pairs of logged and reference wetlands
-rando_plot_idxs = np.random.choice(len(wetland_pairs), size=75, replace=False)
+rando_plot_idxs = np.random.choice(len(wetland_pairs), size=42, replace=False)
 
 for index, row in wetland_pairs.iterrows():
     pair_results = process_wetland_pair(
         row=row,
         stage_data=stage_data,
         plot=(index in rando_plot_idxs),
+        data_set=data_set,
         depth_censor=False,
+        # Optional params for depth censoring
         well_point=None,
         source_dem_path=None,
         min_depth_search_radius=None
@@ -278,14 +345,16 @@ distributions_path = out_dir + f'/modeled_logging_stages/all_wells_hypothetical_
 residuals_path = out_dir + f'/model_info/all_wells_residuals_LAI_{lai_buffer}m.csv'
 models_path = out_dir + f'/model_info/all_wells_model_estimates_LAI_{lai_buffer}m.csv'
 
-# shift_results_df.to_csv(shift_path, index=False)
+shift_results_df.to_csv(shift_path, index=False)
 # distribution_results_df.to_csv(distributions_path, index=False)
 # residual_results_df.to_csv(residuals_path, index=False)
-# model_results_df.to_csv(models_path, index=False)
+model_results_df.to_csv(models_path, index=False)
 
 # %% 4.0 Plot the shifts in depth
 
-plot_df = shift_results_df.query("data_set == 'full' and model_type == 'huber'")
+plot_df = shift_results_df.query("data_set == 'full' and model_type == 'ols'")
+plot_df = plot_df[plot_df['mean_depth_change'] < 0.5]
+
 #plot_df = plot_df[~plot_df['log_id'].isin(['15_516', '3_244'])]
 fig, ax = plt.subplots(figsize=(10, 7))
 
