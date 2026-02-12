@@ -38,7 +38,7 @@ stage_data['day'] = pd.to_datetime(stage_data['date'])
 
 well_point = (
     gpd.read_file(well_points_path)[['wetland_id', 'type', 'geometry', 'rtk_z']]
-    .query("type in ['doe_core_well', 'aux_wetland_well']")
+    .query("type in ['main_doe_well', 'aux_wetland_well']")
 )
 
 # %% 3.0 Process each logging/reference wetland pair
@@ -175,7 +175,7 @@ def process_wetland_pair(
     print(f'proportion of bottomed-out days {(n_dry_days / total_days * 100):.2f}')
 
     if depth_censor:
-        dem_depth_censor(
+        logged_ts, reference_ts = dem_depth_censor(
             reference_ts=reference_qaqc['clean_ts'],
             logged_ts=logged_qaqc['clean_ts'],
             well_point=well_point, 
@@ -183,11 +183,11 @@ def process_wetland_pair(
             depth_thresh=0.0,
             min_depth_search_radius=min_depth_search_radius
         )
-
-    # Merge into comparison dataframe
-    reference_ts = reference_qaqc['clean_ts']
+    else: 
+        reference_ts = reference_qaqc['clean_ts']
+        logged_ts = logged_qaqc['clean_ts']
+    
     reference_ts['depth'] = reference_ts['well_depth_m']
-    logged_ts = logged_qaqc['clean_ts']
     logged_ts['depth'] = logged_ts['well_depth_m']
 
     comparison = pd.merge(
@@ -360,14 +360,14 @@ distributions_path = out_dir + f'/modeled_logging_stages/all_wells_hypothetical_
 residuals_path = out_dir + f'/model_info/all_wells_residuals_LAI_{lai_buffer}m.csv'
 models_path = out_dir + f'/model_info/all_wells_model_estimates_LAI_{lai_buffer}m.csv'
 
-#shift_results_df.to_csv(shift_path, index=False)
+shift_results_df.to_csv(shift_path, index=False)
 # distribution_results_df.to_csv(distributions_path, index=False)
 # residual_results_df.to_csv(residuals_path, index=False)
-# model_results_df.to_csv(models_path, index=False)
+model_results_df.to_csv(models_path, index=False)
 
 # %% 4.0 Plot the shifts in depth
 
-plot_df = shift_results_df.query("data_set == 'no_dry_days' and model_type == 'ols'")
+plot_df = shift_results_df.query("data_set == 'no_dry_days' and model_type == 'huber'")
 
 fig, ax = plt.subplots(figsize=(10, 7))
 
