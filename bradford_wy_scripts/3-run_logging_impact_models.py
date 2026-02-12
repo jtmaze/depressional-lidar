@@ -18,9 +18,9 @@ from bradford_wy_scripts.functions.wetland_logging_functions import (
 
 from wetland_utilities.basin_attributes import WetlandBasin
 
-min_depth_search_radius = 50 # NOTE: Only used if censoring low water table values. 
+min_depth_search_radius = 100 # NOTE: Only used if censoring low water table values. 
 lai_buffer = 150
-data_set = 'no_dry_days'
+data_set = 'wtd_above0'
 
 stage_path = "D:/depressional_lidar/data/bradford/in_data/stage_data/bradford_daily_well_depth_Winter2025.csv"
 source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'
@@ -304,7 +304,7 @@ def process_wetland_pair(
                 log_date=logging_date, 
                 model_results=results
             )
-            #plot_hypothetical_distributions(modeled_distributions, f_dist=ref_sample, bins=50)
+            plot_hypothetical_distributions(modeled_distributions, f_dist=ref_sample, bins=50)
 
     return {
         'model_results': model_results,
@@ -347,27 +347,30 @@ for index, row in wetland_pairs.iterrows():
 # %% 3.0 Combine the results into a dataframe and save results
 
 shift_results_df = pd.DataFrame(shift_results)
-# distribution_results_df = pd.concat(distribution_results)
-# residual_results_df = pd.concat(residual_results)
+distribution_results_df = pd.concat(distribution_results)
+residual_results_df = pd.concat(residual_results)
 model_results_df = pd.DataFrame(model_results)
 data_limited_pairs_df = pd.DataFrame(data_limited_pairs)
 
 # %% 3.1 Save the results
 
 out_dir = "D:/depressional_lidar/data/bradford/out_data/"
-shift_path = out_dir + f'/modeled_logging_stages/all_wells_shift_results_LAI_{lai_buffer}m.csv'
-distributions_path = out_dir + f'/modeled_logging_stages/all_wells_hypothetical_distributions_LAI_{lai_buffer}m.csv'
-residuals_path = out_dir + f'/model_info/all_wells_residuals_LAI_{lai_buffer}m.csv'
-models_path = out_dir + f'/model_info/all_wells_model_estimates_LAI_{lai_buffer}m.csv'
+
+shift_path = out_dir + f'/modeled_logging_stages/all_wells_shift_results_LAI{lai_buffer}m_domain_{data_set}.csv'
+distributions_path = out_dir + f'/modeled_logging_stages/all_wells_hypothetical_distributions_LAI{lai_buffer}m_domain_{data_set}.csv'
+residuals_path = out_dir + f'/model_info/all_wells_residuals_LAI{lai_buffer}m_domain_{data_set}.csv'
+models_path = out_dir + f'/model_info/all_wells_model_estimates_LAI{lai_buffer}m_domain_{data_set}.csv'
+data_limited_path = out_dir + f'/model_info/data_limitted_pairs_LAI{lai_buffer}m_domain_{data_set}.csv'
 
 shift_results_df.to_csv(shift_path, index=False)
-# distribution_results_df.to_csv(distributions_path, index=False)
-# residual_results_df.to_csv(residuals_path, index=False)
+distribution_results_df.to_csv(distributions_path, index=False)
+residual_results_df.to_csv(residuals_path, index=False)
 model_results_df.to_csv(models_path, index=False)
+data_limited_pairs_df.to_csv(data_limited_path)
 
 # %% 4.0 Plot the shifts in depth
 
-plot_df = shift_results_df.query("data_set == 'no_dry_days' and model_type == 'huber'")
+plot_df = shift_results_df.query("data_set == 'wtd_above0' and model_type == 'huber'")
 
 fig, ax = plt.subplots(figsize=(10, 7))
 
