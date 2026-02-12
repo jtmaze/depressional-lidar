@@ -21,14 +21,14 @@ print(len(model_data))
 
 strong_pairs = model_data[
     (model_data['data_set'] == 'no_dry_days') & 
-    (model_data['r2_joint'] >= 0.30)
+    (model_data['r2_joint'] >= 0.5)
 ][['log_id', 'log_date', 'ref_id']]
 
 print(len(strong_pairs))
 
 # %% 3.0 Write the output
 
-strong_pairs.to_csv(f'{data_dir}/strong_ols_models_{lai_buffer_dist}m_all_wells.csv', index=False)
+#strong_pairs.to_csv(f'{data_dir}/strong_ols_models_{lai_buffer_dist}m_all_wells.csv', index=False)
 
 # %% 4.0 Diagnostic plots of model fits
 

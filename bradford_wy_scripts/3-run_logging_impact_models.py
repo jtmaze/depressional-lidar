@@ -18,7 +18,7 @@ from bradford_wy_scripts.functions.wetland_logging_functions import (
 
 from wetland_utilities.basin_attributes import WetlandBasin
 
-min_depth_search_radius = None # NOTE: Only used if censoring low water table values. 
+min_depth_search_radius = 50 # NOTE: Only used if censoring low water table values. 
 lai_buffer = 150
 data_set = 'no_dry_days'
 
@@ -38,7 +38,7 @@ stage_data['day'] = pd.to_datetime(stage_data['date'])
 
 well_point = (
     gpd.read_file(well_points_path)[['wetland_id', 'type', 'geometry', 'rtk_z']]
-    .query("type in ['core_well', 'wetland_well']")
+    .query("type in ['doe_core_well', 'aux_wetland_well']")
 )
 
 # %% 3.0 Process each logging/reference wetland pair
@@ -54,7 +54,7 @@ def timeseries_qaqc(df):
     df = df.dropna(subset=['well_depth_m'])
     min_date = min(df['date'][df['flag'] == 0])
     max_date = max(df['date'][df['flag'] == 0])
-    df_cleaned, bottomed_well_days = remove_flagged_buffer(df, buffer_days=2)
+    df_cleaned, bottomed_well_days = remove_flagged_buffer(df, buffer_days=0)
 
     return {
         'clean_ts': df_cleaned,
@@ -98,19 +98,26 @@ def dem_depth_censor(
     depth_thresh: float = 0.0,
     min_depth_search_radius = 50
 ):
+
+    adj_log_ts = logged_ts.copy()
+    adj_ref_ts = reference_ts.copy()
+
     # Establish basin classes to get depth estimates
     reference_id = reference_ts['well_id'].iloc[0]
     logged_id = logged_ts['well_id'].iloc[0]
+    well_point_log = well_point[well_point['wetland_id'] == logged_id].copy()
+    well_point_ref = well_point[well_point['wetland_id'] == reference_id].copy()
+
     ref_basin = WetlandBasin(
         wetland_id=reference_id, 
-        well_point_info=well_point[well_point['wetland_id'] == reference_id],
+        well_point_info=well_point_ref,
         source_dem_path=source_dem_path, 
         footprint=None,
         transect_buffer=min_depth_search_radius
     )
     log_basin = WetlandBasin(
         wetland_id=logged_id,
-        well_point_info=well_point[well_point['wetland_id'] == logged_id],
+        well_point_info=well_point_log,
         source_dem_path=source_dem_path, 
         footprint=None,
         transect_buffer=min_depth_search_radius
@@ -118,12 +125,19 @@ def dem_depth_censor(
 
     # Calculate wetland depth timeseries using the deepest point on the DEM
     logged_well_diff = log_basin.well_point.elevation_dem - log_basin.deepest_point.elevation
-    logged_ts['wetland_depth'] = logged_ts['well_depth_m'] + logged_well_diff
+    adj_log_ts['wetland_depth'] = adj_log_ts['well_depth_m'] + logged_well_diff
     ref_well_diff = ref_basin.well_point.elevation_dem - ref_basin.deepest_point.elevation
-    reference_ts['wetland_depth'] = reference_ts['well_depth_m'] + ref_well_diff
+    adj_ref_ts['wetland_depth'] = adj_ref_ts['well_depth_m'] + ref_well_diff
 
-    # TODO: finish function later
-    pass
+    # Eliminate date points where wetland depth is less than zero
+    adj_log_ts = adj_log_ts[adj_log_ts['wetland_depth'] >= depth_thresh]
+    adj_ref_ts = adj_ref_ts[adj_ref_ts['wetland_depth'] >= depth_thresh]
+
+    # Remove the extra column
+    adj_ref_ts.drop(columns=['wetland_depth'], inplace=True)
+    adj_log_ts.drop(columns=['wetland_depth'], inplace=True)
+
+    return adj_log_ts, adj_ref_ts
 
 def process_wetland_pair(
     row,
@@ -317,11 +331,11 @@ for index, row in wetland_pairs.iterrows():
         stage_data=stage_data,
         plot=(index in rando_plot_idxs),
         data_set=data_set,
-        depth_censor=False,
+        depth_censor=True,
         # Optional params for depth censoring
-        well_point=None,
-        source_dem_path=None,
-        min_depth_search_radius=None
+        well_point=well_point,
+        source_dem_path=source_dem_path,
+        min_depth_search_radius=min_depth_search_radius
     )
     
     model_results.extend(pair_results['model_results'])
@@ -346,17 +360,15 @@ distributions_path = out_dir + f'/modeled_logging_stages/all_wells_hypothetical_
 residuals_path = out_dir + f'/model_info/all_wells_residuals_LAI_{lai_buffer}m.csv'
 models_path = out_dir + f'/model_info/all_wells_model_estimates_LAI_{lai_buffer}m.csv'
 
-shift_results_df.to_csv(shift_path, index=False)
+#shift_results_df.to_csv(shift_path, index=False)
 # distribution_results_df.to_csv(distributions_path, index=False)
 # residual_results_df.to_csv(residuals_path, index=False)
-model_results_df.to_csv(models_path, index=False)
+# model_results_df.to_csv(models_path, index=False)
 
 # %% 4.0 Plot the shifts in depth
 
 plot_df = shift_results_df.query("data_set == 'no_dry_days' and model_type == 'ols'")
 
-
-#plot_df = plot_df[~plot_df['log_id'].isin(['15_516', '3_244'])]
 fig, ax = plt.subplots(figsize=(10, 7))
 
 # Calculate statistics for annotation
