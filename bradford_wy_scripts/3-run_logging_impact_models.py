@@ -18,9 +18,9 @@ from bradford_wy_scripts.functions.wetland_logging_functions import (
 
 from wetland_utilities.basin_attributes import WetlandBasin
 
-min_depth_search_radius = 100 # NOTE: Only used if censoring low water table values. 
+min_depth_search_radius = 25 # NOTE: Only used if censoring low water table values. 
 lai_buffer = 150
-data_set = 'wtd_above0'
+data_set = 'wtd_above0_25'
 
 stage_path = "D:/depressional_lidar/data/bradford/in_data/stage_data/bradford_daily_well_depth_Winter2025.csv"
 source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'
@@ -50,11 +50,11 @@ def timeseries_qaqc(df):
     First, filters days with water level uncertianty (flag = 1)
     Then, filters bottomed out days (flag=2), tracking number of bottomed out days.
     """
-    df = df[df['flag'] != 1]
-    df = df.dropna(subset=['well_depth_m'])
-    min_date = min(df['date'][df['flag'] == 0])
-    max_date = max(df['date'][df['flag'] == 0])
-    df_cleaned, bottomed_well_days = remove_flagged_buffer(df, buffer_days=0)
+    df_cleaned = df[df['flag'] != 1].copy()
+    df_cleaned = df_cleaned.dropna(subset=['well_depth_m'])
+    min_date = min(df_cleaned['date'][df_cleaned['flag'] == 0])
+    max_date = max(df_cleaned['date'][df_cleaned['flag'] == 0])
+    df_cleaned, bottomed_well_days = remove_flagged_buffer(df_cleaned, buffer_days=0)
 
     return {
         'clean_ts': df_cleaned,
@@ -223,19 +223,21 @@ def process_wetland_pair(
         print(f"pre={len(common_comparison[common_comparison['pre_logging']])}")
         print(f"post={len(common_comparison[~common_comparison['pre_logging']])}")
 
-        data_limited = pd.DataFrame({
-            'log_id': [logged_id],
-            'ref_id': [reference_id],
-            'post_days': [len(common_comparison[~common_comparison['pre_logging']])],
-            'pre_days': [len(common_comparison[common_comparison['pre_logging']])]
-        })
+        data_limited = {
+            'log_id': logged_id,
+            'ref_id': reference_id,
+            'post_days': len(common_comparison[~common_comparison['pre_logging']]),
+            'pre_days': len(common_comparison[common_comparison['pre_logging']])
+        }
+
+        print(data_limited)
 
         return {
             'model_results': [],
             'shift_results': [],
             'residual_results': [],
             'distribution_results': [],
-            'data_limited_pairs': data_limited
+            'data_limited_pairs': [data_limited]
         }
 
     for model_type, model_label, fit_func, fit_kwargs in model_configs:
@@ -323,7 +325,7 @@ residual_results = []
 data_limited_pairs = []
 
 # View plots for random pairs of logged and reference wetlands
-rando_plot_idxs = np.random.choice(len(wetland_pairs), size=42, replace=False)
+rando_plot_idxs = np.random.choice(len(wetland_pairs), size=0, replace=False)
 
 for index, row in wetland_pairs.iterrows():
     pair_results = process_wetland_pair(
@@ -363,14 +365,14 @@ models_path = out_dir + f'/model_info/all_wells_model_estimates_LAI{lai_buffer}m
 data_limited_path = out_dir + f'/model_info/data_limitted_pairs_LAI{lai_buffer}m_domain_{data_set}.csv'
 
 shift_results_df.to_csv(shift_path, index=False)
-distribution_results_df.to_csv(distributions_path, index=False)
-residual_results_df.to_csv(residuals_path, index=False)
+# distribution_results_df.to_csv(distributions_path, index=False)
+# residual_results_df.to_csv(residuals_path, index=False)
 model_results_df.to_csv(models_path, index=False)
-data_limited_pairs_df.to_csv(data_limited_path)
+data_limited_pairs_df.to_csv(data_limited_path, index=False)
 
 # %% 4.0 Plot the shifts in depth
 
-plot_df = shift_results_df.query("data_set == 'wtd_above0' and model_type == 'huber'")
+plot_df = shift_results_df.query("data_set == 'wtd_above0_25' and model_type == 'ols'")
 
 fig, ax = plt.subplots(figsize=(10, 7))
 

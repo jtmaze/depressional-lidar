@@ -18,13 +18,11 @@ footprints = gpd.read_file(footprints_path)
 well_point = (
     gpd.read_file(well_points_path)[['wetland_id', 'type', 'rtk_z', 'geometry', 'site']]
     .rename(columns={'rtk_z': 'rtk_z'})
-    .query("type in ['core_well', 'wetland_well'] and site == 'bradford'")
+    .query("type in ['main_doe_well', 'aux_wetland_well'] and site == 'Bradford'")
 )
 
 well_ids = well_point['wetland_id'].unique().tolist()
-well_ids.remove('wet_wetland_east')
-well_ids.remove('dry_wetland_west')
-dem_buffer = 250
+dem_buffer = 150
 
 connectivity = pd.read_excel(wetland_connectivity_path)
 

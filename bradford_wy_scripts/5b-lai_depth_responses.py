@@ -14,20 +14,20 @@ from bradford_wy_scripts.functions.lai_vis_functions import read_concatonate_lai
 
 lai_buffer_dist = 150
 model_type = 'ols'  # or 'ols'
-data_set = 'no_dry_days'  # or 'full'
+data_set = 'full_obs'  
 
 data_dir = "D:/depressional_lidar/data/bradford/"
 lai_dir = data_dir + f'/in_data/hydro_forcings_and_LAI/well_buffer_{lai_buffer_dist}m_nomasking/'
 
 # Path to results
-shift_path = data_dir + f'out_data/modeled_logging_stages/all_wells_shift_results_LAI_{lai_buffer_dist}m.csv'
+shift_path = data_dir + f'out_data/modeled_logging_stages/all_wells_shift_results_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
 #distributions_path = data_dir + f'out_data/modeled_logging_stages/all_wells_hypothetical_distributions_LAI_{lai_buffer_dist}m.csv'
 models_path = data_dir + f'out_data/model_info/all_wells_model_estimates_LAI_{lai_buffer_dist}m.csv'
 
 # Path to wetland pairs, connnectivity key and strong model fits
 wetland_pairs_path = data_dir + f'/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer_dist}m_all_wells.csv'
 connectivity_key_path = data_dir + 'bradford_wetland_connect_logging_key.xlsx'
-strong_pairs = data_dir + f'out_data/strong_ols_models_{lai_buffer_dist}m_all_wells.csv'
+strong_pairs = data_dir + f'out_data/strong_ols_models_{lai_buffer_dist}m_domain_{data_set}.csv'
 
 wetland_pairs = pd.read_csv(wetland_pairs_path)
 strong_pairs = pd.read_csv(strong_pairs)
@@ -40,6 +40,7 @@ shift_data = shift_data.merge(
     right_on=['log_id', 'ref_id', 'log_date'],
     how='inner'
 )
+shift_data = shift_data[shift_data['mean_depth_change'] < 1]
 
 print(len(shift_data))
 print(len(strong_pairs))
@@ -222,6 +223,11 @@ for connectivity_level, config in connectivity_config.items():
             marker=config['marker']
         )
     
+    # Add text labels for each point
+    for idx, row in subset.iterrows():
+        ax.text(row['roll_diff_change'], row['mean_depth_change'], 
+                str(row['log_id']), fontsize=8, alpha=0.7)
+    
     slope, intercept, r_value, p_value, std_err = stats.linregress(
         subset['roll_diff_change'], 
         subset['mean_depth_change']
@@ -323,4 +329,4 @@ ax.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.show()
 
-# %%
+# %% 8.0 Simple histogram

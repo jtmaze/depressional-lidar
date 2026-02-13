@@ -3,16 +3,20 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
+from scipy import stats
 
 lai_buffer_dist = 150
+data_set = 'no_dry_days'
 data_dir = "D:/depressional_lidar/data/bradford/"
-shift_path = data_dir + f'/out_data/modeled_logging_stages/all_wells_shift_results_LAI_{lai_buffer_dist}m.csv'
+shift_path = data_dir + f'/out_data/modeled_logging_stages/all_wells_shift_results_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
 connectivity_key_path = data_dir + '/bradford_wetland_connect_logging_key.xlsx'
-strong_pairs_path = data_dir + f'out_data/strong_ols_models_{lai_buffer_dist}m_all_wells.csv'
+strong_pairs_path = data_dir + f'out_data/strong_ols_models_{lai_buffer_dist}m_domain_{data_set}.csv'
 
 shift_data = pd.read_csv(shift_path)
 connect_data = pd.read_excel(connectivity_key_path)
 strong_pairs = pd.read_csv(strong_pairs_path)
+
+# %% 2.1 Merge connectivity data and select for strong models
 
 # Add connectivity class info
 shift_data = shift_data.merge(
@@ -38,8 +42,10 @@ shift_data = shift_data.merge(
 )
 plot_data = shift_data[
     (shift_data['model_type'] == 'ols') &
-    (shift_data['data_set'] == 'full')
+    (shift_data['data_set'] == data_set)
 ].copy()
+
+# %% 2.2 Generate a new column that specifies both log and ref connectivity status
 
 def classify_pair(df_row):
     """
@@ -74,7 +80,7 @@ print(plot_data.head(2))
 # Define connectivity color palette
 connectivity_config = {
     'flow-through': {'color': 'red', 'label': 'Flow-through'},
-    'first order': {'color': 'orange', 'label': '1st Order Ditched'},
+    'first order': {'color': 'green', 'label': '1st Order Ditched'},
     'giw': {'color': 'blue', 'label': 'GIW'}
 }
 
@@ -246,11 +252,16 @@ pair_labels = [
     '1st→GIW', '1st→Flow', '1st→1st'
 ]
 
+connectivity_config = {
+    'flow-through': {'color': 'red', 'label': 'Flow-through'},
+    'first order': {'color': 'green', 'label': '1st Order Ditched'},
+    'giw': {'color': 'blue', 'label': 'GIW'}
+}
 # Color mapping based on the logged wetland's connectivity
 pair_colors = {
     'giw-giw': 'blue', 'giw-flow': 'blue', 'giw-first': 'blue',
     'flow-giw': 'red', 'flow-flow': 'red', 'flow-first': 'red',
-    'first-giw': 'orange', 'first-flow': 'orange', 'first-first': 'orange'
+    'first-giw': 'green', 'first-flow': 'green', 'first-first': 'green'
 }
 
 fig, ax = plt.subplots(figsize=(12, 6))
@@ -295,56 +306,85 @@ ax.legend(handles=legend_elements, loc='best')
 plt.tight_layout()
 plt.show()
 
-# %% 7.0 Nine-panel histogram of depth shifts by connectivity pairing (same series as 5.0)
-# Rows = logged wetland connectivity (flow-through, first order, giw)
-# Columns = reference wetland connectivity (flow-through, first order, giw)
-# Each panel shows histogram of mean_depth_change for that pair_connect category
+# %% 7.0 Nine-panel (3x3) boxplot
 
-# Compute global axis limits for common axes
-all_depth_changes = plot_data['mean_depth_change'].dropna()
-x_min, x_max = all_depth_changes.min(), all_depth_changes.max()
-x_padding = (x_max - x_min) * 0.1
-x_lim = (x_min - x_padding, x_max + x_padding)
+from matplotlib.patches import Polygon
+from matplotlib.transforms import Bbox
 
-# Create 3x3 grid: rows = logged connectivity, cols = reference connectivity
-fig, axes = plt.subplots(3, 3, figsize=(10, 8), sharex=True, sharey=True)
+connectivity_config = {
+    'flow-through': {'color': 'red', 'label': 'Flow-through'},
+    'first order': {'color': 'green', 'label': '1st Order Ditched'},
+    'giw': {'color': 'blue', 'label': 'GIW'}
+}
 
-bins = 15
+connect_types = list(connectivity_config.keys())
+bg_alpha = 0.3
 
-# Map connectivity to row/column indices
-conn_to_idx = {'flow-through': 0, 'first order': 1, 'giw': 2}
-conn_labels = ['Flow-through', '1st Order', 'GIW']
+plt.rcParams['hatch.linewidth'] = 2.0
+fig, axes = plt.subplots(3, 3, figsize=(10, 9), sharex=True, sharey=True)
 
-for i, log_conn in enumerate(connectivity_order):
-    for j, ref_conn in enumerate(connectivity_order):
-        ax = axes[i, j]
+for row_i, ref_conn in enumerate(connect_types):
+    for col_j, log_conn in enumerate(connect_types):
+        ax = axes[row_i, col_j]
         
-        # Filter data for this connectivity pairing
-        pair_data = plot_data[
+        log_color = connectivity_config[log_conn]['color']
+        ref_color = connectivity_config[ref_conn]['color']
+        
+        # Shaded background by connectivity
+        if log_conn == ref_conn:
+            ax.set_facecolor((*plt.cm.colors.to_rgb(log_color), bg_alpha))
+        else:
+            # Full background = logged color
+            ax.set_facecolor((*plt.cm.colors.to_rgb(log_color), bg_alpha))
+            # Smaller bottom-right triangle = reference color 
+            tri_ref = Polygon(
+                [[0.7, 0], [1, 0], [1, 0.7]], 
+                closed=True, transform=ax.transAxes,
+                facecolor=ref_color, alpha=0.7, edgecolor='none', zorder=0
+            )
+            ax.add_patch(tri_ref)
+        
+        subset = plot_data[
             (plot_data['logged_connect'] == log_conn) & 
             (plot_data['ref_connect'] == ref_conn)
-        ]['mean_depth_change']
+        ]['mean_depth_change'].dropna()
         
-        ax.hist(pair_data, bins=bins, range=x_lim, color='grey', 
-                alpha=0.6, edgecolor='black', linewidth=0.5)
-        ax.axvline(x=0, color='maroon', linestyle='--', linewidth=1.5)
-        # Add count annotation
-        ax.text(0.95, 0.95, f'n={len(pair_data)} pairs', ha='right', va='top',
-                transform=ax.transAxes, fontsize=9)
+        if len(subset) > 0:
+            bp = ax.boxplot(subset, patch_artist=True, widths=0.3, zorder=3)
+            
+            for patch in bp['boxes']:
+                patch.set_facecolor('grey')
+                patch.set_edgecolor('black')
+                patch.set_alpha(1)
+            
+            # Black median lines
+            for median in bp['medians']:
+                median.set_color('black')
+                median.set_linewidth(2)
+                
+            # Print mean, std, and t-statistic on panel
+            mean_val = subset.mean()
+            std_val = subset.std()
+            t_stat, p_val = stats.ttest_1samp(subset, 0)
+            ax.text(0.98, 0.95, f'Mean: {mean_val:.2f}\nStd: {std_val:.2f}\nt-stat: {t_stat:.2f}\n p-val: {p_val:.3f}\n n={len(subset)}', 
+                   transform=ax.transAxes, ha='right', va='top',
+                   fontsize=9, color='black', 
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
+        else:
+            ax.text(0.5, 0.5, 'No data', transform=ax.transAxes,
+                    ha='center', va='center', fontsize=10, color='gray')
         
-        # Add row labels on left column
-        if j == 0:
-            ax.set_ylabel(conn_labels[i], fontsize=10)
-        
-        # Add column labels on top row
-        if i == 0:
-            ax.set_title(conn_labels[j], fontsize=10)
+        if row_i == 0:
+            ax.set_title(connectivity_config[log_conn]['label'])
+        if col_j == 0:
+            ax.set_ylabel(connectivity_config[ref_conn]['label'])
 
-# Add overall axis labels
-fig.supxlabel('Depth Change (m)', fontsize=14)
-fig.supylabel('Logged Wetland Connectivity', fontsize=14, x=0.02)
-fig.suptitle('Reference Wetland Connectivity', fontsize=14, y=0.96)
+        ax.axhline(y=0, color='black', linestyle=':', linewidth=2)
 
-plt.tight_layout(rect=[0.04, 0.02, 1, 0.96])
+fig.supxlabel('Logged Connectivity')
+fig.supylabel('Reference Connectivity')
+plt.tight_layout()
 plt.show()
+
+
 # %% 6.0 Test 9-panel histogram of depth shifts by connectivity pairing
