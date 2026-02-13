@@ -22,7 +22,7 @@ well_point = (
 )
 
 well_ids = well_point['wetland_id'].unique().tolist()
-dem_buffer = 150
+dem_buffer = 200
 
 connectivity = pd.read_excel(wetland_connectivity_path)
 
@@ -41,6 +41,6 @@ for i in well_ids:
     
     print(f'Well ID: {i}, Connectivity: {connectivity_class}')
 
-    log_basin.visualize_shape(show_shape=False, show_well=True, show_deepest=False)
+    log_basin.visualize_shape(show_shape=True, show_well=True, show_deepest=False)
 
 # %%

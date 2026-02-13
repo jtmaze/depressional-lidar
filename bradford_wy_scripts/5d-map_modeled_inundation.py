@@ -4,18 +4,21 @@ import sys
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+import matplotlib.pyplot as plt
 
-tgt_id = '14_610'
+tgt_id = '14_500'
 lai_buffer_dist = 150
+inundation_mapping_dist = 200
+data_set = 'no_dry_days'
 
 data_dir = data_dir = "D:/depressional_lidar/data/bradford/"
 
-distributions_path = data_dir + f'/out_data/modeled_logging_stages/all_wells_hypothetical_distributions_LAI_{lai_buffer_dist}m.csv'
-wetland_pairs_path = data_dir + f'out_data/strong_ols_models_{lai_buffer_dist}m_all_wells.csv'
+distributions_path = data_dir + f'/out_data/modeled_logging_stages/all_wells_hypothetical_distributions_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
+wetland_pairs_path = data_dir + f'out_data/strong_ols_models_{lai_buffer_dist}m_domain_{data_set}.csv'
 
 source_dem_path = data_dir + '/in_data/bradford_DEM_cleaned_veg.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-shift_results_path = data_dir + f'/out_data/modeled_logging_stages/all_wells_shift_results_LAI_{lai_buffer_dist}m.csv'
+shift_results_path = data_dir + f'/out_data/modeled_logging_stages/all_wells_shift_results_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
 
 PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
 if PROJECT_ROOT not in sys.path:
@@ -28,7 +31,7 @@ from wetland_utilities.basin_dynamics import BasinDynamics, WellStageTimeseries
 
 well_pt = (
     gpd.read_file(well_points_path)[['wetland_id', 'type', 'rtk_z', 'geometry']]
-    .query("type in ['core_well', 'wetland_well']")
+    .query("type in ['main_doe_well', 'aux_wetland_well']")
 )
 well_pt = well_pt[well_pt['wetland_id'] == tgt_id]
 
@@ -37,22 +40,20 @@ basin = WetlandBasin(
     source_dem_path=source_dem_path,
     footprint=None,
     well_point_info=well_pt,
-    transect_buffer=50
+    transect_buffer=inundation_mapping_dist
 )
 
 # %% 3.0 Figure out the proportion of days the well was bottomed out
 
 dry_days = pd.read_csv(shift_results_path)
+print(dry_days)
 dry_days = dry_days[
-    #(dry_days['log_id'] == tgt_id) &
-    (dry_days['data_set'] == 'full') &
+    (dry_days['log_id'] == tgt_id) &
+    (dry_days['data_set'] == data_set) &
     (dry_days['model_type'] == 'ols') 
-][['log_id', 'ref_id', 'total_obs', 'n_bottomed_out']].copy()
+][['log_id', 'ref_id', 'total_obs', 'n_bottomed_out', 'filtered_domain_days']].copy()
 
-dry_days['dry_proportion'] = dry_days['n_bottomed_out'] / dry_days['total_obs']
-
-print(dry_days.groupby('log_id')['dry_proportion'].mean())
-print(dry_days.groupby('ref_id')['dry_proportion'].mean())
+dry_days['dry_proportion'] = 1 - (dry_days['filtered_domain_days'] / dry_days['total_obs'])
 
 dry_proportion = dry_days['dry_proportion'].mean()
 
@@ -66,7 +67,6 @@ distributions_clean = distributions[
         (distributions['log_id'] == tgt_id)
 ].copy()
 
-# TODO: Figure out if a gaussian KDE is better than just sampling
 pre_dist = np.random.choice(
     distributions_clean['pre'].values, 
     size=1_000, 
@@ -121,7 +121,7 @@ pre_ts = WellStageTimeseries(
 pre_dynamics = BasinDynamics(
     basin=basin,
     well_stage=pre_ts, 
-    well_to_dem_offset=0
+    well_to_dem_offset=0.5
 )
 pre_dynamics.map_inundation_stacks(
     inundation_frequency=None,
@@ -138,14 +138,61 @@ post_ts = WellStageTimeseries(
 post_dynamics = BasinDynamics(
     basin=basin,
     well_stage=post_ts,
-    well_to_dem_offset=0
+    well_to_dem_offset=0.5
 )
 post_dynamics.map_inundation_stacks(
     inundation_frequency=None,
     show_basin_footprint=False,
     cbar_min=0,
     cbar_max=100
-)
-                                   
+)                                
 
-# %% 
+# %% 4.0 Make Nominal and Relative Inundation Change Map
+
+# Pre-logging inundation frequency
+pre_stacks = pre_dynamics.calculate_inundation_stacks()
+pre_stack = np.stack(list(pre_stacks.values())).astype(np.float32)
+pre_map = np.nansum(pre_stack, axis=0) / pre_stack.shape[0]
+
+# Post-logging inundation frequency
+post_stacks = post_dynamics.calculate_inundation_stacks()
+post_stack = np.stack(list(post_stacks.values())).astype(np.float32)
+post_map = np.nansum(post_stack, axis=0) / post_stack.shape[0]
+
+# Nominal change (post - pre), as percentage points
+nominal_change = (post_map - pre_map) * 100
+
+# Relative change (post - pre) / pre, guard against division by zero
+with np.errstate(divide='ignore', invalid='ignore'):
+    relative_change = np.where(
+        pre_map > 0,
+        ((post_map - pre_map) / pre_map) * 100,
+        np.nan
+    )
+
+# Plot
+fig, axes = plt.subplots(1, 2, figsize=(14, 5), facecolor='white')
+
+# Create single colormap with grey for NaN values
+cmap = plt.cm.RdBu.copy()
+cmap.set_bad('white')
+
+nom_lim = np.nanmax(np.abs(nominal_change))
+im0 = axes[0].imshow(nominal_change, cmap=cmap, vmin=-nom_lim, vmax=nom_lim)
+axes[0].set_title(f'Nominal Change (%)')
+axes[0].set_facecolor('white')
+fig.colorbar(im0, ax=axes[0], label='Δ Inundation Freq (%)')
+
+rel_lim = np.nanpercentile(np.abs(relative_change[np.isfinite(relative_change)]), 95)
+im1 = axes[1].imshow(relative_change, cmap=cmap, vmin=-rel_lim, vmax=rel_lim)
+axes[1].set_title(f'Relative Change (%)')
+axes[1].set_facecolor('white')
+fig.colorbar(im1, ax=axes[1], label='Relative to Pre')
+
+for ax in axes:
+    ax.set_axis_off()
+
+plt.tight_layout()
+plt.show()
+
+# %%
