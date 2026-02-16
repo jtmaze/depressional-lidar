@@ -4,7 +4,6 @@ import os
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-import matplotlib.pyplot as plt
 import rasterio as rio
 
 os.chdir('D:/depressional_lidar/data/')
@@ -136,7 +135,7 @@ combined_gdf['lat_proj'] = combined_gdf.geometry.y
 
 # %% 6.0  Write the files
 
-combined_gdf.to_file('rtk_pts_with_dem_elevations.shp')
+combined_gdf.to_file('rtk_pts_with_dem_elevations.shp', index=False)
 combined_df = combined_gdf.drop(columns=['geometry'])
 combined_df.to_excel('doe_point_data_master.xlsx', index=False)
 

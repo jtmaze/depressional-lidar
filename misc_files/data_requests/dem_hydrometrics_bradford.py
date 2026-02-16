@@ -1,7 +1,6 @@
 # %% 1.0 Libraries and file paths
 
 import os
-import datetime as dt
 import pandas as pd
 import numpy as np
 import geopandas as gpd
@@ -9,12 +8,13 @@ import geopandas as gpd
 os.chdir('D:/depressional_lidar/data/')
 
 points_master = gpd.read_file('./rtk_pts_with_dem_elevations.shp')
-
-core_wells = ['15_516']
+metric_wells = points_master[points_master['type'].isin(['main_doe_well', 'sunita_transect'])].copy()
+metric_wells = metric_wells[metric_wells['site'] == 'Bradford']
+metric_wells = metric_wells['wetland_id'].unique()
 
 bradford_core_wells = pd.read_csv('./bradford/in_data/stage_data/bradford_daily_well_depth_Winter2025.csv')
 bradford_core_wells = bradford_core_wells[
-    bradford_core_wells['well_id'].isin(core_wells)
+    bradford_core_wells['wetland_id'].isin(metric_wells)
 ]
 
 print(bradford_core_wells['flag'].unique())
@@ -27,14 +27,14 @@ fig = px.line(
     plot_df.sort_values('date'),
     x='date',
     y='well_depth_m',
-    color='well_id',
+    color='wetland_id',
     title='Well Depth Over Time',
     markers=True
 )
 
 # Add a horizontal line for the mean of each well
-for well in bradford_core_wells['well_id'].unique():
-    mean_depth = bradford_core_wells[bradford_core_wells['well_id'] == well]['well_depth_m'].mean()
+for well in bradford_core_wells['wetland_id'].unique():
+    mean_depth = bradford_core_wells[bradford_core_wells['wetland_id'] == well]['well_depth_m'].mean()
     fig.add_hline(y=mean_depth, line_dash="dot",
                   annotation_text=f"Mean {well}", 
                   annotation_position="bottom right")
@@ -44,15 +44,15 @@ fig.show()
 
 # %% 2.0 List out bradford wetlands, types and locations
 
-points_bradford = points_master[points_master['site'] == 'bradford']
+points_bradford = points_master[points_master['site'] == 'Bradford']
 wetlands_bradford = points_bradford['wetland_id'].unique()
-print(wetlands_bradford)
+
 types = points_bradford['type'].unique()
 locations = points_bradford['location'].unique()
-print(types)
+print(locations)
 
 # Remove wetland and core_well types, only interested in sampling locations
-remove_types = ['core_well', 'wetland_well']
+remove_types = ['main_doe_well', 'aux_wetland_well', 'sunita_well']
 types = [t for t in types if t not in remove_types]
 print(types)
 
@@ -61,12 +61,12 @@ print(types)
 out_dfs = []
 point_elevations_dfs = []
 
-for i in core_wells:
+for i in metric_wells:
 
-    stage = bradford_core_wells[bradford_core_wells['well_id'] == i].copy()
-    stage = stage[['date', 'well_depth_m', 'well_id']]
+    stage = bradford_core_wells[bradford_core_wells['wetland_id'] == i].copy()
+    stage = stage[['date', 'well_depth_m', 'wetland_id']]
     well_z = points_bradford[
-        (points_bradford['type'] == 'core_well') & 
+        (points_bradford['type'].isin(['main_doe_well', 'sunita_well'])) & 
         (points_bradford['wetland_id'] == i)
     ]['z_dem']
 
@@ -147,24 +147,18 @@ point_elevations = pd.concat(point_elevations_dfs, ignore_index=True)
 
 print(hydrographs)
 
-# %%
-
-above_ground = hydrographs[hydrographs['location_depth_m'] >= 0]
-
-print(len(above_ground)/len(hydrographs))
-
 # %% 5.0 Compute the hydro summary for each sensor
 
 summary_dfs = []
 
-wetlands = hydrographs['well_id'].unique()
+wetlands = hydrographs['wetland_id'].unique()
 locations = hydrographs['location'].unique()
 types = hydrographs['type'].unique()
 
 for i in wetlands:
     for t in types:
         for l in locations:
-            ts = hydrographs[(hydrographs['well_id'] == i) &
+            ts = hydrographs[(hydrographs['wetland_id'] == i) &
                              (hydrographs['type'] == t) &
                             (hydrographs['location'] == l)
             ].dropna(subset=['location_depth_m'])
@@ -230,7 +224,7 @@ for i in wetlands:
             durations = inundated_durations(df['binary_inundated'].values)
 
             result = {
-                'well_id': i,
+                'wetland_id': i,
                 'type': t,
                 'location': l,
                 'mean_depth': mean_depth,
@@ -247,7 +241,6 @@ for i in wetlands:
 
 summary = pd.DataFrame(summary_dfs)
     
-
 # %% 6.0 Write the files
 
 hydrographs_path = './bradford/out_data/misc_stuff/bradford_hydrographs_for_Sunita_Audrey.csv'
@@ -256,32 +249,5 @@ summary_path = './bradford/out_data/misc_stuff/bradford_hydro_summary_for_Sunita
 hydrographs.to_csv(hydrographs_path, index=False)
 summary.to_csv(summary_path, index=False)
 
-# %% 7.0 Quick plot to see how uncertianty translates to metrics. 
 
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-plot = summary[summary['type'] == 'litter_trap'].copy()
-
-# Convert location to categorical with desired order
-location_order = ['W4', 'W3', 'W2', 'W1', 'U']
-plot['location'] = pd.Categorical(plot['location'], categories=location_order, ordered=True)
-
-plt.figure(figsize=(20, 12))
-
-# Create subplot grid
-g = sns.FacetGrid(plot, col='well_id', col_wrap=3, height=4, aspect=1.2)
-g.map_dataframe(sns.scatterplot, x='location', y='mean_inundated_duration', hue='uncert', s=100, alpha=0.7)
-g.set_axis_labels('Location', '# continous days')
-g.set_titles('{col_name}')
-
-g.fig.legend(g._legend_data.values(), g._legend_data.keys(), 
-             loc='lower center', bbox_to_anchor=(0.5, -0.05), 
-             ncol=3, title='Uncertainty Level')
-
-for ax in g.axes.flat:
-    ax.tick_params(axis='x', rotation=15)
-
-plt.tight_layout()
-plt.show()
 # %%

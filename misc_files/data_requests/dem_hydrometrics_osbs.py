@@ -9,11 +9,11 @@ os.chdir('D:/depressional_lidar/data/')
 
 points_master = gpd.read_file('./rtk_pts_with_dem_elevations.shp')
 
-core_wells = ['Devils Den', 'West Ford', 'Brantley North', 'Ross Pond', 'Fish Cove', 'Surprise']
+core_wells = ["Devil's Den", "West Ford", "Brantley North", "Ross", "Fish Cove", "Surprise Pond"]
 
-osbs_core_wells = pd.read_csv('./osbs/in_data/stage_data/daily_well_depth_Fall2025.csv')
+osbs_core_wells = pd.read_csv('./osbs/in_data/stage_data/osbs_daily_well_depth_Fall2025.csv')
 osbs_core_wells = osbs_core_wells[
-    osbs_core_wells['well_id'].isin(core_wells)
+    osbs_core_wells['wetland_id'].isin(core_wells)
 ]
 
 # NOTE: only using post 2022 data due to coverage discrepancies
@@ -28,7 +28,7 @@ fig = px.line(
     osbs_core_wells.sort_values('date'),
     x='date',
     y='well_depth_m',
-    color='well_id',
+    color='wetland_id',
     title='Well Depth Over Time',
     markers=True
 )
@@ -37,7 +37,7 @@ fig.show()
 
 # %% 2.0 List out osbs wetlands, types and locations
 
-points_osbs = points_master[points_master['site'] == 'osbs']
+points_osbs = points_master[points_master['site'] == 'OSBS']
 wetlands_osbs = points_osbs['wetland_id'].unique()
 print(wetlands_osbs)
 types = points_osbs['type'].unique()
@@ -45,7 +45,7 @@ locations = points_osbs['location'].unique()
 print(types)
 
 # Remove wetland and core_well types, only interested in sampling locations
-remove_types = ['core_well', 'wetland_well']
+remove_types = ['main_doe_well', 'aux_wetland_well']
 types = [t for t in types if t not in remove_types]
 print(types)
 
@@ -56,10 +56,10 @@ point_elevations_dfs = []
 
 for i in core_wells:
 
-    stage = osbs_core_wells[osbs_core_wells['well_id'] == i].copy()
-    stage = stage[['date', 'well_depth_m', 'well_id']]
+    stage = osbs_core_wells[osbs_core_wells['wetland_id'] == i].copy()
+    stage = stage[['date', 'well_depth_m', 'wetland_id']]
     well_z = points_osbs[
-        (points_osbs['type'] == 'core_well') & 
+        (points_osbs['type'] == 'main_doe_well') & 
         (points_osbs['wetland_id'] == i)
     ]['rtk_z']
 
@@ -142,14 +142,14 @@ point_elevations = pd.concat(point_elevations_dfs, ignore_index=True)
 
 summary_dfs = []
 
-wetlands = hydrographs['well_id'].unique()
+wetlands = hydrographs['wetland_id'].unique()
 locations = hydrographs['location'].unique()
 types = hydrographs['type'].unique()
 
 for i in wetlands:
     for t in types:
         for l in locations:
-            ts = hydrographs[(hydrographs['well_id'] == i) &
+            ts = hydrographs[(hydrographs['wetland_id'] == i) &
                              (hydrographs['type'] == t) &
                             (hydrographs['location'] == l)
             ].dropna(subset=['location_depth_m'])
@@ -216,7 +216,7 @@ for i in wetlands:
             durations = inundated_durations(df['binary_inundated'].values)
 
             result = {
-                'well_id': i,
+                'wetland_id': i,
                 'type': t,
                 'location': l,
                 'mean_depth': mean_depth,
