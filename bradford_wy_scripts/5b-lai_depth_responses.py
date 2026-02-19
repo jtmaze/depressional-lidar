@@ -1,28 +1,29 @@
 # %% 1.0 Libraries, function imports and filepaths
 
 import sys
-import pandas as pd
-import numpy as np
-from scipy import stats
-import matplotlib.pyplot as plt
 
 PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+import pandas as pd
+import numpy as np
+from scipy import stats
+import matplotlib.pyplot as plt
+
 from bradford_wy_scripts.functions.lai_vis_functions import read_concatonate_lai
 
 lai_buffer_dist = 150
-model_type = 'ols'  # or 'ols'
-data_set = 'full_obs'  
+model_type = 'OLS'  
+data_set = 'no_dry_days'  
 
 data_dir = "D:/depressional_lidar/data/bradford/"
 lai_dir = data_dir + f'/in_data/hydro_forcings_and_LAI/well_buffer_{lai_buffer_dist}m_nomasking/'
 
 # Path to results
-shift_path = data_dir + f'out_data/modeled_logging_stages/all_wells_shift_results_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
+shift_path = data_dir + f'out_data/modeled_logging_stages/shift_results_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
 #distributions_path = data_dir + f'out_data/modeled_logging_stages/all_wells_hypothetical_distributions_LAI_{lai_buffer_dist}m.csv'
-models_path = data_dir + f'out_data/model_info/all_wells_model_estimates_LAI_{lai_buffer_dist}m.csv'
+models_path = data_dir + f'out_data/model_info/model_estimates_LAI_{lai_buffer_dist}m.csv'
 
 # Path to wetland pairs, connnectivity key and strong model fits
 wetland_pairs_path = data_dir + f'/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer_dist}m_all_wells.csv'
@@ -193,7 +194,7 @@ connectivity_key = pd.read_excel(connectivity_key_path)
 
 plot_df['log_connected'] = plot_df.apply(
     lambda row: connectivity_key.loc[
-        connectivity_key['well_id'] == row['log_id'], 'connectivity'
+        connectivity_key['wetland_id'] == row['log_id'], 'connectivity'
     ].values[0],
     axis=1
 )
@@ -203,43 +204,59 @@ print(plot_df['log_connected'].value_counts())
 # %% 4.1 Make the connectivity biplot
 
 connectivity_config = {
-    'first order': {'color': 'navy', 'label': '1st Order Ditched', 'marker': 's'},
-    'giw': {'color': 'green', 'label': 'GIW', 'marker': '^'}
+    'first order': {'color': 'green', 'label': '1st Order Ditched', 'marker': 's'},
+    'giw': {'color': 'blue', 'label': 'GIW', 'marker': '^'}, 
+    'flow-through': {'color': 'red', 'label': 'flow-through', 'marker': 'X'}
 }
 
 fig, ax = plt.subplots(figsize=(10, 8))
 
 for connectivity_level, config in connectivity_config.items():
-    subset = plot_df[plot_df['log_connected'] == connectivity_level]
+    subset = plot_df[plot_df['log_connected'] == connectivity_level].copy()
+
+    subset_clean = subset.dropna(subset=['roll_diff_change', 'mean_depth_change', 'log_id'])
 
     ax.scatter(
-            subset['roll_diff_change'], 
-            subset['mean_depth_change'],
-            alpha=0.6, 
-            s=32, 
-            edgecolors='black', 
-            linewidth=0.5,
-            color=config['color'],
-            marker=config['marker']
-        )
-    
-    # Add text labels for each point
-    for idx, row in subset.iterrows():
-        ax.text(row['roll_diff_change'], row['mean_depth_change'], 
-                str(row['log_id']), fontsize=8, alpha=0.7)
-    
-    slope, intercept, r_value, p_value, std_err = stats.linregress(
-        subset['roll_diff_change'], 
-        subset['mean_depth_change']
+        subset_clean['roll_diff_change'],
+        subset_clean['mean_depth_change'],
+        alpha=0.6,
+        s=32,
+        edgecolors='black',
+        linewidth=0.5,
+        color=config['color'],
+        marker=config['marker']
     )
 
-    x_range = np.linspace(subset['roll_diff_change'].min(), 
-                                 subset['roll_diff_change'].max(), 100)
-    
-    y_pred = slope * x_range + intercept
-    
-    ax.plot(x_range, y_pred, '--', linewidth=2, color=config['color'],
-            label=f"{config['label']}: slope={slope:.3f}, R²={r_value**2:.3f}")
+    if connectivity_level == 'flow-through':
+        for _, row in subset_clean.iterrows():
+            ax.annotate(
+                str(row['log_id']),
+                xy=(row['roll_diff_change'], row['mean_depth_change']),
+                xytext=(6, 4),
+                textcoords='offset points',
+                fontsize=9,
+                alpha=0.9,
+                bbox=dict(boxstyle='round,pad=0.1', fc='white', alpha=0.6)
+            )
+
+    # only compute / plot regression if there are >=2 valid points
+    if len(subset_clean) >= 2:
+        slope, intercept, r_value, p_value, std_err = stats.linregress(
+            subset_clean['roll_diff_change'],
+            subset_clean['mean_depth_change']
+        )
+
+        x_min = subset_clean['roll_diff_change'].min()
+        x_max = subset_clean['roll_diff_change'].max()
+        if x_min == x_max:
+            x_range = np.linspace(x_min - 0.1, x_max + 0.1, 100)
+        else:
+            x_range = np.linspace(x_min, x_max, 100)
+
+        y_pred = slope * x_range + intercept
+
+        ax.plot(x_range, y_pred, '--', linewidth=2, color=config['color'],
+                label=f"{config['label']}: slope={slope:.3f}, R²={r_value**2:.3f}")
 
 # Formatting
 ax.set_xlabel('Relative LAI Decrease (Pre - Post)', fontsize=18)
@@ -283,13 +300,14 @@ from scipy.stats import t
 
 fig, ax = plt.subplots(figsize=(10, 8))
 
-connectivity_levels = ['giw', 'first order']
-connectivity_labels = {'giw': 'GIW', 'first order': '1st Order Ditched'}
-connectivity_colors = {'giw': 'green', 'first order': 'navy'}
+connectivity_levels = ['giw', 'first order', 'flow-through'] 
+connectivity_labels = {'giw': 'GIW', 'first order': '1st Order Ditched', 'flow-through': 'flow-through'}
+connectivity_colors = {'giw': 'green', 'first order': 'navy', 'flow-through': 'red'}
 
 for conn_level in connectivity_levels:
     subset = plot_df[plot_df['log_connected'] == conn_level]
-
+    filter_ids = ['7_341', '9_77']
+    subset = subset[~subset['log_id'].isin(filter_ids)]
     x = subset['roll_diff_change'].values
     y = subset['mean_depth_change'].values
     

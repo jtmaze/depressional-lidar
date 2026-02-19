@@ -1,9 +1,18 @@
+# NOTE: This shim facilites imports by bringing the root directory higher
+import sys
+PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+    
 import pandas as pd
+import geopandas as gpd
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import stats
 import statsmodels.api as sm
 import matplotlib.dates as mdates
+
+from wetland_utilities.basin_attributes import WetlandBasin
+
 
 def plot_ts(df: pd.DataFrame, y_col: str):
 
@@ -28,16 +37,16 @@ def plot_stage_ts(
         y_label: str
     ):
 
-    if 'well_id' not in logged_df.columns or 'well_id' not in reference_df.columns:
+    if 'wetland_id' not in logged_df.columns or 'wetland_id' not in reference_df.columns:
         reference_id = 'reference'
         logged_id = 'logged'
         well_depth_col_ref = 'wetland_depth_ref'
         well_depth_col_log = 'wetland_depth_log'
     else:
-        reference_id = reference_df['well_id'].iloc[0]
-        logged_id = logged_df['well_id'].iloc[0]
-        well_depth_col_ref = 'well_depth'
-        well_depth_col_log = 'well_depth'
+        reference_id = reference_df['wetland_id'].iloc[0]
+        logged_id = logged_df['wetland_id'].iloc[0]
+        well_depth_col_ref = 'depth'
+        well_depth_col_log = 'depth'
 
     # Sort dataframes by date to ensure proper gap detection
     reference_df = reference_df.sort_values('day')
@@ -53,11 +62,9 @@ def plot_stage_ts(
     plt.plot(reference_df['day'], reference_df[well_depth_col_ref], 
              label=f'Reference', marker='o', markersize=2.5, linestyle='None', color='blue')
     
-    # Plot logged series - pre-logging in grey
+    # Plot pre vs post logged timeseries
     plt.plot(logged_pre['day'], logged_pre[well_depth_col_log], 
              label=f'Logged Pre', marker='o', markersize=2.5, linestyle='None', color='#333333')
-    
-    # Plot logged series - post-logging in gold
     plt.plot(logged_post['day'], logged_post[well_depth_col_log], 
              label=f'Logged Post', marker='o', markersize=2.5, linestyle='None', color='#E69F00')
     
@@ -90,67 +97,103 @@ def remove_flagged_buffer(ts_df, buffer_days=1):
 
     return filtered_df, dates_to_remove
 
-def plot_correlations(
-        comparison_df: pd.DataFrame, 
-        x_series_name: str, 
-        y_series_name: str, 
-        log_date: pd.Timestamp,
-        filter_obs: tuple = None
-    ):
-    
-    if filter_obs:
-        min_val, max_val = filter_obs
-        comparison_df = comparison_df[
-            (comparison_df[x_series_name] >= min_val) &
-            (comparison_df[x_series_name] <= max_val) &
-            (comparison_df[y_series_name] >= min_val) &
-            (comparison_df[y_series_name] <= max_val)
-        ].copy()
+def timeseries_qaqc(df: pd.DataFrame, keep_below_obs: bool):
+    """ 
+    First, filters days with water level uncertianty (flag = 1)
+    Then, filters bottomed out days (flag=2), tracking number of bottomed out days.
+    """
+    df_cleaned = df[df['flag'] != 1].copy()
+    df_cleaned = df_cleaned.dropna(subset=['well_depth_m'])
+    min_date = min(df_cleaned['day'][df_cleaned['flag'] == 0])
+    max_date = max(df_cleaned['day'][df_cleaned['flag'] == 0])
+    if keep_below_obs:
+        bottomed_well_days = None
+    else:
+        df_cleaned, bottomed_well_days = remove_flagged_buffer(df_cleaned, buffer_days=0)
+        
 
-    comparison_df['pre_logging'] = comparison_df['day'] <= log_date
+    return {
+        'clean_ts': df_cleaned,
+        'bottomed_dates': bottomed_well_days,
+        'min_date': min_date,
+        'max_date': max_date,
+    }
+
+def check_domain_overlap(comp_df, log_date):
     
-    # Split data into pre and post logging
-    pre_df = comparison_df[comparison_df['pre_logging']]
-    post_df = comparison_df[~comparison_df['pre_logging']]
-    
-    # Calculate regressions
-    pre_slope, pre_intercept, pre_r, pre_p, pre_stderr = stats.linregress(
-        pre_df[x_series_name], pre_df[y_series_name]
+    """
+    Filters the logging and reference data to ensure they have the same domain for interaction models
+    Calculates the proportion of observations outside the domain. 
+    """
+    common_comp = comp_df.copy().dropna(subset=['depth_ref', 'depth_log'])
+    initial_obs_cnt = len(common_comp)
+    common_comp['pre_logging'] = common_comp['day'] <= log_date
+    max_common = min(
+        common_comp['depth_ref'][common_comp['pre_logging']].max(), 
+        common_comp['depth_ref'][~common_comp['pre_logging']].max()
     )
-    post_slope, post_intercept, post_r, post_p, post_stderr = stats.linregress(
-        post_df[x_series_name], post_df[y_series_name]
+    min_common = max(
+        common_comp['depth_ref'][common_comp['pre_logging']].min(), 
+        common_comp['depth_ref'][~common_comp['pre_logging']].min()
     )
+    common_comp = common_comp[common_comp['depth_ref'].between(min_common, max_common)]
+    filtered_obs_cnt = len(common_comp)
     
-    # Create plot
-    plt.figure(figsize=(8, 8))
-    plt.scatter(
-        pre_df[x_series_name],
-        pre_df[y_series_name], 
-        color='black',
-        label='Pre-logging',
-        alpha=0.6
+    return {
+        'common_comp': comp_df, # NOTE, not filtering domain. Just tracking the % overlap.
+        'initial_domain_days': initial_obs_cnt,
+        'filtered_domain_days': filtered_obs_cnt
+    }
+
+def dem_depth_censor(
+    reference_ts: pd.DataFrame,
+    logged_ts: pd.DataFrame, 
+    well_point: gpd.GeoDataFrame,
+    source_dem_path: str,
+    depth_thresh: float = 0.0,
+    min_depth_search_radius = 50
+):
+
+    adj_log_ts = logged_ts.copy()
+    adj_ref_ts = reference_ts.copy()
+
+    # Establish basin classes to get depth estimates
+    reference_id = reference_ts['wetland_id'].iloc[0]
+    logged_id = logged_ts['wetland_id'].iloc[0]
+    well_point_log = well_point[well_point['wetland_id'] == logged_id].copy()
+    well_point_ref = well_point[well_point['wetland_id'] == reference_id].copy()
+
+    ref_basin = WetlandBasin(
+        wetland_id=reference_id, 
+        well_point_info=well_point_ref,
+        source_dem_path=source_dem_path, 
+        footprint=None,
+        transect_buffer=min_depth_search_radius
     )
-    plt.scatter(
-        post_df[x_series_name],
-        post_df[y_series_name], 
-        color='red',
-        label='Post-logging',
-        alpha=0.6
+    log_basin = WetlandBasin(
+        wetland_id=logged_id,
+        well_point_info=well_point_log,
+        source_dem_path=source_dem_path, 
+        footprint=None,
+        transect_buffer=min_depth_search_radius
     )
-    
-    # Plot trendlines
-    x_range = comparison_df[x_series_name]
-    plt.plot(x_range, pre_slope * x_range + pre_intercept, 
-                'black', label=f'Pre: m={pre_slope:.3f}, r_sq={pre_r:.3f}')
-    plt.plot(x_range, post_slope * x_range + post_intercept, 
-                'red', label=f'Post: m={post_slope:.3f}, r_sq={post_r:.3f}')
-    
-    plt.xlabel(x_series_name, fontsize=14)
-    plt.ylabel(y_series_name, fontsize=14)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-    
+
+    # Calculate wetland depth timeseries using the deepest point on the DEM
+    logged_well_diff = log_basin.well_point.elevation_dem - log_basin.deepest_point.elevation
+    adj_log_ts['wetland_depth'] = adj_log_ts['well_depth_m'] + logged_well_diff
+    ref_well_diff = ref_basin.well_point.elevation_dem - ref_basin.deepest_point.elevation
+    adj_ref_ts['wetland_depth'] = adj_ref_ts['well_depth_m'] + ref_well_diff
+
+    # Eliminate date points where wetland depth is less than zero
+    adj_log_ts = adj_log_ts[adj_log_ts['wetland_depth'] >= depth_thresh]
+    adj_ref_ts = adj_ref_ts[adj_ref_ts['wetland_depth'] >= depth_thresh]
+
+    # Remove the extra column
+    adj_ref_ts.drop(columns=['wetland_depth'], inplace=True)
+    adj_log_ts.drop(columns=['wetland_depth'], inplace=True)
+
+    return adj_log_ts, adj_ref_ts
+
 def plot_correlations_from_model(
         comparison_df: pd.DataFrame, 
         x_series_name: str, 
@@ -228,12 +271,9 @@ def plot_correlations_from_model(
     # Add text box with test results
     textstr = f'Slope change: {slope_change:+.3f} (p={p_slope:.3f})\n'
     textstr += f'Intercept change: {intercept_change:+.3f} (p={p_intercept:.3f})\n'
-    #textstr += f'Joint test p-value: {model_results["tests"]["joint_p"]:.3f}'
     
     props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
-    # ax.text(0.02, 0.98, textstr, transform=ax.transAxes, fontsize=10,
-    #         verticalalignment='top', bbox=props)
-    
+
     # Formatting
     ax.set_xlabel("Reference Stage (m)", fontsize=14)
     ax.set_ylabel("Logged Stage (m)", fontsize=14)
@@ -366,60 +406,6 @@ def fit_interaction_model_ols(
     }
     return results
 
-def fit_interaction_model_huber(
-        comparison_df: pd.DataFrame,
-        x_series_name: str, 
-        y_series_name: str,
-        log_date: pd.Timestamp,
-        ):
-    
-    df, X, y = _prep_arrays_for_regression(comparison_df, x_series_name, y_series_name, log_date)
-    #NOTE: 1) Used default value for Huber's t function 2) should I add the option to change the covariance type?
-    model = sm.RLM(y, X, M=sm.robust.norms.HuberT(t=1.345)).fit()
-
-    b0, m_pre, bg, m_g = model.params
-    V = model.cov_params()
-    post_intercept = b0 + bg
-    post_slope = m_pre + m_g
-
-    pre_r2, post_r2 = _compute_pre_post_r2(model, X, y, df['group'])
-
-    se_pre_intercept = float(np.sqrt(V[0,0]))
-    se_pre_slope = float(np.sqrt(V[1,1]))
-    se_post_intercept = np.sqrt(V[0,0] + V[2,2] + 2*V[0,2])
-    se_post_slope = np.sqrt(V[1,1] + V[3,3] + 2*V[1,3])
-
-    # NOTE: this is r-squared is determined by sum of squared errors, and does not relate to the Huber model's optimization
-    r2 = 1 - np.sum((y - model.fittedvalues) ** 2) / np.sum((y - y.mean())**2)
-
-    results = {
-        'pre': {
-            "intercept": float(b0),
-            "slope": float(m_pre),
-            "se_intercept": float(se_pre_intercept),
-            "se_slope": float(se_pre_slope),
-            "pre_r2": float(pre_r2)
-        },
-        'post': {
-            "intercept": float(post_intercept),
-            "slope": float(post_slope),
-            "se_intercept": float(se_post_intercept),
-            "se_slope": float(se_post_slope),
-            "post_r2": float(post_r2)
-        },
-        'tests': {
-            'p_intercept_diff': float(np.nan),
-            'p_slope_diff': float(np.nan), 
-            'joint_F': float(np.nan)
-        },
-        'model_fit': {
-            'type': 'HuberRLM',
-            'joint_r2': float(r2),
-            'n': int(len(df))
-        }
-    }
-    return results
-
 def compute_residuals(
         comparison_df: pd.DataFrame,
         log_date: pd.Timestamp,
@@ -457,71 +443,6 @@ def compute_residuals(
 
     return comparison_df[['day', x_series_name, 'predicted', 'residual']]
 
-# def visualize_residuals(residuals_df: pd.DataFrame, log_date: pd.Timestamp):
-#     """
-#     Visualize model residuals with residuals vs predicted plot and Q-Q plot.
-#     Separates pre and post logging periods for comparison.
-#     """
-    
-#     # Add logging period indicator
-#     residuals_df = residuals_df.copy()
-#     residuals_df['logged'] = residuals_df['day'] >= log_date
-    
-#     # Split into pre and post
-#     pre_df = residuals_df[~residuals_df['logged']]
-#     post_df = residuals_df[residuals_df['logged']]
-    
-#     # Create 2x2 subplot figure
-#     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-
-#     # Pre;ogging (top left)
-#     axes[0, 0].scatter(pre_df['predicted'], pre_df['residual'], 
-#                        alpha=0.6, s=40, color='grey', edgecolors='black', linewidth=0.5)
-#     axes[0, 0].axhline(0, color='red', linestyle='--', linewidth=2)
-#     axes[0, 0].set_xlabel('Predicted Values [m]', fontsize=11)
-#     axes[0, 0].set_ylabel('Residuals [m]', fontsize=11)
-#     axes[0, 0].set_title(f'Pre-Logging: Residuals vs Predicted (n={len(pre_df)})', 
-#                          fontsize=12, fontweight='bold')
-#     axes[0, 0].grid(True, alpha=0.3)
-    
-#     # Post-logging (top right)
-#     axes[0, 1].scatter(post_df['predicted'], post_df['residual'],
-#                        alpha=0.6, s=40, color='coral', edgecolors='black', linewidth=0.5)
-#     axes[0, 1].axhline(0, color='red', linestyle='--', linewidth=2)
-#     axes[0, 1].set_xlabel('Predicted Values [m]', fontsize=11)
-#     axes[0, 1].set_ylabel('Residuals [m]', fontsize=11)
-#     axes[0, 1].set_title(f'Post-Logging: Residuals vs Predicted (n={len(post_df)})',
-#                          fontsize=12, fontweight='bold')
-#     axes[0, 1].grid(True, alpha=0.3)
-
-#     # Pre-logging Q-Q (bottom left)
-#     stats.probplot(pre_df['residual'], dist="norm", plot=axes[1, 0])
-#     axes[1, 0].set_title('Pre-Logging: Normal Q-Q Plot', fontsize=12, fontweight='bold')
-#     axes[1, 0].set_xlabel('Theoretical Quantiles', fontsize=11)
-#     axes[1, 0].set_ylabel('Sample Quantiles', fontsize=11)
-#     axes[1, 0].grid(True, alpha=0.3)
-#     axes[1, 0].get_lines()[0].set_markerfacecolor('steelblue')
-#     axes[1, 0].get_lines()[0].set_markeredgecolor('black')
-#     axes[1, 0].get_lines()[0].set_markersize(5)
-#     axes[1, 0].get_lines()[1].set_color('red')
-#     axes[1, 0].get_lines()[1].set_linewidth(2)
-    
-#     # Post-logging Q-Q (bottom right)
-#     stats.probplot(post_df['residual'], dist="norm", plot=axes[1, 1])
-#     axes[1, 1].set_title('Post-Logging: Normal Q-Q Plot', fontsize=12, fontweight='bold')
-#     axes[1, 1].set_xlabel('Theoretical Quantiles', fontsize=11)
-#     axes[1, 1].set_ylabel('Sample Quantiles', fontsize=11)
-#     axes[1, 1].grid(True, alpha=0.3)
-#     axes[1, 1].get_lines()[0].set_markerfacecolor('coral')
-#     axes[1, 1].get_lines()[0].set_markeredgecolor('black')
-#     axes[1, 1].get_lines()[0].set_markersize(5)
-#     axes[1, 1].get_lines()[1].set_color('red')
-#     axes[1, 1].get_lines()[1].set_linewidth(2)
-    
-#     plt.suptitle('Residual Diagnostics: Pre vs Post-Logging', 
-#                  fontsize=15, fontweight='bold', y=0.995)
-#     plt.tight_layout()
-#     plt.show()
 
 def flatten_model_results(
         results: dict,
@@ -659,6 +580,131 @@ def summarize_depth_shift(model_distributions: dict):
         "mean_post": post_mean,
         "delta_mean": delta_mean
     }
+
+
+"""
+NOTE: None of these functions are used anymore, they're left over from previous modeling approaches
+"""
+
+# def visualize_residuals(residuals_df: pd.DataFrame, log_date: pd.Timestamp):
+#     """
+#     Visualize model residuals with residuals vs predicted plot and Q-Q plot.
+#     Separates pre and post logging periods for comparison.
+#     """
+    
+#     # Add logging period indicator
+#     residuals_df = residuals_df.copy()
+#     residuals_df['logged'] = residuals_df['day'] >= log_date
+    
+#     # Split into pre and post
+#     pre_df = residuals_df[~residuals_df['logged']]
+#     post_df = residuals_df[residuals_df['logged']]
+    
+#     # Create 2x2 subplot figure
+#     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+#     # Pre;ogging (top left)
+#     axes[0, 0].scatter(pre_df['predicted'], pre_df['residual'], 
+#                        alpha=0.6, s=40, color='grey', edgecolors='black', linewidth=0.5)
+#     axes[0, 0].axhline(0, color='red', linestyle='--', linewidth=2)
+#     axes[0, 0].set_xlabel('Predicted Values [m]', fontsize=11)
+#     axes[0, 0].set_ylabel('Residuals [m]', fontsize=11)
+#     axes[0, 0].set_title(f'Pre-Logging: Residuals vs Predicted (n={len(pre_df)})', 
+#                          fontsize=12, fontweight='bold')
+#     axes[0, 0].grid(True, alpha=0.3)
+    
+#     # Post-logging (top right)
+#     axes[0, 1].scatter(post_df['predicted'], post_df['residual'],
+#                        alpha=0.6, s=40, color='coral', edgecolors='black', linewidth=0.5)
+#     axes[0, 1].axhline(0, color='red', linestyle='--', linewidth=2)
+#     axes[0, 1].set_xlabel('Predicted Values [m]', fontsize=11)
+#     axes[0, 1].set_ylabel('Residuals [m]', fontsize=11)
+#     axes[0, 1].set_title(f'Post-Logging: Residuals vs Predicted (n={len(post_df)})',
+#                          fontsize=12, fontweight='bold')
+#     axes[0, 1].grid(True, alpha=0.3)
+
+#     # Pre-logging Q-Q (bottom left)
+#     stats.probplot(pre_df['residual'], dist="norm", plot=axes[1, 0])
+#     axes[1, 0].set_title('Pre-Logging: Normal Q-Q Plot', fontsize=12, fontweight='bold')
+#     axes[1, 0].set_xlabel('Theoretical Quantiles', fontsize=11)
+#     axes[1, 0].set_ylabel('Sample Quantiles', fontsize=11)
+#     axes[1, 0].grid(True, alpha=0.3)
+#     axes[1, 0].get_lines()[0].set_markerfacecolor('steelblue')
+#     axes[1, 0].get_lines()[0].set_markeredgecolor('black')
+#     axes[1, 0].get_lines()[0].set_markersize(5)
+#     axes[1, 0].get_lines()[1].set_color('red')
+#     axes[1, 0].get_lines()[1].set_linewidth(2)
+    
+#     # Post-logging Q-Q (bottom right)
+#     stats.probplot(post_df['residual'], dist="norm", plot=axes[1, 1])
+#     axes[1, 1].set_title('Post-Logging: Normal Q-Q Plot', fontsize=12, fontweight='bold')
+#     axes[1, 1].set_xlabel('Theoretical Quantiles', fontsize=11)
+#     axes[1, 1].set_ylabel('Sample Quantiles', fontsize=11)
+#     axes[1, 1].grid(True, alpha=0.3)
+#     axes[1, 1].get_lines()[0].set_markerfacecolor('coral')
+#     axes[1, 1].get_lines()[0].set_markeredgecolor('black')
+#     axes[1, 1].get_lines()[0].set_markersize(5)
+#     axes[1, 1].get_lines()[1].set_color('red')
+#     axes[1, 1].get_lines()[1].set_linewidth(2)
+    
+#     plt.suptitle('Residual Diagnostics: Pre vs Post-Logging', 
+#                  fontsize=15, fontweight='bold', y=0.995)
+#     plt.tight_layout()
+#     plt.show()
+
+# def fit_interaction_model_huber(
+#         comparison_df: pd.DataFrame,
+#         x_series_name: str, 
+#         y_series_name: str,
+#         log_date: pd.Timestamp,
+#         ):
+    
+#     df, X, y = _prep_arrays_for_regression(comparison_df, x_series_name, y_series_name, log_date)
+#     #NOTE: 1) Used default value for Huber's t function 2) should I add the option to change the covariance type?
+#     model = sm.RLM(y, X, M=sm.robust.norms.HuberT(t=1.345)).fit()
+
+#     b0, m_pre, bg, m_g = model.params
+#     V = model.cov_params()
+#     post_intercept = b0 + bg
+#     post_slope = m_pre + m_g
+
+#     pre_r2, post_r2 = _compute_pre_post_r2(model, X, y, df['group'])
+
+#     se_pre_intercept = float(np.sqrt(V[0,0]))
+#     se_pre_slope = float(np.sqrt(V[1,1]))
+#     se_post_intercept = np.sqrt(V[0,0] + V[2,2] + 2*V[0,2])
+#     se_post_slope = np.sqrt(V[1,1] + V[3,3] + 2*V[1,3])
+
+#     # NOTE: this is r-squared is determined by sum of squared errors, and does not relate to the Huber model's optimization
+#     r2 = 1 - np.sum((y - model.fittedvalues) ** 2) / np.sum((y - y.mean())**2)
+
+#     results = {
+#         'pre': {
+#             "intercept": float(b0),
+#             "slope": float(m_pre),
+#             "se_intercept": float(se_pre_intercept),
+#             "se_slope": float(se_pre_slope),
+#             "pre_r2": float(pre_r2)
+#         },
+#         'post': {
+#             "intercept": float(post_intercept),
+#             "slope": float(post_slope),
+#             "se_intercept": float(se_post_intercept),
+#             "se_slope": float(se_post_slope),
+#             "post_r2": float(post_r2)
+#         },
+#         'tests': {
+#             'p_intercept_diff': float(np.nan),
+#             'p_slope_diff': float(np.nan), 
+#             'joint_F': float(np.nan)
+#         },
+#         'model_fit': {
+#             'type': 'HuberRLM',
+#             'joint_r2': float(r2),
+#             'n': int(len(df))
+#         }
+#     }
+#     return results
 
 # def plot_dmc(
 #         comparison_df: pd.DataFrame, 

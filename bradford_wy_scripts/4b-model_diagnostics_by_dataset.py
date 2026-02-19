@@ -15,11 +15,11 @@ model_dfs = []
 shift_dfs = []
 
 for d in datasets:
-    model_path = f'{data_dir}/model_info/all_wells_model_estimates_LAI{lai_buffer_dist}m_domain_{d}.csv'
+    model_path = f'{data_dir}/model_info/model_estimates_LAI{lai_buffer_dist}m_domain_{d}.csv'
     model_df = pd.read_csv(model_path)
     model_dfs.append(model_df)
 
-    shift_path = f'{data_dir}/modeled_logging_stages/all_wells_shift_results_LAI{lai_buffer_dist}m_domain_{d}.csv'
+    shift_path = f'{data_dir}/modeled_logging_stages/shift_results_LAI{lai_buffer_dist}m_domain_{d}.csv'
     shift_df = pd.read_csv(shift_path)
     shift_dfs.append(shift_df)
 
@@ -27,6 +27,9 @@ for d in datasets:
 model_data = pd.concat(model_dfs)
 shift_data = pd.concat(shift_dfs)
 shift_data.head()
+
+model_data = model_data[model_data['log_id'] != '15_516']
+shift_data = shift_data[shift_data['log_id'] != '15_516']
 
 
 # %% 2.1 Compare pearson's-r for different datasets with threshold curves
@@ -139,13 +142,14 @@ plt.legend(handles, datasets, title='Dataset', loc='upper left')
 plt.tight_layout()
 plt.show()
 
+# %%
 # Print shift statistics
-print("\nShift Statistics by Dataset:")
-print("=" * 60)
+
 for d in datasets:
-    subset = shift_data[(shift_data['data_set'] == d) & (shift_data['model_type'] == 'ols')]
+    subset = shift_data[(shift_data['data_set'] == d) & (shift_data['model_type'] == 'OLS')]
     if len(subset) > 0:
-        print(f"\n{d} - {model_type}:")
+        print('-----------')
+        print(d)
         print(f"  Mean shift: {subset['mean_depth_change'].mean():.3f} m")
         print(f"  Median shift: {subset['mean_depth_change'].median():.3f} m")
         print(f"  Std deviation: {subset['mean_depth_change'].std():.3f} m")

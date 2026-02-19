@@ -25,7 +25,7 @@ wetland_connectivity_key = pd.read_excel(
     'D:/depressional_lidar/data/bradford/bradford_wetland_connect_logging_key.xlsx'
 )
 
-candidate_ids = wetland_connectivity_key['well_id'].unique()
+candidate_ids = wetland_connectivity_key['wetland_id'].unique()
 
 # %% 2.0 Read the LAI timeseriess and determine which ids are suitable references. 
 
@@ -37,7 +37,7 @@ log_ids = []
 for i in candidate_ids:
 
     lai = read_concatonate_lai(lai_dir, i, lai_method, upper_bound, lower_bound)
-    connect = wetland_connectivity_key[wetland_connectivity_key['well_id'] == i].iloc[0]['connectivity']
+    connect = wetland_connectivity_key[wetland_connectivity_key['wetland_id'] == i].iloc[0]['connectivity']
     print(connect)
                                                                                          
     # Check for trend with theil-sen slope regression
@@ -58,14 +58,14 @@ for i in candidate_ids:
     
     slope = _theil_sen_per_year(ref_check)
     if slope > ref_slope_threshold:
-        lai['well_id'] = i
+        lai['wetland_id'] = i
         ref_ids.append(i)
         ref_dfs.append(lai)
         print(f"Assigning {i} as a reference ID ||| Theil-Sen slope = {slope:.2f} LAI/yr")
-        visualize_lai(lai[lai['date'] >= start_date], well_id=i, show=True)
+        visualize_lai(lai[lai['date'] >= start_date], wetland_id=i, show=True)
     else:
         print(f"Assigning {i} as a logging ID ||| Theil-Sen slope = {slope:.2f} LAI/yr")
-        lai['well_id'] = i
+        lai['wetland_id'] = i
         log_ids.append(i)
         log_dfs.append(lai)
 
@@ -75,34 +75,6 @@ log = pd.concat(log_dfs)
 print(len(log_ids))
 print(len(ref_ids))
 
-# %% 2.1 Timeseries plot for roll_yr LAI. Use all well_ids color by log and ref
-fig, ax = plt.subplots(figsize=(10, 8))
-
-# Plot individual lines as dashed
-for wid in log_ids:
-    df_w = log[log['well_id'] == wid].sort_values('date')
-    df_w = df_w[df_w['date'] >= '2019-01-01']
-    ax.plot(df_w['date'], df_w['roll_yr'], color='red', alpha=0.4, linewidth=1.5, linestyle='--')
-
-for wid in ref_ids:
-    df_w = ref[ref['well_id'] == wid].sort_values('date')
-    df_w = df_w[df_w['date'] >= '2019-01-01']
-    ax.plot(df_w['date'], df_w['roll_yr'], color='blue', alpha=0.4, linewidth=1.5, linestyle='--')
-
-# Calculate and plot averages as thick solid lines
-log_avg = log[log['date'] >= '2019-01-01'].groupby('date')['roll_yr'].mean().reset_index()
-ref_avg = ref[ref['date'] >= '2019-01-01'].groupby('date')['roll_yr'].mean().reset_index()
-
-ax.plot(log_avg['date'], log_avg['roll_yr'], color='red', linewidth=3, label=f'Logged (n={len(log_ids)})')
-ax.plot(ref_avg['date'], ref_avg['roll_yr'], color='blue', linewidth=3, label=f'Reference (n={len(ref_ids)})')
-
-#ax.set_title('LAI by Well ID', fontsize=18, fontweight='bold')
-ax.set_ylabel('Landsat 8 LAI', fontsize=18)
-ax.legend(frameon=True, fancybox=True, shadow=True, fontsize=24)
-ax.tick_params(axis='both', which='major', labelsize=18)
-ax.grid(True, alpha=0.3)
-plt.tight_layout()
-plt.show()
 
 # %% 3.0 Visually estimate the logging dates
 
@@ -215,8 +187,91 @@ print('done')
 
 # %% 4.0 Determine if logged wetlands were sufficiently instrumented prior to harvest
 
-logged_summary = wetland_connectivity_key[['well_id', 'planet_log_date']].copy()
+logged_summary = wetland_connectivity_key[['wetland_id', 'planet_log_date']].copy()
 logged_summary['hydro_sufficient'] = pd.to_datetime(logged_summary['planet_log_date']) >= pd.to_datetime('2022-05-01')
+
+# %% 4.1 Timeseries plot for roll_yr LAI. Use all well_ids color by log and ref
+
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 14), height_ratios=[4, 1])
+
+# Plot individual lines as dashed
+for wid in log_ids:
+    df_w = log[log['wetland_id'] == wid].sort_values('date')
+    df_w = df_w[df_w['date'] >= '2019-01-01']
+    ax1.plot(df_w['date'], df_w['roll_yr'], color='red', alpha=0.4, linewidth=1.5, linestyle='--')
+
+for wid in ref_ids:
+    df_w = ref[ref['wetland_id'] == wid].sort_values('date')
+    df_w = df_w[df_w['date'] >= '2019-01-01']
+    ax1.plot(df_w['date'], df_w['roll_yr'], color='blue', alpha=0.4, linewidth=1.5, linestyle='--')
+
+# Calculate and plot averages as thick solid lines
+log_avg = log[log['date'] >= '2019-01-01'].groupby('date')['roll_yr'].mean().reset_index()
+ref_avg = ref[ref['date'] >= '2019-01-01'].groupby('date')['roll_yr'].mean().reset_index()
+
+ax1.plot(log_avg['date'], log_avg['roll_yr'], color='red', linewidth=3, label=f'Logged (n={len(log_ids)})')
+ax1.plot(ref_avg['date'], ref_avg['roll_yr'], color='blue', linewidth=3, label=f'Reference (n={len(ref_ids)})')
+
+ax1.set_ylabel('Landsat 8 LAI', fontsize=22)
+ax1.legend(frameon=True, fancybox=True, shadow=True, fontsize=24)
+ax1.tick_params(axis='both', which='major', labelsize=18)
+ax1.grid(True, alpha=0.3)
+
+# Set x-axis limits for alignment
+start_date = pd.to_datetime('2019-01-01')
+end_date = pd.to_datetime('2026-01-01')
+ax1.set_xlim(start_date, end_date)
+ax1.tick_params(axis='x', labelbottom=False)
+
+# Second subplot: Plot logging dates as stacked dots by quarter
+# Collect all logging dates first
+logging_dates = []
+for wid in log_ids:
+    log_date = logged_summary[logged_summary['wetland_id'] == wid]['planet_log_date']
+    if not log_date.empty:
+        log_date = pd.to_datetime(log_date.iloc[0])
+        if log_date >= start_date:
+            logging_dates.append(log_date)
+
+# Create quarterly bins and count events per quarter
+if logging_dates:
+    logging_df = pd.DataFrame({'date': logging_dates})
+    logging_df['quarter'] = logging_df['date'].dt.to_period('Q')
+    quarter_counts = logging_df['quarter'].value_counts().sort_index()
+    
+    # Plot stacked dots for each quarter
+    max_count = quarter_counts.max() if len(quarter_counts) > 0 else 1
+    
+    for quarter, count in quarter_counts.items():
+        # Use middle of quarter for x-position
+        quarter_start = quarter.start_time
+        quarter_end = quarter.end_time
+        quarter_mid = quarter_start + (quarter_end - quarter_start) / 2
+        
+        # Stack dots vertically
+        for i in range(count):
+            y_pos = (i - (count-1)/2) * 0.15  # Center the stack around y=0
+            ax2.scatter(quarter_mid, y_pos, marker='o', color='red', s=80, alpha=0.8, edgecolor='black', linewidth=1)
+
+ax2.set_ylabel('Logging\nEvents\n  ', fontsize=22)
+ax2.set_xlabel('Year', fontsize=18)
+ax2.tick_params(axis='both', which='major', labelsize=18)
+ax2.set_ylim(-1, 1) 
+ax2.set_yticks([])
+ax2.set_xlim(start_date, end_date)  # Match x-axis limits
+
+# Add green shading for hydrologic monitoring period
+monitoring_start = pd.to_datetime('2021-11-20')
+ax2.axvspan(monitoring_start, end_date, color='green', alpha=0.2, zorder=0)
+ax2.text(monitoring_start + (end_date - monitoring_start) / 2, 0.7, 
+         'Hydrologic monitoring period', 
+         ha='center', va='center', fontsize=16, 
+         bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=1))
+
+ax2.grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
 
 # %% 5.0 Generate a combination of every logging and reference wetland. 
 
@@ -226,19 +281,19 @@ for ref_id in ref_ids:
 
         # Get hydro data sufficiency and connectivity classification values
         hydro_sufficient = logged_summary[
-            logged_summary['well_id'] == log_id
+            logged_summary['wetland_id'] == log_id
         ].iloc[0]['hydro_sufficient']
 
         planet_log = logged_summary[
-            logged_summary['well_id'] == log_id
+            logged_summary['wetland_id'] == log_id
         ].iloc[0]['planet_log_date']
 
         ref_connect = wetland_connectivity_key[
-            wetland_connectivity_key['well_id'] == ref_id
+            wetland_connectivity_key['wetland_id'] == ref_id
         ].iloc[0]['connectivity']
 
         log_connect = wetland_connectivity_key[
-            wetland_connectivity_key['well_id'] == log_id
+            wetland_connectivity_key['wetland_id'] == log_id
         ].iloc[0]['connectivity']
 
         combinations_list.append({

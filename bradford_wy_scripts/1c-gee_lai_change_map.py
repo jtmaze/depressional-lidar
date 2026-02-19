@@ -11,9 +11,7 @@ ee.Initialize()
 bradford_shapefile = gpd.read_file("D:/depressional_lidar/data/bradford/bradford_boundary.shp")
 bradford_shapefile = bradford_shapefile.to_crs(epsg=4326)
 
-# %% 2.0 Generate LAI map for a given date range cropped to bradford boundary
-
-# Helpter functions
+# %% 2.0 Helper functions for LAI composite maps
 
 def apply_scale_factors(image):
     optical = image.select('SR_B.*').multiply(0.0000275).add(-0.2)
@@ -62,7 +60,6 @@ def calc_lai_composite(collection, polygon):
         LAI = SR.multiply(0.332915).subtract(0.00212).rename('LAI').clamp(0, 5.6)
         return LAI
     
-    # Map LAI calculation, reduce to median, then clip once at the end
     lai_composite = (collection
         .map(add_lai)
         .median()
@@ -72,21 +69,16 @@ def calc_lai_composite(collection, polygon):
 
 # %% 3.0 Create LAI map
 
-# Convert shapefile to ee.Geometry
 polygon = geemap.geopandas_to_ee(bradford_shapefile).geometry()
 
 # Set date range
 start_date = '2025-06-01'
 end_date = '2025-12-31'
 
-# Create Landsat 8 collection and calculate LAI composite
 ls8_collection = make_ls8_collection(polygon, start_date, end_date)
 lai_composite = calc_lai_composite(ls8_collection, polygon)
 
-# Check collection size (for debugging)
-print(f"Number of images in collection: {ls8_collection.size().getInfo()}")
-
-# %% 4.0 Display LAI map in geemap
+# %% 3.1 Display LAI map in geemap
 
 Map = geemap.Map(basemap='Esri.WorldImagery')
 Map.centerObject(polygon, zoom=12)
@@ -126,7 +118,8 @@ def export_composite_to_drive(image, region, description, folder, scale=30, crs=
     print(f"Export started: '{description}' -> Drive folder '{folder}'")
     return task
 
-# Example usage:
+# %% 6.0 Run the export function
+
 task = export_composite_to_drive(
     lai_composite, polygon,
     description=f'LAI_composite_{start_date}_to_{end_date}',

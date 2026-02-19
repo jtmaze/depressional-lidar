@@ -57,7 +57,7 @@ point_elevations_dfs = []
 for i in core_wells:
 
     stage = osbs_core_wells[osbs_core_wells['wetland_id'] == i].copy()
-    stage = stage[['date', 'well_depth_m', 'wetland_id']]
+    stage = stage[['date', 'well_depth_m', 'wetland_id', 'flag']]
     well_z = points_osbs[
         (points_osbs['type'] == 'main_doe_well') & 
         (points_osbs['wetland_id'] == i)

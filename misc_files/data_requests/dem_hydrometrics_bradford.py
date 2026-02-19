@@ -64,7 +64,7 @@ point_elevations_dfs = []
 for i in metric_wells:
 
     stage = bradford_core_wells[bradford_core_wells['wetland_id'] == i].copy()
-    stage = stage[['date', 'well_depth_m', 'wetland_id']]
+    stage = stage[['date', 'well_depth_m', 'wetland_id', 'flag']]
     well_z = points_bradford[
         (points_bradford['type'].isin(['main_doe_well', 'sunita_well'])) & 
         (points_bradford['wetland_id'] == i)

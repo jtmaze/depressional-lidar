@@ -21,14 +21,14 @@ well_point = (
     .query("type in ['main_doe_well', 'aux_wetland_well'] and site == 'Bradford'")
 )
 
-well_ids = well_point['wetland_id'].unique().tolist()
+wetland_ids = well_point['wetland_id'].unique().tolist()
 dem_buffer = 200
 
 connectivity = pd.read_excel(wetland_connectivity_path)
 
 # %% 2.0 Visualize the wetland's DEM
 
-for i in well_ids:
+for i in wetland_ids:
 
     log_basin = WetlandBasin(
         wetland_id=i,
@@ -37,7 +37,7 @@ for i in well_ids:
         footprint=None,
         transect_buffer=dem_buffer
     )
-    connectivity_class = connectivity[connectivity['well_id'] == i].iloc[0]['connectivity']
+    connectivity_class = connectivity[connectivity['wetland_id'] == i].iloc[0]['connectivity']
     
     print(f'Well ID: {i}, Connectivity: {connectivity_class}')
 

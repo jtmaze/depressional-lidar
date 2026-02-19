@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 def read_concatonate_lai(
         dir_path: str, 
-        well_id: str, 
+        wetland_id: str, 
         lai_method: str, 
         upper_bound: float,
         lower_bound: float
@@ -17,7 +17,7 @@ def read_concatonate_lai(
     """
     # Read files
     file_list = glob.glob(f"{dir_path}/*.csv")
-    pattern = rf"_{well_id}_"
+    pattern = rf"_{wetland_id}_"
     well_files = [f for f in file_list if re.search(pattern, f)]
     dfs = [pd.read_csv(f) for f in well_files]
     out_df = pd.concat(dfs, ignore_index=True)
@@ -49,6 +49,8 @@ def read_concatonate_lai(
     # Specify the LAI method
     out_df['method'] = lai_method
 
+    print(out_df.head(10))
+
     out_df = apply_moving_averages(out_df)
     
     return out_df
@@ -79,7 +81,7 @@ def apply_moving_averages(lai_df: pd.DataFrame):
 
 
 def visualize_lai(lai_df: pd.DataFrame, 
-                  well_id: str, 
+                  wetland_id: str, 
                   show: bool=True, 
                   ax=None, 
                   title_suffix: str = ""
@@ -104,7 +106,7 @@ def visualize_lai(lai_df: pd.DataFrame,
             color='orange', linewidth=2, label='1-year')
     
     # Formatting
-    ax.set_title(f"Wetland ID: {well_id} - LAI Timeseries {title_suffix}", fontsize=14, fontweight='bold')
+    ax.set_title(f"Wetland ID: {wetland_id} - LAI Timeseries {title_suffix}", fontsize=14, fontweight='bold')
     ax.set_xlabel('Date', fontsize=12)
     ax.set_ylabel('LAI', fontsize=12)
     ax.legend(frameon=True, fancybox=True, shadow=True)

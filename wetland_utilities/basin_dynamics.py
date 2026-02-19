@@ -1,10 +1,10 @@
-# NOTE: T
+# NOTE: This shim facilites imports by bringing the root directory higher
 import sys
 PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import cached_property
 from typing import Dict
 
