@@ -1,5 +1,10 @@
 # %% 1.0 Libraries and file paths
 
+# shim for imports across directories
+PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 import sys
 import numpy as np
 import pandas as pd
@@ -19,10 +24,6 @@ wetland_pairs_path = data_dir + f'out_data/strong_ols_models_{lai_buffer_dist}m_
 source_dem_path = data_dir + '/in_data/bradford_DEM_cleaned_veg.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 shift_results_path = data_dir + f'/out_data/modeled_logging_stages/all_wells_shift_results_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
-
-PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
 
 from wetland_utilities.basin_attributes import WetlandBasin
 from wetland_utilities.basin_dynamics import BasinDynamics, WellStageTimeseries

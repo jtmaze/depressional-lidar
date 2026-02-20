@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 import numpy as np
 import scipy.stats as stats
+import statsmodels.api as sm
+from statsmodels.formula.api import ols
+from statsmodels.stats.multicomp import pairwise_tukeyhsd
 
 
 lai_buffer_dist = 150
@@ -77,37 +80,47 @@ def classify_pair(df_row):
     
 plot_data['pair_connect'] = plot_data.apply(classify_pair, axis=1)
 
-print(plot_data.head(2))
+# %% 2.3 Make log and ref connect categorical columns
 
+# Sort plot_data by connectivity to cluster connectivity classes together
+connectivity_order = ['flow-through', 'first order', 'giw']
+plot_data['log_connectivity_cat'] = pd.Categorical(
+    plot_data['logged_connect'], 
+    categories=connectivity_order, 
+    ordered=True
+)
+
+plot_data['ref_connectivity_cat'] = pd.Categorical(
+    plot_data['ref_connect'], 
+    categories=connectivity_order, 
+    ordered=True
+)
+
+unique_log_ids = plot_data.drop_duplicates(subset='log_id').sort_values('log_connectivity_cat')['log_id'].values
+unique_ref_ids = plot_data.drop_duplicates(subset='ref_id').sort_values('ref_connectivity_cat')['ref_id'].values
+
+plot_data['mean_depth_change'] = plot_data['mean_depth_change'] * 100
+
+# %% 3.0 Boxplot showing depth shifts by log_id
 # Define connectivity color palette
+
 connectivity_config = {
     'flow-through': {'color': 'red', 'label': 'Flow-through'},
     'first order': {'color': 'green', 'label': '1st Order Ditched'},
     'giw': {'color': 'blue', 'label': 'GIW'}
 }
 
-# %% 2.0 Boxplot showing depth shifts by log_id
-
-# Sort plot_data by connectivity to cluster connectivity classes together
-connectivity_order = ['flow-through', 'first order', 'giw']
-plot_data['connectivity_cat'] = pd.Categorical(
-    plot_data['logged_connect'], 
-    categories=connectivity_order, 
-    ordered=True
-)
-plot_data_sorted = plot_data.sort_values('connectivity_cat')
-
-unique_log_ids = plot_data_sorted.drop_duplicates(subset='log_id').sort_values('connectivity_cat')['log_id'].values
+plot_data_log_sorted = plot_data.sort_values('log_connectivity_cat')
 
 fig, ax = plt.subplots(figsize=(10, 5))
 
-groups = [plot_data.loc[plot_data["log_id"] == id, "mean_depth_change"] 
+groups = [plot_data_log_sorted.loc[plot_data_log_sorted["log_id"] == id, "mean_depth_change"] 
           for id in unique_log_ids]
 
 bp = ax.boxplot(groups, tick_labels=unique_log_ids, patch_artist=True)
 
 for i, log_id in enumerate(unique_log_ids):
-    connectivity = plot_data.loc[plot_data["log_id"] == log_id, "logged_connect"].iloc[0]
+    connectivity = plot_data_log_sorted.loc[plot_data_log_sorted["log_id"] == log_id, "logged_connect"].iloc[0]
     color = connectivity_config[connectivity]['color']
     bp['boxes'][i].set_facecolor(color)
     bp['boxes'][i].set_alpha(0.6)
@@ -116,7 +129,7 @@ for median in bp['medians']:
     median.set_color('black')
     median.set_linewidth(1.5)
 
-ax.set_ylabel("Depth Change (m)")
+ax.set_ylabel("Depth Change (cm)")
 ax.set_title("Depth Change by Logged Wetland")
 plt.xticks(rotation=90)
 
@@ -133,26 +146,17 @@ plt.show()
 
 # %% 3.0 Boxplot showing depth_shifts by ref_id
 
-# Sort plot_data by reference connectivity to cluster connectivity classes together
-plot_data['ref_connectivity_cat'] = pd.Categorical(
-    plot_data['ref_connect'], 
-    categories=connectivity_order, 
-    ordered=True
-)
 plot_data_sorted_ref = plot_data.sort_values('ref_connectivity_cat')
-
-# Get ref_ids in sorted order
-unique_ref_ids = plot_data_sorted_ref.drop_duplicates(subset='ref_id').sort_values('ref_connectivity_cat')['ref_id'].values
 
 fig, ax = plt.subplots(figsize=(10, 5))
 
-groups = [plot_data.loc[plot_data['ref_id'] == id, "mean_depth_change"]
+groups = [plot_data_sorted_ref.loc[plot_data_sorted_ref['ref_id'] == id, "mean_depth_change"]
           for id in unique_ref_ids]
 
 bp = ax.boxplot(groups, tick_labels=unique_ref_ids, patch_artist=True)
 
 for i, ref_id in enumerate(unique_ref_ids):
-    connectivity = plot_data.loc[plot_data["ref_id"] == ref_id, "ref_connect"].iloc[0]
+    connectivity = plot_data_sorted_ref.loc[plot_data_sorted_ref["ref_id"] == ref_id, "ref_connect"].iloc[0]
     color = connectivity_config[connectivity]['color']
     bp['boxes'][i].set_facecolor(color)
     bp['boxes'][i].set_alpha(0.6)
@@ -161,7 +165,7 @@ for median in bp['medians']:
     median.set_color('black')
     median.set_linewidth(1.5)
 
-ax.set_ylabel("Depth Change (m)")
+ax.set_ylabel("Depth Change (cm)")
 ax.set_title("Depth Change by Reference Wetland")
 plt.xticks(rotation=90)
 
@@ -196,7 +200,7 @@ for median in bp['medians']:
     median.set_color('black')
     median.set_linewidth(1.5)
 
-ax.set_ylabel("Depth Change (m)")
+ax.set_ylabel("Depth Change (cm)")
 ax.set_title("Aggregate Depth Change by Logged Wetland Connectivity")
 plt.xticks(rotation=0)
 
@@ -224,7 +228,7 @@ for median in bp['medians']:
     median.set_color('black')
     median.set_linewidth(1.5)
 
-ax.set_ylabel("Depth Change (m)")
+ax.set_ylabel("Depth Change (cm)")
 ax.set_title("Aggregate Depth Change by Reference Wetland Connectivity")
 plt.xticks(rotation=0)
 
@@ -266,7 +270,7 @@ for ref_conn in connectivity_order:
 ax.set_xticks(range(len(connectivity_order)))
 ax.set_xticklabels([connectivity_config[conn]['label'] for conn in connectivity_order], fontsize=12)
 ax.set_xlabel("Logged Wetland Connectivity", fontsize=18, labelpad=20)  # small downward offset
-ax.set_ylabel("Modeled Depth Change (m)", fontsize=14)
+ax.set_ylabel("Modeled Depth Change (cm)", fontsize=14)
 ax.tick_params(axis='y', labelsize=12)
 
 ax.axhline(y=0, color='black', linestyle='--', linewidth=2.5)
@@ -276,8 +280,6 @@ plt.tight_layout()
 plt.show()
 
 # %% 7.0 Heat map grid colored by t-stats (colums = log connect, rows = ref connect)
-import seaborn as sns
-
 
 # Calculate t-stats for each combination of logged and reference connectivity
 t_stat_matrix = np.zeros((len(connectivity_order), len(connectivity_order)))
@@ -293,16 +295,14 @@ for i, log_conn in enumerate(connectivity_order):
         ]['mean_depth_change']
         
         count_matrix[i, j] = len(subset)
-
         std_matrix[i, j] = subset.std()
         t_stat, p_val = stats.ttest_1samp(subset, 0)
         t_stat_matrix[i, j] = t_stat
         p_value_matrix[i, j] = p_val
 
-
+# Create heatmap
 fig, ax = plt.subplots(figsize=(8, 6))
 
-# Create heatmap
 im = ax.imshow(t_stat_matrix.T, cmap='RdBu_r', aspect='auto', 
                vmin=0, 
                vmax=np.nanmax(np.abs(t_stat_matrix)))
@@ -324,7 +324,7 @@ ax.set_ylabel("Reference Wetland Connectivity", fontsize=16, labelpad=20)
 
 # Add colorbar
 cbar = plt.colorbar(im, ax=ax)
-cbar.set_label('T-Statistic')
+cbar.set_label('t-Statistic')
 
 # Annotate cells with t-stat, significance stars, sample count, and standard deviation
 for i in range(len(connectivity_order)):
@@ -343,11 +343,38 @@ for i in range(len(connectivity_order)):
         else:
             stars = ''
         
-        text_color = 'white' if abs(t_val) > np.nanmax(np.abs(t_stat_matrix)) * 0.6 else 'black'
-        ax.text(j, i, f'{t_val:.2f}{stars}\nn={count}\nsd={std_val:.2f}', ha='center', va='center', 
-                color=text_color, fontsize=10, fontweight='bold')
+        text_color = 'white' if abs(t_val) > np.nanmax(np.abs(t_stat_matrix)) * 0.8 else 'black'
+        ax.text(j, i, f't={t_val:.2f}{stars}\nn={count}\nsd={std_val:.2f}', ha='center', va='center', 
+                color=text_color, fontsize=12, fontweight='bold')
 
 plt.tight_layout()
 plt.show()
 
+# %% 8.0 Conduct 2-way ANOVA to determine effects and possible interactions for connectivity
+
+model = ols('mean_depth_change ~ C(logged_connect) + C(ref_connect) + C(logged_connect):C(ref_connect)', data=plot_data)
+model = model.fit()
+anova_tbl = sm.stats.anova_lm(model, typ=2)
+print(anova_tbl)
+
+
+# %% 9.0 Run a Tukey HSD
+
+# %% 9.1 Tukey HSD for logged
+
+tukey_logged = pairwise_tukeyhsd(
+    endog=plot_data["mean_depth_change"],
+    groups=plot_data["logged_connect"],
+    alpha=0.01
+)
+print(tukey_logged)
+
+# %% 9.2 Tukey HSD for ref
+
+tukey_ref = pairwise_tukeyhsd(
+    endog=plot_data["mean_depth_change"],
+    groups=plot_data["ref_connect"],
+    alpha=0.01
+)
+print(tukey_ref)
 # %%

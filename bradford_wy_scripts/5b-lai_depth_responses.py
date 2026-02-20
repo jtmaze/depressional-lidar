@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
+from scipy.stats import t
 
 from bradford_wy_scripts.functions.lai_vis_functions import read_concatonate_lai
 
@@ -41,7 +42,6 @@ shift_data = shift_data.merge(
     right_on=['log_id', 'ref_id', 'log_date'],
     how='inner'
 )
-shift_data = shift_data[shift_data['mean_depth_change'] < 1]
 
 print(len(shift_data))
 print(len(strong_pairs))
@@ -184,7 +184,6 @@ ax.set_title(f'LAI Loss vs Wetland Depth Change (n={len(strong_pairs)} pairs)',
              fontsize=14, fontweight='bold')
 ax.legend(loc='best', fontsize=11)
 
-
 plt.tight_layout()
 plt.show()
 
@@ -219,44 +218,58 @@ for connectivity_level, config in connectivity_config.items():
     ax.scatter(
         subset_clean['roll_diff_change'],
         subset_clean['mean_depth_change'],
-        alpha=0.6,
-        s=32,
+        alpha=0.5,
+        s=20,
         edgecolors='black',
         linewidth=0.5,
         color=config['color'],
         marker=config['marker']
     )
 
-    if connectivity_level == 'flow-through':
-        for _, row in subset_clean.iterrows():
-            ax.annotate(
-                str(row['log_id']),
-                xy=(row['roll_diff_change'], row['mean_depth_change']),
-                xytext=(6, 4),
-                textcoords='offset points',
-                fontsize=9,
-                alpha=0.9,
-                bbox=dict(boxstyle='round,pad=0.1', fc='white', alpha=0.6)
-            )
+    # if connectivity_level == 'giw':
+    #     for _, row in subset_clean.iterrows():
+    #         ax.annotate(
+    #             str(row['log_id']),
+    #             xy=(row['roll_diff_change'], row['mean_depth_change']),
+    #             xytext=(6, 4),
+    #             textcoords='offset points',
+    #             fontsize=9,
+    #             alpha=0.9,
+    #             bbox=dict(boxstyle='round,pad=0.1', fc='white', alpha=0.6)
+    #         )
 
-    # only compute / plot regression if there are >=2 valid points
-    if len(subset_clean) >= 2:
-        slope, intercept, r_value, p_value, std_err = stats.linregress(
-            subset_clean['roll_diff_change'],
-            subset_clean['mean_depth_change']
-        )
+    x = subset_clean['roll_diff_change']
+    y = subset_clean['mean_depth_change']
 
-        x_min = subset_clean['roll_diff_change'].min()
-        x_max = subset_clean['roll_diff_change'].max()
-        if x_min == x_max:
-            x_range = np.linspace(x_min - 0.1, x_max + 0.1, 100)
-        else:
-            x_range = np.linspace(x_min, x_max, 100)
+    slope, intercept, r_value, p_value, std_err = stats.linregress(
+        x,
+        y
+    )
 
-        y_pred = slope * x_range + intercept
+    x_min = subset_clean['roll_diff_change'].min()
+    x_max = subset_clean['roll_diff_change'].max()
 
-        ax.plot(x_range, y_pred, '--', linewidth=2, color=config['color'],
-                label=f"{config['label']}: slope={slope:.3f}, R²={r_value**2:.3f}")
+    x_range = np.linspace(x_min, x_max, 100)
+
+    y_pred = slope * x_range + intercept
+
+    ax.plot(x_range, y_pred, '--', linewidth=2, color=config['color'],
+            label=f"{config['label']}: slope={slope:.2f}, R²={r_value**2:.2f}, p={p_value:.4f}")
+    
+    n = len(x)
+    dof = n - 2 
+    t_val = t.ppf(0.99, dof) 
+
+    x_mean = np.mean(x)
+    sxx = np.sum((x - x_mean)**2)
+    residuals = y - (slope * x + intercept)
+    s_res = np.sqrt(np.sum(residuals**2) / dof)
+    
+    se = s_res * np.sqrt(1/n + (x_range - x_mean)**2 / sxx)
+    ci = t_val * se
+
+    ax.fill_between(x_range, y_pred - ci, y_pred + ci, 
+                    alpha=0.2, color='grey')
 
 # Formatting
 ax.set_xlabel('Relative LAI Decrease (Pre - Post)', fontsize=18)
@@ -270,81 +283,6 @@ ax.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.show()
 
-# %% 5.2 Print the connectivity stats
 
-print("\n" + "="*70)
-print("STATISTICS BY CONNECTIVITY")
-print("="*70)
 
-for connectivity_level in sorted(connectivity_config.keys()):
-    subset = plot_df[plot_df['log_connected'] == connectivity_level]
-    
-
-    slope, intercept, r_value, p_value, std_err = stats.linregress(
-        subset['roll_diff_change'], 
-        subset['mean_depth_change']
-    )
-        
-    print(f"\nConnectivity Level: {connectivity_config[connectivity_level]['label']}")
-    print(f"  N = {len(subset)}")
-    print(f"  Slope = {slope:.4f}")
-    print(f"  Intercept = {intercept:.4f}")
-    print(f"  R² = {r_value**2:.3f}")
-    print(f"  p-value = {p_value:.4f}")
-
-print("="*70)
-
-# %% 7.0 Linear regression lines by connectivity with confidence intervals
-
-from scipy.stats import t
-
-fig, ax = plt.subplots(figsize=(10, 8))
-
-connectivity_levels = ['giw', 'first order', 'flow-through'] 
-connectivity_labels = {'giw': 'GIW', 'first order': '1st Order Ditched', 'flow-through': 'flow-through'}
-connectivity_colors = {'giw': 'green', 'first order': 'navy', 'flow-through': 'red'}
-
-for conn_level in connectivity_levels:
-    subset = plot_df[plot_df['log_connected'] == conn_level]
-    filter_ids = ['7_341', '9_77']
-    subset = subset[~subset['log_id'].isin(filter_ids)]
-    x = subset['roll_diff_change'].values
-    y = subset['mean_depth_change'].values
-    
-    slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
-    
-    x_range = np.linspace(x.min(), x.max(), 100)
-    y_pred = slope * x_range + intercept
-    
-    n = len(x)
-    dof = n - 2 
-    t_val = t.ppf(0.975, dof) 
-
-    x_mean = np.mean(x)
-    sxx = np.sum((x - x_mean)**2)
-    residuals = y - (slope * x + intercept)
-    s_res = np.sqrt(np.sum(residuals**2) / dof)
-    
-    se = s_res * np.sqrt(1/n + (x_range - x_mean)**2 / sxx)
-    ci = t_val * se
-    
-    ax.plot(x_range, y_pred, '--', linewidth=2, 
-            color=connectivity_colors[conn_level],
-            label=f"{connectivity_labels[conn_level]}: slope={slope:.3f}, R²={r_value**2:.3f}")
-    
-    # Plot confidence interval
-    ax.fill_between(x_range, y_pred - ci, y_pred + ci, 
-                    alpha=0.2, color=connectivity_colors[conn_level])
-
-ax.set_xlabel('Relative LAI Decrease (Pre - Post)', fontsize=18)
-ax.set_ylabel('Modeled Stage Increase (Post - Pre) [m]', fontsize=18)
-ax.set_title(f'LAI Loss vs Wetland Depth Change by Connectivity', 
-            fontsize=20, fontweight='bold')
-ax.tick_params(axis='both', labelsize=14)
-ax.legend(loc='best', fontsize=14, framealpha=0.9)
-ax.grid(True, alpha=0.3)
-
-plt.tight_layout()
-plt.show()
-
-# %% 8.0 Simple histogram
+# %%

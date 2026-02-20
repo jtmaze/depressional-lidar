@@ -12,7 +12,6 @@ if PROJECT_ROOT not in sys.path:
 from wetland_utilities.basin_attributes import WetlandBasin
 
 buffer = 100
-model_type = 'ols'
 data_set = 'no_dry_days'
 lai_buffer_dist = 150
 
@@ -20,9 +19,9 @@ data_dir = "D:/depressional_lidar/data/bradford/"
 source_dem_path = f'{data_dir}/in_data/bradford_DEM_cleaned_veg.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 connectivity_key_path = f'{data_dir}bradford_wetland_connect_logging_key.xlsx'
-distributions_path = f'{data_dir}/out_data/modeled_logging_stages/all_wells_hypothetical_distributions_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
+distributions_path = f'{data_dir}/out_data/modeled_logging_stages/hypothetical_distributions_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
 strong_wetland_pairs_path = f'{data_dir}/out_data/strong_ols_models_{lai_buffer_dist}m_domain_{data_set}.csv'
-agg_shift_data_path = f'{data_dir}/out_data/modeled_logging_stages/all_wells_shift_results_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
+agg_shift_data_path = f'{data_dir}/out_data/modeled_logging_stages/shift_results_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
 
 # %% 2.0 Read and merge data 
 well_point = (
@@ -31,7 +30,6 @@ well_point = (
 )
 
 distributions = pd.read_csv(distributions_path)
-distributions = distributions[distributions['model_type'] == model_type]
 # Only keep strong models
 strong_pairs = pd.read_csv(strong_wetland_pairs_path)
 distributions = distributions.merge(
@@ -43,9 +41,8 @@ distributions = distributions.merge(
 
 # For tracking omitted low days
 dry_days = pd.read_csv(agg_shift_data_path)
-dry_days = dry_days[dry_days['model_type'] == model_type]
 dry_days = dry_days[['log_id', 'ref_id', 'total_obs', 'n_bottomed_out', 'initial_domain_days', 'filtered_domain_days']] 
-dry_days['modeled_pct'] = dry_days['filtered_domain_days'] / dry_days['total_obs'] * 100
+dry_days['modeled_pct'] = (1 - (dry_days['n_bottomed_out'] / dry_days['total_obs'])) * 100
 
 distributions = distributions.merge(
     dry_days[['log_id', 'ref_id', 'modeled_pct']],
@@ -246,18 +243,18 @@ ax.plot(prob_bins, post_mean * 100, color=post_color, linewidth=5, label='Post-l
 ax.plot(prob_bins, (post_mean - post_se)* 100, color=post_color, linewidth=2.5, linestyle='--', alpha=0.35, label='Post-logging ±1 SE')
 ax.plot(prob_bins, (post_mean + post_se) * 100, color=post_color, linewidth=2.5, linestyle='--', alpha=0.35)
 
-ax.axvline(x=0.5, color='maroon', alpha=0.7, linewidth=2.5, label="P=0.5")
+ax.axvline(x=0.5, color='maroon', alpha=0.7, linewidth=4, label="P=0.5")
+ax.axvline(x=0.25, color='navy', alpha=0.7, linewidth=4, label="P=0.25")
 
 ax.set_xlabel('Exceedance Probability', fontsize=16)
 ax.set_ylabel('Inundated Fraction (%)', fontsize=16)
 ax.set_title('Flood Duration Curves All Wetlands', fontsize=18)
 ax.grid(True, alpha=0.3)
 ax.set_xlim(0, 1)
-ax.set_ylim(0, 65)
+ax.set_ylim(0, 75)
 ax.legend(fontsize=16)
 
 ax.tick_params(axis='both', which='major', labelsize=14)
-
 
 plt.tight_layout()
 plt.show()
@@ -326,7 +323,6 @@ for ax, p_val in zip(axes, [0.25, 0.5]):
     ax.set_xticks(x)
     ax.set_xticklabels(subset['log_id'], rotation=45, ha='right')
     #ax.set_ylabel('Mean Inundated Fraction (%)')
-    ax.set_title(f'Inundated Fraction (%) at Exceedance Probability = {p_val}')
     ax.legend()
     ax.grid(axis='y', alpha=0.3)
 

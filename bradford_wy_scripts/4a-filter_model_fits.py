@@ -26,7 +26,7 @@ strong_pairs = model_data[
 print(len(strong_pairs))
 
 # Well data was problematic
-strong_pairs = strong_pairs[strong_pairs['log_id'] != '15_516']
+#strong_pairs = strong_pairs[strong_pairs['log_id'] != '15_516']
 
 # Outlier of model output
 print(len(strong_pairs))
