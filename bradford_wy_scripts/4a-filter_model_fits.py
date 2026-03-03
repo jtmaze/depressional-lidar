@@ -23,11 +23,6 @@ strong_pairs = model_data[
     (model_data['r2_joint'] >= 0.3)
 ][['log_id', 'log_date', 'ref_id']].copy()
 
-print(len(strong_pairs))
-
-# Well data was problematic
-#strong_pairs = strong_pairs[strong_pairs['log_id'] != '15_516']
-
 # Outlier of model output
 print(len(strong_pairs))
 strong_pairs = strong_pairs[

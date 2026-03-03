@@ -18,7 +18,7 @@ from bradford_wy_scripts.functions.wetland_logging_functions import (
 
 min_depth_search_radius = 25 # Only used if censoring low water table values. 
 lai_buffer = 150
-data_set = 'no_dry_days'
+data_set = 'wtd_above0_25'
 
 stage_path = "D:/depressional_lidar/data/bradford/in_data/stage_data/bradford_daily_well_depth_Winter2025.csv"
 source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'
@@ -32,7 +32,6 @@ wetland_pairs = pd.read_csv(wetland_pairs_path)
 # %% 2.0 Load the stage data and well coordinates
 
 stage_data = pd.read_csv(stage_path)
-print(stage_data['wetland_id'].unique())
 stage_data['day'] = pd.to_datetime(stage_data['date'])
 stage_data.drop(columns=['date'], inplace=True)
 
@@ -259,16 +258,16 @@ residual_results = []
 data_limited_pairs = []
 
 # View plots for random pairs of logged and reference wetlands
-rando_plot_idxs = np.random.choice(len(wetland_pairs), size=1, replace=False)
+rando_plot_idxs = np.random.choice(len(wetland_pairs), size=50, replace=False)
 
 for index, row in wetland_pairs.iterrows():
     pair_results = process_wetland_pair(
         row=row,
         stage_data=stage_data,
-        plot=True,
+        plot=False,
         data_set=data_set,
         keep_below_obs=False,
-        depth_censor=False,
+        depth_censor=True,
         # Optional params for depth censoring
         well_point=well_point,
         source_dem_path=source_dem_path,
@@ -308,8 +307,7 @@ data_limited_pairs_df.to_csv(data_limited_path, index=False)
 # %% 4.0 Plot the shifts in depth
 
 plot_df = shift_results_df.query("data_set == data_set and model_type == 'OLS'")
-plot_df = plot_df[plot_df['mean_depth_change'] < 1]
-plot_df = plot_df[plot_df['log_id'] != '15_516']
+
 fig, ax = plt.subplots(figsize=(10, 7))
 
 # Calculate statistics for annotation

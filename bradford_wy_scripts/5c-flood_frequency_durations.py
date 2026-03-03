@@ -243,8 +243,8 @@ ax.plot(prob_bins, post_mean * 100, color=post_color, linewidth=5, label='Post-l
 ax.plot(prob_bins, (post_mean - post_se)* 100, color=post_color, linewidth=2.5, linestyle='--', alpha=0.35, label='Post-logging ±1 SE')
 ax.plot(prob_bins, (post_mean + post_se) * 100, color=post_color, linewidth=2.5, linestyle='--', alpha=0.35)
 
-ax.axvline(x=0.5, color='maroon', alpha=0.7, linewidth=4, label="P=0.5")
-ax.axvline(x=0.25, color='navy', alpha=0.7, linewidth=4, label="P=0.25")
+ax.scatter(0.5, 2, marker='v', color='maroon', s=500, linewidths=4, label="P=0.5")
+ax.scatter(0.25, 2, marker='v', color='navy', s=500, linewidths=4, facecolors='none', edgecolors='navy', label="P=0.25")
 
 ax.set_xlabel('Exceedance Probability', fontsize=16)
 ax.set_ylabel('Inundated Fraction (%)', fontsize=16)
@@ -258,7 +258,6 @@ ax.tick_params(axis='both', which='major', labelsize=14)
 
 plt.tight_layout()
 plt.show()
-
 
 # %% 5.0 Bar showing graph of inundated fraction at P=0.5
 
@@ -306,7 +305,7 @@ bar_means['nominal_diff'] = bar_means['post_mean'] * 100 - bar_means['pre_mean']
 bar_means['rel_diff'] = (bar_means['nominal_diff'] / (bar_means['pre_mean'] * 100)) * 100
 # %% 5.1 Plot
 
-fig, axes = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
+fig, axes = plt.subplots(2, 1, figsize=(8, 8), sharex=True, sharey=True)
 bar_width = 0.35
 
 for ax, p_val in zip(axes, [0.25, 0.5]):
@@ -322,11 +321,12 @@ for ax, p_val in zip(axes, [0.25, 0.5]):
     
     ax.set_xticks(x)
     ax.set_xticklabels(subset['log_id'], rotation=45, ha='right')
-    #ax.set_ylabel('Mean Inundated Fraction (%)')
+    ax.set_ylabel('Inundated Fraction (%)')
     ax.legend()
     ax.grid(axis='y', alpha=0.3)
 
 axes[-1].set_xlabel('Logged Wetland ID', fontsize=16)
+
 plt.tight_layout()
 plt.show()
 

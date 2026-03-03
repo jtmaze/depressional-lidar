@@ -208,14 +208,14 @@ for i in unique_log_ids:
     pre_nep_map = (pre_depth_map * slope_m) + b
     post_nep_map = (post_depth_map * slope_m) + b
 
-    # plot_depth_and_nep_maps(
-    #     pre_depth_map, 
-    #     post_depth_map, 
-    #     pre_nep_map, 
-    #     post_nep_map, 
-    #     clipped_dem, 
-    #     nodata
-    # )
+    plot_depth_and_nep_maps(
+        pre_depth_map, 
+        post_depth_map, 
+        pre_nep_map, 
+        post_nep_map, 
+        clipped_dem, 
+        nodata
+    )
 
     pre_nep_mean = np.nanmean(pre_nep_map)
     post_nep_mean = np.nanmean(post_nep_map)

@@ -262,7 +262,8 @@ ax2.set_xlim(start_date, end_date)  # Match x-axis limits
 
 # Add green shading for hydrologic monitoring period
 monitoring_start = pd.to_datetime('2021-11-20')
-ax2.axvspan(monitoring_start, end_date, color='green', alpha=0.2, zorder=0)
+monitoring_end = pd.to_datetime('2025-12-12')
+ax2.axvspan(monitoring_start, monitoring_end, color='green', alpha=0.2, zorder=0)
 ax2.text(monitoring_start + (end_date - monitoring_start) / 2, 0.7, 
          'Hydrologic monitoring period', 
          ha='center', va='center', fontsize=16, 
@@ -313,6 +314,7 @@ bad_log_ids = [
     '3_173', # The wetland itself was logged. 
     '3_244', # The wetland was logged and the well was snapped in the process
     '13_263', # well position is not stable. 
+    '15_516' # The well positoin moved and there's inadequate post-harvest data. 
 ]
 
 combinations_df = combinations_df[~combinations_df['logged_id'].isin(bad_log_ids)]

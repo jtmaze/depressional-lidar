@@ -1,11 +1,10 @@
 # %% 1.0 Libraries and file paths
-
+import sys
 # shim for imports across directories
 PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-import sys
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -18,12 +17,12 @@ data_set = 'no_dry_days'
 
 data_dir = data_dir = "D:/depressional_lidar/data/bradford/"
 
-distributions_path = data_dir + f'/out_data/modeled_logging_stages/all_wells_hypothetical_distributions_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
+distributions_path = data_dir + f'/out_data/modeled_logging_stages/hypothetical_distributions_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
 wetland_pairs_path = data_dir + f'out_data/strong_ols_models_{lai_buffer_dist}m_domain_{data_set}.csv'
 
 source_dem_path = data_dir + '/in_data/bradford_DEM_cleaned_veg.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-shift_results_path = data_dir + f'/out_data/modeled_logging_stages/all_wells_shift_results_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
+shift_results_path = data_dir + f'/out_data/modeled_logging_stages/shift_results_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
 
 from wetland_utilities.basin_attributes import WetlandBasin
 from wetland_utilities.basin_dynamics import BasinDynamics, WellStageTimeseries
@@ -47,18 +46,17 @@ basin = WetlandBasin(
 # %% 3.0 Figure out the proportion of days the well was bottomed out
 
 dry_days = pd.read_csv(shift_results_path)
-print(dry_days)
 dry_days = dry_days[
     (dry_days['log_id'] == tgt_id) &
     (dry_days['data_set'] == data_set) &
-    (dry_days['model_type'] == 'ols') 
+    (dry_days['model_type'] == 'OLS') 
 ][['log_id', 'ref_id', 'total_obs', 'n_bottomed_out', 'filtered_domain_days']].copy()
 
-dry_days['dry_proportion'] = 1 - (dry_days['filtered_domain_days'] / dry_days['total_obs'])
+dry_days['dry_proportion'] = 1 - (dry_days['n_bottomed_out'] / dry_days['total_obs'])
 
 dry_proportion = dry_days['dry_proportion'].mean()
 
-print(dry_proportion)
+
 # %% 3.0 Read the modeled distributions and establish the wetland basin class
 
 distributions = pd.read_csv(distributions_path)

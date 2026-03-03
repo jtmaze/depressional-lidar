@@ -19,7 +19,7 @@ data_dir = "D:/depressional_lidar/data/bradford/"
 lai_buffer_dist = 150
 nep_mapping_dist = 200
 data_set = 'no_dry_days'
-tgt_log_id = '14_500'
+tgt_log_id = '14_418'
 
 distributions_path = f'{data_dir}/out_data/modeled_logging_stages/hypothetical_distributions_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
 strong_wetland_pairs_path = f'{data_dir}/out_data/strong_ols_models_{lai_buffer_dist}m_domain_{data_set}.csv'

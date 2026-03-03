@@ -215,16 +215,16 @@ for connectivity_level, config in connectivity_config.items():
 
     subset_clean = subset.dropna(subset=['roll_diff_change', 'mean_depth_change', 'log_id'])
 
-    ax.scatter(
-        subset_clean['roll_diff_change'],
-        subset_clean['mean_depth_change'],
-        alpha=0.5,
-        s=20,
-        edgecolors='black',
-        linewidth=0.5,
-        color=config['color'],
-        marker=config['marker']
-    )
+    # ax.scatter(
+    #     subset_clean['roll_diff_change'],
+    #     subset_clean['mean_depth_change'],
+    #     alpha=0.5,
+    #     s=20,
+    #     edgecolors='black',
+    #     linewidth=0.5,
+    #     color=config['color'],
+    #     marker=config['marker']
+    # )
 
     # if connectivity_level == 'giw':
     #     for _, row in subset_clean.iterrows():
@@ -253,7 +253,7 @@ for connectivity_level, config in connectivity_config.items():
 
     y_pred = slope * x_range + intercept
 
-    ax.plot(x_range, y_pred, '--', linewidth=2, color=config['color'],
+    ax.plot(x_range, y_pred, '-', linewidth=2, color=config['color'],
             label=f"{config['label']}: slope={slope:.2f}, R²={r_value**2:.2f}, p={p_value:.4f}")
     
     n = len(x)
@@ -270,6 +270,39 @@ for connectivity_level, config in connectivity_config.items():
 
     ax.fill_between(x_range, y_pred - ci, y_pred + ci, 
                     alpha=0.2, color='grey')
+
+# Fourth trendline: flow-through excluding outlier log_ids
+ft_subset = plot_df[
+    (plot_df['log_connected'] == 'flow-through') &
+    (~plot_df['log_id'].isin(['7_341', '9_77']))
+].copy()
+ft_clean = ft_subset.dropna(subset=['roll_diff_change', 'mean_depth_change', 'log_id'])
+
+x_ft = ft_clean['roll_diff_change']
+y_ft = ft_clean['mean_depth_change']
+
+slope_ft, intercept_ft, r_ft, p_ft, std_err_ft = stats.linregress(x_ft, y_ft)
+
+x_range_ft = np.linspace(x_ft.min(), x_ft.max(), 100)
+y_pred_ft = slope_ft * x_range_ft + intercept_ft
+
+ax.plot(x_range_ft, y_pred_ft, '--', linewidth=2, color='darkred',
+        label=f"Flow-through (excl. outliers): slope={slope_ft:.2f}, R²={r_ft**2:.2f}, p={p_ft:.4f}")
+
+n_ft = len(x_ft)
+dof_ft = n_ft - 2
+t_val_ft = t.ppf(0.99, dof_ft)
+
+x_mean_ft = np.mean(x_ft)
+sxx_ft = np.sum((x_ft - x_mean_ft)**2)
+residuals_ft = y_ft - (slope_ft * x_ft + intercept_ft)
+s_res_ft = np.sqrt(np.sum(residuals_ft**2) / dof_ft)
+
+se_ft = s_res_ft * np.sqrt(1/n_ft + (x_range_ft - x_mean_ft)**2 / sxx_ft)
+ci_ft = t_val_ft * se_ft
+
+ax.fill_between(x_range_ft, y_pred_ft - ci_ft, y_pred_ft + ci_ft,
+                alpha=0.2, color='grey')
 
 # Formatting
 ax.set_xlabel('Relative LAI Decrease (Pre - Post)', fontsize=18)

@@ -129,17 +129,17 @@ for median in bp['medians']:
     median.set_color('black')
     median.set_linewidth(1.5)
 
-ax.set_ylabel("Depth Change (cm)")
-ax.set_title("Depth Change by Logged Wetland")
-plt.xticks(rotation=90)
+ax.set_ylabel("Depth Change (cm)", fontsize=14)
+plt.xticks(rotation=90, fontsize=12)
+ax.tick_params(axis='y', labelsize=12)
 
 ax.axhline(y=0, color='black', linestyle='--', linewidth=1)
 
-legend_elements = [Patch(facecolor=connectivity_config[conn]['color'], 
-                         label=connectivity_config[conn]['label'], 
-                         alpha=0.6) 
+legend_elements = [Patch(facecolor=connectivity_config[conn]['color'],
+                         label=connectivity_config[conn]['label'],
+                         alpha=0.6)
                    for conn in connectivity_order]
-ax.legend(handles=legend_elements, loc='best')
+ax.legend(handles=legend_elements, loc='upper center', fontsize=12)
 
 plt.tight_layout()
 plt.show()
@@ -165,17 +165,18 @@ for median in bp['medians']:
     median.set_color('black')
     median.set_linewidth(1.5)
 
-ax.set_ylabel("Depth Change (cm)")
-ax.set_title("Depth Change by Reference Wetland")
-plt.xticks(rotation=90)
+# Increase font sizes
+ax.set_ylabel("Depth Change (cm)", fontsize=14)
+plt.xticks(rotation=90, fontsize=12)
+ax.tick_params(axis='y', labelsize=12)
 
 ax.axhline(y=0, color='black', linestyle='--', linewidth=1)
 
-legend_elements = [Patch(facecolor=connectivity_config[conn]['color'], 
-                         label=connectivity_config[conn]['label'], 
-                         alpha=0.6) 
-                   for conn in connectivity_order]
-ax.legend(handles=legend_elements, loc='best')
+# legend_elements = [Patch(facecolor=connectivity_config[conn]['color'],
+#                          label=connectivity_config[conn]['label'],
+#                          alpha=0.6)
+#                    for conn in connectivity_order]
+# ax.legend(handles=legend_elements, loc='best', fontsize=12)
 
 plt.tight_layout()
 plt.show()
@@ -201,7 +202,6 @@ for median in bp['medians']:
     median.set_linewidth(1.5)
 
 ax.set_ylabel("Depth Change (cm)")
-ax.set_title("Aggregate Depth Change by Logged Wetland Connectivity")
 plt.xticks(rotation=0)
 
 ax.axhline(y=0, color='black', linestyle='--', linewidth=1)
@@ -246,9 +246,11 @@ interaction_stats = plot_data.groupby(['logged_connect', 'ref_connect'])['mean_d
 
 fig, ax = plt.subplots(figsize=(6, 6))
 
-x_positions = {conn: i for i, conn in enumerate(connectivity_order)}
+# Reverse order so GIWs are first and flow-throughs are last
+plot_connectivity_order = ['giw', 'first order', 'flow-through']
+x_positions = {conn: i for i, conn in enumerate(plot_connectivity_order)}
 
-for ref_conn in connectivity_order:
+for ref_conn in plot_connectivity_order:
     subset = interaction_stats[interaction_stats['ref_connect'] == ref_conn]
 
     x_vals = [x_positions[log_conn] for log_conn in subset['logged_connect']]
@@ -264,17 +266,26 @@ for ref_conn in connectivity_order:
     label = connectivity_config[ref_conn]['label']
     
     ax.errorbar(x_sorted, y_sorted, yerr=yerr_sorted, 
-                fmt='o-', color=color, label=f'Ref: {label}',
+                fmt='o-', color=color, label=f'Reference: {label}',
                 capsize=4, capthick=1.5, markersize=8, linewidth=2, alpha=0.5)
-    
-ax.set_xticks(range(len(connectivity_order)))
-ax.set_xticklabels([connectivity_config[conn]['label'] for conn in connectivity_order], fontsize=12)
+
+# Calculate and plot marginal means for logged connectivity as black X's
+logged_marginal_means = plot_data.groupby('logged_connect')['mean_depth_change'].agg(['mean', 'sem']).reset_index()
+
+for i, conn in enumerate(plot_connectivity_order):
+    if conn in logged_marginal_means['logged_connect'].values:
+        mean_val = logged_marginal_means[logged_marginal_means['logged_connect'] == conn]['mean'].iloc[0]
+        ax.plot(i, mean_val, 'x', color='black', markersize=18, markeredgewidth=3,
+               label='Logged Mean' if i == 0 else "")
+
+ax.set_xticks(range(len(plot_connectivity_order)))
+ax.set_xticklabels([connectivity_config[conn]['label'] for conn in plot_connectivity_order], fontsize=12)
 ax.set_xlabel("Logged Wetland Connectivity", fontsize=18, labelpad=20)  # small downward offset
 ax.set_ylabel("Modeled Depth Change (cm)", fontsize=14)
 ax.tick_params(axis='y', labelsize=12)
 
 ax.axhline(y=0, color='black', linestyle='--', linewidth=2.5)
-ax.legend(title='Reference Connectivity', loc='best', fontsize=12, title_fontsize=14)
+ax.legend(loc='best', fontsize=12, title_fontsize=14)
 
 plt.tight_layout()
 plt.show()
@@ -286,6 +297,7 @@ t_stat_matrix = np.zeros((len(connectivity_order), len(connectivity_order)))
 p_value_matrix = np.zeros((len(connectivity_order), len(connectivity_order)))
 count_matrix = np.zeros((len(connectivity_order), len(connectivity_order)))
 std_matrix = np.zeros((len(connectivity_order), len(connectivity_order)))
+mean_matrix = np.zeros((len(connectivity_order), len(connectivity_order)))
 
 for i, log_conn in enumerate(connectivity_order):
     for j, ref_conn in enumerate(connectivity_order):
@@ -296,6 +308,7 @@ for i, log_conn in enumerate(connectivity_order):
         
         count_matrix[i, j] = len(subset)
         std_matrix[i, j] = subset.std()
+        mean_matrix[i, j] = subset.mean()
         t_stat, p_val = stats.ttest_1samp(subset, 0)
         t_stat_matrix[i, j] = t_stat
         p_value_matrix[i, j] = p_val
@@ -333,6 +346,7 @@ for i in range(len(connectivity_order)):
         p_val = p_value_matrix[j, i]
         count = int(count_matrix[j, i])
         std_val = std_matrix[j, i]
+        mean_val = mean_matrix[j, i]
         
         if p_val < 0.001:
             stars = '***'
@@ -344,7 +358,7 @@ for i in range(len(connectivity_order)):
             stars = ''
         
         text_color = 'white' if abs(t_val) > np.nanmax(np.abs(t_stat_matrix)) * 0.8 else 'black'
-        ax.text(j, i, f't={t_val:.2f}{stars}\nn={count}\nsd={std_val:.2f}', ha='center', va='center', 
+        ax.text(j, i, f't={t_val:.2f}{stars}\nm={mean_val:.2f}\nn={count}\nsd={std_val:.2f}', ha='center', va='center', 
                 color=text_color, fontsize=12, fontweight='bold')
 
 plt.tight_layout()

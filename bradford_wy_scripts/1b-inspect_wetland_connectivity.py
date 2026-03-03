@@ -22,7 +22,7 @@ well_point = (
 )
 
 wetland_ids = well_point['wetland_id'].unique().tolist()
-dem_buffer = 200
+dem_buffer = 150
 
 connectivity = pd.read_excel(wetland_connectivity_path)
 
