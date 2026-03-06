@@ -37,23 +37,18 @@ fig, ax = plt.subplots(figsize=(7, 7))
 bp = ax.boxplot([early_flat, late_flat],
                 labels=['2019 (c)', '2025 (d)'],
                 patch_artist=True,
-                widths=0.6,                     # wider boxes
-                boxprops=dict(linewidth=3),     # thicker box edge
+                widths=0.6,                    
+                boxprops=dict(linewidth=3),     
                 whiskerprops=dict(linewidth=3),
                 capprops=dict(linewidth=3),
                 medianprops=dict(linewidth=3, color='black'))
 
-# fill boxes with grey
 for patch in bp['boxes']:
     patch.set_facecolor('lightgrey')
 
-
-
-# remove top and right spines
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 
-# make bottom and left spines thicker
 ax.spines['bottom'].set_linewidth(2.5)
 ax.spines['left'].set_linewidth(2.5)
 
@@ -61,7 +56,6 @@ ax.set_ylabel('LAI', fontsize=34, fontweight='bold')
 #ax.set_title('LAI Comparison: Pre vs Post Logging', fontsize=18)
 ax.tick_params(labelsize=34)
 
-# make all tick labels bold
 for label in ax.get_xticklabels() + ax.get_yticklabels():
     label.set_fontweight('bold')
 

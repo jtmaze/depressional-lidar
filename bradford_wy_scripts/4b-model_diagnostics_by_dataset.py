@@ -142,7 +142,6 @@ print(summary_table.to_string(index=False, float_format='%.2f'))
 
 from matplotlib.patches import Patch
 
-# x series should be dataset and 'model_type' colored by 'data_set'
 fig, ax = plt.subplots(figsize=(7, 6))
 
 box_data_all = []
@@ -166,14 +165,12 @@ for i, d in enumerate(datasets):
         positions_strong.append(pos + 0.35)
         pos += 1.2
 
-# Full data boxplots (no hatching)
 bp_all = ax.boxplot(box_data_all, positions=positions_all, patch_artist=True,
                     showfliers=False, widths=0.3)
 for patch, color in zip(bp_all['boxes'], colors_list):
     patch.set_facecolor(color)
     patch.set_alpha(0.7)
 
-# Strong models boxplots (hatching)
 bp_strong = ax.boxplot(box_data_strong, positions=positions_strong, patch_artist=True,
                        showfliers=False, widths=0.3)
 for patch, color in zip(bp_strong['boxes'], colors_list):
@@ -183,14 +180,12 @@ for patch, color in zip(bp_strong['boxes'], colors_list):
     patch.set_hatch('///')
     patch.set(hatch_color=color) if hasattr(patch, 'set_hatch_color') else None
 
-# Mean markers
 for pos_a, data_a in zip(positions_all, box_data_all):
     ax.plot(pos_a, data_a.mean(), marker='D', color='red', markersize=5, markeredgecolor='darkred', zorder=5)
 for pos_s, data_s in zip(positions_strong, box_data_strong):
     if len(data_s) > 0:
         ax.plot(pos_s, data_s.mean(), marker='D', color='red', markersize=5, markeredgecolor='darkred', zorder=5)
 
-# X-axis labels centered between each pair
 tick_positions = [(a + s) / 2 for a, s in zip(positions_all, positions_strong)]
 ax.set_xticks(tick_positions)
 ax.set_xticklabels(labels, rotation=0)
@@ -199,7 +194,6 @@ plt.ylabel('Mean Depth Change (cm)')
 plt.axhline(0, color='black', linestyle=':', linewidth=2)
 plt.grid(True, alpha=0.3)
 
-# Legend
 legend_elements = [
     Patch(facecolor=colors[i], alpha=0.7, label=dataset_labels[d]) for i, d in enumerate(datasets)
 ]

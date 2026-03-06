@@ -10,9 +10,9 @@ import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
 
-tgt_id = '14_500'
+tgt_id = '9_508'
 lai_buffer_dist = 150
-inundation_mapping_dist = 200
+inundation_mapping_dist = 250
 data_set = 'no_dry_days'
 
 data_dir = data_dir = "D:/depressional_lidar/data/bradford/"
@@ -50,9 +50,9 @@ dry_days = dry_days[
     (dry_days['log_id'] == tgt_id) &
     (dry_days['data_set'] == data_set) &
     (dry_days['model_type'] == 'OLS') 
-][['log_id', 'ref_id', 'total_obs', 'n_bottomed_out', 'filtered_domain_days']].copy()
+][['log_id', 'ref_id', 'total_obs', 'n_bottomed_out']].copy()
 
-dry_days['dry_proportion'] = 1 - (dry_days['n_bottomed_out'] / dry_days['total_obs'])
+dry_days['dry_proportion'] = (dry_days['n_bottomed_out'] / dry_days['total_obs'])
 
 dry_proportion = dry_days['dry_proportion'].mean()
 
@@ -104,13 +104,8 @@ post_data['date'] = pd.date_range(
 )
 # %% 3.0 Generate the BasinDynamics class for pre & post modeled hydrology
 
-# NOTE: The the stage models are already converted to the lowest point with DEM radius
-# However, the BasinDynamics class exepects the timeseries as water_level at the 
-# well. I convert the modeled stage back to well depth
-
-offset = basin.well_point.elevation_dem - basin.deepest_point.elevation
-pre_data['water_level'] = pre_data['stage'] - offset
-post_data['water_level'] = post_data['stage'] - offset
+pre_data['water_level'] = pre_data['stage'] 
+post_data['water_level'] = post_data['stage']
 
 pre_ts = WellStageTimeseries(
     well_id=tgt_id,
@@ -120,13 +115,13 @@ pre_ts = WellStageTimeseries(
 pre_dynamics = BasinDynamics(
     basin=basin,
     well_stage=pre_ts, 
-    well_to_dem_offset=0.5
+    well_to_dem_offset=0
 )
 pre_dynamics.map_inundation_stacks(
     inundation_frequency=None,
     show_basin_footprint=False,
     cbar_min=0,
-    cbar_max=100
+    cbar_max=75
 )
 
 post_ts = WellStageTimeseries(
@@ -137,17 +132,19 @@ post_ts = WellStageTimeseries(
 post_dynamics = BasinDynamics(
     basin=basin,
     well_stage=post_ts,
-    well_to_dem_offset=0.5
+    well_to_dem_offset=0
 )
 post_dynamics.map_inundation_stacks(
     inundation_frequency=None,
     show_basin_footprint=False,
     cbar_min=0,
-    cbar_max=100
+    cbar_max=75
 )                                
-
 # %% 4.0 Make Nominal and Relative Inundation Change Map
 
+# NOTE: this code isn't working great. May not use. 
+
+"""
 # Pre-logging inundation frequency
 pre_stacks = pre_dynamics.calculate_inundation_stacks()
 pre_stack = np.stack(list(pre_stacks.values())).astype(np.float32)
@@ -194,4 +191,4 @@ for ax in axes:
 plt.tight_layout()
 plt.show()
 
-# %%
+"""

@@ -14,10 +14,10 @@ import matplotlib.pyplot as plt
 from wetland_utilities.basin_attributes import WetlandBasin
 import matplotlib as mpl
 
-data_dir = "D:/depressional_lidar/data/bradford/"
+data_dir = "D:/depressional_lidar/data/bradford/" 
 
 lai_buffer_dist = 150
-nep_mapping_dist = 200
+nep_mapping_dist = 150
 data_set = 'no_dry_days'
 tgt_log_id = '14_418'
 
@@ -123,7 +123,7 @@ for i in unique_log_ids:
         summaries.append(summary)
 
 
-# %% Concatonate Results and inspect distributions with medians
+# %% 4.0 Concatonate Results and inspect distributions with medians
 
 summary_df = pd.concat(summaries)
 
@@ -132,15 +132,15 @@ post_depth = summary_df['post_median'].mean()
 
 print(pre_depth, post_depth)
 
-# %% Li et al equation info
+# %% 5.0 Li et al equation info
 
 slope_cm=0.0582 # per cm
 slope_m=slope_cm * 100
-b=1.9 # NOTE need to email authors for exact estimate. 
+b=1.8 # NOTE need to email authors for exact estimate. 
 model_domain = (-1, 1)
 
 
-# %%  Establish logged basin and extract DEM as an array
+# %% 6.0 Establish logged basin and extract DEM as an array
 
 well_pt = (
     gpd.read_file(well_points_path)[['wetland_id', 'type', 'rtk_z', 'geometry']]
@@ -169,7 +169,7 @@ post_depth_map = np.where(depth_mask, post_depth_map, np.nan)
 pre_nep_map = (pre_depth_map * slope_m) + b
 post_nep_map = (post_depth_map * slope_m) + b
 
-# %% Quick visualizations of pre and post depth and NEP maps
+# %% 7.0 Quick visualizations of pre and post depth and NEP maps
 
 def plot_depth_and_nep_maps(pre_depth_map, post_depth_map, pre_nep_map, post_nep_map, clipped_dem, nodata):
     """Plot 2x2 grid of pre/post depth and NEP maps."""
@@ -215,7 +215,7 @@ def plot_depth_and_nep_maps(pre_depth_map, post_depth_map, pre_nep_map, post_nep
 
     # Bottom row: NEP maps
     im_n0 = axes[1, 0].imshow(pre_nep_viz, cmap=cmap_rd_gr, norm=nep_norm)
-    axes[1, 0].set_title('Pre-Logging NEP (t C ha-1 yr⁻¹)')
+    axes[1, 0].set_title('Pre-Logging NEP')
     axes[1, 0].set_xticks([])
     axes[1, 0].set_yticks([])
     for spine in axes[1, 0].spines.values():
@@ -223,7 +223,7 @@ def plot_depth_and_nep_maps(pre_depth_map, post_depth_map, pre_nep_map, post_nep
         spine.set_linewidth(3)
 
     im_n1 = axes[1, 1].imshow(post_nep_viz, cmap=cmap_rd_gr, norm=nep_norm)
-    axes[1, 1].set_title('Post-Logging NEP (t C ha-1 yr⁻¹)')
+    axes[1, 1].set_title('Post-Logging NEP')
     axes[1, 1].set_xticks([])
     axes[1, 1].set_yticks([])
     for spine in axes[1, 1].spines.values():
@@ -232,7 +232,7 @@ def plot_depth_and_nep_maps(pre_depth_map, post_depth_map, pre_nep_map, post_nep
 
     # Colorbars
     fig.colorbar(im_d1, ax=axes[0, :], orientation='vertical', fraction=0.046, pad=0.04, label='Depth (m)')
-    fig.colorbar(im_n1, ax=axes[1, :], orientation='vertical', fraction=0.046, pad=0.04, label='NEP (g C m⁻² yr⁻¹)')
+    fig.colorbar(im_n1, ax=axes[1, :], orientation='vertical', fraction=0.046, pad=0.04, label='NEP (t C ha⁻¹ yr⁻¹)')
 
     plt.show()
 

@@ -16,7 +16,7 @@ import matplotlib as mpl
 data_dir = "D:/depressional_lidar/data/bradford/"
 
 lai_buffer_dist = 150
-nep_mapping_dist = 200
+nep_mapping_dist = 150
 data_set = 'no_dry_days'
 
 # Li et al equation info
@@ -126,7 +126,7 @@ def plot_depth_and_nep_maps(pre_depth_map, post_depth_map, pre_nep_map, post_nep
 
     # Bottom row: NEP maps
     im_n0 = axes[1, 0].imshow(pre_nep_viz, cmap=cmap_rd_gr, norm=nep_norm)
-    axes[1, 0].set_title('Pre-Logging NEP (t C ha-1 yr⁻¹)')
+    axes[1, 0].set_title('Pre-Logging NEP')
     axes[1, 0].set_xticks([])
     axes[1, 0].set_yticks([])
     for spine in axes[1, 0].spines.values():
@@ -134,7 +134,7 @@ def plot_depth_and_nep_maps(pre_depth_map, post_depth_map, pre_nep_map, post_nep
         spine.set_linewidth(3)
 
     im_n1 = axes[1, 1].imshow(post_nep_viz, cmap=cmap_rd_gr, norm=nep_norm)
-    axes[1, 1].set_title('Post-Logging NEP (t C ha-1 yr⁻¹)')
+    axes[1, 1].set_title('Post-Logging NEP')
     axes[1, 1].set_xticks([])
     axes[1, 1].set_yticks([])
     for spine in axes[1, 1].spines.values():
@@ -143,7 +143,7 @@ def plot_depth_and_nep_maps(pre_depth_map, post_depth_map, pre_nep_map, post_nep
 
     # Colorbars
     fig.colorbar(im_d1, ax=axes[0, :], orientation='vertical', fraction=0.046, pad=0.04, label='Depth (m)')
-    fig.colorbar(im_n1, ax=axes[1, :], orientation='vertical', fraction=0.046, pad=0.04, label='NEP (g C m⁻² yr⁻¹)')
+    fig.colorbar(im_n1, ax=axes[1, :], orientation='vertical', fraction=0.046, pad=0.04, label='NEP (t C ha⁻¹ yr⁻¹)')
 
     plt.show()
 
@@ -247,39 +247,122 @@ results_df = results_df.merge(
 
 # %% 5.0 Simple bar graph plotting pre and post NEP by log id. 
 
-fig, ax = plt.subplots(figsize=(14, 6))
+fig, ax = plt.subplots(figsize=(10, 6))
 
 pre_color = '#333333'
 post_color = '#E69F00'
 
-x = np.arange(len(results_df))
-width = 0.25
+# Define connectivity order
+connectivity_order = ['giw', 'first order', 'flow-through']
 
-bars1 = ax.bar(x - width/2, results_df['pre_nep_mean'], width, 
+# Sort results_df by connectivity
+results_sorted = results_df.copy()
+results_sorted['connectivity'] = pd.Categorical(
+    results_sorted['connectivity'], 
+    categories=connectivity_order, 
+    ordered=True
+)
+results_sorted = results_sorted.sort_values('connectivity')
+
+x = np.arange(len(results_sorted))
+width = 0.30
+
+bars1 = ax.bar(x - width/2, results_sorted['pre_nep_mean'], width, 
                label='Pre-Logging', color=pre_color, alpha=0.9)
-bars2 = ax.bar(x + width/2, results_df['post_nep_mean'], width, 
+bars2 = ax.bar(x + width/2, results_sorted['post_nep_mean'], width, 
                label='Post-Logging', color=post_color, alpha=0.9)
 
 ax.axhline(y=0, color='black', linestyle='-', linewidth=0.8, alpha=0.5)
 
-ax.set_xlabel('Wetland ID', fontsize=12)
-ax.set_ylabel('NEP Mean (t C ha-1 yr⁻¹)', fontsize=12)
-ax.set_title('Pre vs Post-Logging NEP Estimates by Wetland', fontsize=14, fontweight='bold')
+ax.set_xlabel('Wetland ID', fontsize=16, fontweight='bold')
+ax.set_ylabel('NEP Mean (t C ha⁻¹ yr⁻¹)', fontsize=16, fontweight='bold', labelpad=10)
 ax.set_xticks(x)
-ax.set_xticklabels(results_df['log_id'], rotation=45, ha='right')
-ax.legend(framealpha=0.95)
+ax.set_xticklabels(results_sorted['log_id'], rotation=45, ha='right', fontsize=12)
+ax.tick_params(axis='y', labelsize=12)
+ax.legend(framealpha=0.95, loc='upper right', fontsize=14)
 ax.grid(axis='y', alpha=0.3)
 
 plt.tight_layout()
 plt.show()
 
-# %% 6.0 Group by connectivity class and calculate mean NEP increase
+
+# %% 6.0 Show the pre and post NEP grouped by connectivity
 
 connectivity_config = {
     'first order': {'color': 'green', 'label': '1st Order Ditched'},
     'giw': {'color': 'blue', 'label': 'GIW'}, 
     'flow-through': {'color': 'red', 'label': 'flow-through'}
 }
+
+connectivity_order = ['giw', 'first order', 'flow-through']
+
+# Group by connectivity and calculate mean pre and post NEP
+grouped_nep = results_df.groupby('connectivity').agg({
+    'pre_nep_mean': ['mean', 'sem'],
+    'post_nep_mean': ['mean', 'sem']
+}).reset_index()
+
+fig, ax = plt.subplots(figsize=(8, 8))
+
+pre_color = '#333333'
+post_color = '#E69F00'
+
+x = np.arange(len(connectivity_order))
+width = 0.35
+
+pre_values = []
+post_values = []
+pre_errors = []
+post_errors = []
+labels = []
+
+for connectivity_type in connectivity_order:
+    row = grouped_nep[grouped_nep['connectivity'] == connectivity_type]
+    
+    pre_values.append(row['pre_nep_mean']['mean'].values[0])
+    post_values.append(row['post_nep_mean']['mean'].values[0])
+    pre_errors.append(row['pre_nep_mean']['sem'].values[0])
+    post_errors.append(row['post_nep_mean']['sem'].values[0])
+    labels.append(connectivity_config[connectivity_type]['label'])
+
+bars1 = ax.bar(x - width/2, pre_values, width, 
+               label='Pre-Logging', color=pre_color, alpha=0.9,
+               yerr=pre_errors, capsize=5, error_kw={'linewidth': 2.5})
+bars2 = ax.bar(x + width/2, post_values, width, 
+               label='Post-Logging', color=post_color, alpha=0.9,
+               yerr=post_errors, capsize=5, error_kw={'linewidth': 2.5})
+
+ax.axhline(y=0, color='black', linestyle='-', linewidth=0.8, alpha=0.5)
+
+ax.set_xlabel('Connectivity Type', fontsize=18, fontweight='bold', labelpad=10)
+ax.set_ylabel('NEP Mean (t C ha⁻¹ yr⁻¹)', fontsize=18, fontweight='bold')
+ax.set_xticks(x)
+ax.set_xticklabels(labels, rotation=0, ha='center', fontsize=16)
+ax.tick_params(axis='y', labelsize=14)
+ax.legend(framealpha=0.95, fontsize=16)
+
+plt.tight_layout()
+plt.show()
+
+# %% 7.0 Generate NEP summary stats for manuscript
+
+results_df['nep_change'] = results_df['post_nep_mean'] - results_df['pre_nep_mean']
+
+
+print(results_df['nep_change'].mean())
+print(results_df['nep_change'].quantile([0.25, 0.75]))
+print(results_df['pre_nep_mean'].mean())
+
+connectivity_summary = results_df.groupby('connectivity').agg(
+    mean_nep_change=('nep_change', 'mean'),
+    num_sources_pre=('pre_nep_mean', lambda x: (x < 0).sum()),
+    num_sources_post=('post_nep_mean', lambda x: (x < 0).sum())
+)
+print(connectivity_summary)
+
+# %% 8.0 Group by connectivity class and calculate mean NEP increase
+
+"""
 
 results_df['post_pre_nep_diff'] = results_df['post_nep_mean'] - results_df['pre_nep_mean']
 
@@ -343,7 +426,7 @@ for connectivity_type, config in connectivity_config.items():
 ax.axhline(y=0, color='black', linestyle='--', linewidth=1, alpha=0.5)
 
 ax.set_xlabel('Connectivity Type', fontsize=12)
-ax.set_ylabel('Post - Pre NEP Difference (t C ha-1 yr⁻¹)', fontsize=12)
+ax.set_ylabel('Post - Pre NEP Difference (t C ha⁻¹ yr⁻¹)', fontsize=12)
 ax.set_title('NEP Change by Connectivity Type', fontsize=14, fontweight='bold')
 ax.set_xticks(list(x_positions.values()))
 ax.set_xticklabels([connectivity_config[ct]['label'] for ct in connectivity_types])
@@ -369,51 +452,6 @@ ax.grid(axis='y', alpha=0.3)
 plt.tight_layout()
 plt.show()
 
-# %% 7.0 Show the pre and post NEP grouped by connectivity
-
-# Group by connectivity and calculate mean pre and post NEP
-grouped_nep = results_df.groupby('connectivity').agg({
-    'pre_nep_mean': 'mean',
-    'post_nep_mean': 'mean'
-}).reset_index()
-
-fig, ax = plt.subplots(figsize=(8, 8))
-
-pre_color = '#333333'
-post_color = '#E69F00'
-
-connectivity_types = list(connectivity_config.keys())
-x = np.arange(len(grouped_nep))
-width = 0.35
-
-# Get the values in the order of connectivity_config
-pre_values = []
-post_values = []
-labels = []
-for connectivity_type in connectivity_types:
-    row = grouped_nep[grouped_nep['connectivity'] == connectivity_type]
-    if len(row) > 0:
-        pre_values.append(row['pre_nep_mean'].values[0])
-        post_values.append(row['post_nep_mean'].values[0])
-        labels.append(connectivity_config[connectivity_type]['label'])
-
-x = np.arange(len(labels))
-
-bars1 = ax.bar(x - width/2, pre_values, width, 
-               label='Pre-Logging', color=pre_color, alpha=0.9)
-bars2 = ax.bar(x + width/2, post_values, width, 
-               label='Post-Logging', color=post_color, alpha=0.9)
-
-ax.axhline(y=0, color='black', linestyle='-', linewidth=0.8, alpha=0.5)
-
-ax.set_xlabel('Connectivity Type', fontsize=12)
-ax.set_ylabel('Mean NEP (t C ha⁻1 yr⁻¹)', fontsize=12)
-ax.set_title('Pre vs Post-Logging NEP by Connectivity Type', fontsize=14, fontweight='bold')
-ax.set_xticks(x)
-ax.set_xticklabels(labels, rotation=0, ha='center')
-ax.legend(framealpha=0.95)
-
-plt.tight_layout()
-plt.show()
+"""
 
 # %%

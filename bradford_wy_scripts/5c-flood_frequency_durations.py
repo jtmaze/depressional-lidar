@@ -11,7 +11,7 @@ if PROJECT_ROOT not in sys.path:
 
 from wetland_utilities.basin_attributes import WetlandBasin
 
-buffer = 100
+buffer = 150
 data_set = 'no_dry_days'
 lai_buffer_dist = 150
 
@@ -188,11 +188,6 @@ inundate_freq = pd.concat(fd_results)
 
 unique_log_ids = strong_pairs['log_id'].unique()
 unique_ref_ids = strong_pairs['ref_id'].unique()
-# Color scheme
-post_color = '#E69F00'  # Orange
-pre_color = '#333333'  # Dark gray
-
-fig, ax = plt.subplots(1, 1, figsize=(10, 10))
 
 # Define common probability bins for interpolation
 prob_bins = np.linspace(0, 1, 51)
@@ -232,6 +227,13 @@ post_interp = np.array(post_interp)
 post_mean = np.mean(post_interp, axis=0)
 post_std = np.std(post_interp, axis=0)
 post_se = post_std / np.sqrt(post_interp.shape[0])
+# %% 5.0 Plot with excedence curves
+
+# Color scheme
+post_color = '#E69F00'  # Orange
+pre_color = '#333333'  # Dark gray
+
+fig, ax = plt.subplots(1, 1, figsize=(10, 10))
 
 # Plot pre-logging mean and standard error lines
 ax.plot(prob_bins, pre_mean * 100, color=pre_color, linewidth=5, label='Pre-logging Mean')
@@ -246,20 +248,21 @@ ax.plot(prob_bins, (post_mean + post_se) * 100, color=post_color, linewidth=2.5,
 ax.scatter(0.5, 2, marker='v', color='maroon', s=500, linewidths=4, label="P=0.5")
 ax.scatter(0.25, 2, marker='v', color='navy', s=500, linewidths=4, facecolors='none', edgecolors='navy', label="P=0.25")
 
-ax.set_xlabel('Exceedance Probability', fontsize=16)
-ax.set_ylabel('Inundated Fraction (%)', fontsize=16)
-ax.set_title('Flood Duration Curves All Wetlands', fontsize=18)
+ax.set_xlabel('Exceedance Probability', fontsize=22)
+ax.set_ylabel('Inundated Fraction (%)', fontsize=22)
 ax.grid(True, alpha=0.3)
 ax.set_xlim(0, 1)
-ax.set_ylim(0, 75)
-ax.legend(fontsize=16)
+ax.set_ylim(0, 70)
+ax.legend(fontsize=20)
 
-ax.tick_params(axis='both', which='major', labelsize=14)
+ax.tick_params(axis='both', which='major', labelsize=18)
 
 plt.tight_layout()
 plt.show()
 
-# %% 5.0 Bar showing graph of inundated fraction at P=0.5
+# %% 6.0 Bar showing graph of inundated fraction at P=0.5 and P=0.25
+
+# %% 6.1 Extract curve values for bargraphs
 
 def get_inundated_at_prob(curve_df, target_prob):
     """Get the inundated fraction closest to a target exceedance probability"""
@@ -303,32 +306,70 @@ bar_means = bar_df.groupby(['log_id', 'probability']).agg(
 
 bar_means['nominal_diff'] = bar_means['post_mean'] * 100 - bar_means['pre_mean'] * 100
 bar_means['rel_diff'] = (bar_means['nominal_diff'] / (bar_means['pre_mean'] * 100)) * 100
-# %% 5.1 Plot
+# %% 6.2 Plot bar graphs
 
-fig, axes = plt.subplots(2, 1, figsize=(8, 8), sharex=True, sharey=True)
+fig, axes = plt.subplots(2, 1, figsize=(8, 10), sharex=True)
 bar_width = 0.35
 
-for ax, p_val in zip(axes, [0.25, 0.5]):
+# Determine common y-limit
+max_val = max(bar_means['pre_mean'].max(), bar_means['post_mean'].max()) * 110
+
+for i, (ax, p_val) in enumerate(zip(axes, [0.25, 0.5])):
     subset = bar_means[bar_means['probability'] == p_val].sort_values('log_id')
     x = np.arange(len(subset))
     
-    ax.bar(x - bar_width/2, subset['pre_mean'], bar_width,
-           yerr=subset['pre_se'], capsize=3,
+    ax.bar(x - bar_width/2, subset['pre_mean'] * 100, bar_width,
+           yerr=subset['pre_se'] * 100, capsize=3,
            color='#333333', alpha=0.85, label='Pre-logging')
-    ax.bar(x + bar_width/2, subset['post_mean'], bar_width,
-           yerr=subset['post_se'], capsize=3,
+    ax.bar(x + bar_width/2, subset['post_mean'] * 100, bar_width,
+           yerr=subset['post_se'] * 100, capsize=3,
            color='#E69F00', alpha=0.85, label='Post-logging')
     
+    ax.set_ylim(0, max_val)
     ax.set_xticks(x)
-    ax.set_xticklabels(subset['log_id'], rotation=45, ha='right')
-    ax.set_ylabel('Inundated Fraction (%)')
-    ax.legend()
+    ax.set_xticklabels(subset['log_id'], rotation=45, ha='right', fontsize=16)
+    ax.set_ylabel(f'Inundated Fraction (%)', fontsize=18)
+    
+    if i == 1:
+        ax.legend(fontsize=16)
+        
     ax.grid(axis='y', alpha=0.3)
+    ax.tick_params(axis='both', which='major', labelsize=16)
 
-axes[-1].set_xlabel('Logged Wetland ID', fontsize=16)
+axes[-1].set_xlabel('Logged Wetland ID', fontsize=18, labelpad=10)
 
 plt.tight_layout()
 plt.show()
 
+
+# %% 7.0 Quick summary stats for manuscript
+
+bar_means['diff'] = bar_means['post_mean'] - bar_means['pre_mean']
+bar_50p = bar_means[bar_means['probability'] == 0.5].copy()
+print(bar_50p['pre_mean'].mean())
+print(bar_50p['post_mean'].mean())
+print(bar_50p['diff'].mean())
+
+
+print(bar_50p['diff'].quantile(0.25), bar_50p['diff'].quantile(0.75))
+print(bar_50p['diff'].quantile(0.75) - bar_50p['diff'].quantile(0.25))
+
+print(bar_50p['diff'].mean() / bar_50p['post_mean'].mean() * 100)
+# %% 7.1 Group by connectivity and get summary stats
+
+connect_key = pd.read_excel(connectivity_key_path)
+
+bar_50p = bar_50p.merge(
+    connect_key[['wetland_id', 'connectivity']],
+    how='left', 
+    left_on='log_id',
+    right_on='wetland_id'
+)
+
+con50 = bar_50p.groupby('connectivity').agg(
+    con_mean_diff=('nominal_diff', 'mean')
+)
+
+print(con50)
 
 # %%

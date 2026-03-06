@@ -482,6 +482,7 @@ class BasinDynamics:
             inundation_frequency = self.aggregate_inundation_stacks()
 
         dem = self.basin.clipped_dem.dem
+            
         inundation_percent = inundation_frequency * 100
         inundation_percent = np.where(np.isnan(dem), np.nan, inundation_percent)  # Keep NaNs outside the basin boundary as NaNs
     
@@ -502,9 +503,12 @@ class BasinDynamics:
         colors = ['#8B4513', '#FFFFFF', '#0000FF']  # Brown, White, Blue
         custom_cmap = LinearSegmentedColormap.from_list('brown_white_blue', colors, N=256)
 
-        if show_basin_footprint:
+        if show_basin_footprint and self.basin.footprint is not None:
             footprint = self.basin.footprint
-            footprint.boundary.plot(ax=ax, color='green', linewidth=2, alpha=0.8, label='Basin Footprint')
+            footprint.boundary.plot(ax=ax, color='red', linewidth=2, alpha=0.8, label='Basin Footprint')
+        elif show_basin_footprint:
+            footprint = well_point.buffer(self.basin.transect_buffer)
+            footprint.boundary.plot(ax=ax, color='red', linewidth=2, alpha=0.8, label='Basin Footprint')
         
         # Show inundation frequency (values from 0-1 representing frequency of being inundated)
         im = show(inundation_percent, ax=ax, cmap=custom_cmap, alpha=1,
@@ -517,9 +521,11 @@ class BasinDynamics:
         cbar.ax.tick_params(labelsize=12)
 
         # Plot well point
-        ax.scatter(well_point_x, well_point_y, color='limegreen', 
-                marker='x', s=400, linewidths=7,
-                label=f'Well Location')
+        # ax.scatter(well_point_x, well_point_y, color='limegreen', 
+        #         marker='x', s=400, linewidths=7,
+        #         label=f'Well Location')
+
+        #plot_shape.plot(ax=ax, facecolor='none', edgecolor='red', linewidth=2)
         
         # Add legend and labels
         #ax.legend(loc='upper right', fontsize=14)

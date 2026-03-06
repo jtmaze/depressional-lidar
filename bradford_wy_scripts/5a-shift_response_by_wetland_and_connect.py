@@ -38,7 +38,7 @@ shift_data = shift_data.merge(
     how='left'
 ).rename(columns={'connectivity': 'ref_connect'}).drop(columns=['wetland_id'])
 
-# Filter to only strong model
+# Filter to only strong models
 shift_data = shift_data.merge(
     strong_pairs[['log_id', 'ref_id', 'log_date']],
     left_on=['log_id', 'ref_id', 'logging_date'],
@@ -82,7 +82,6 @@ plot_data['pair_connect'] = plot_data.apply(classify_pair, axis=1)
 
 # %% 2.3 Make log and ref connect categorical columns
 
-# Sort plot_data by connectivity to cluster connectivity classes together
 connectivity_order = ['flow-through', 'first order', 'giw']
 plot_data['log_connectivity_cat'] = pd.Categorical(
     plot_data['logged_connect'], 
@@ -110,16 +109,21 @@ connectivity_config = {
     'giw': {'color': 'blue', 'label': 'GIW'}
 }
 
-plot_data_log_sorted = plot_data.sort_values('log_connectivity_cat')
+# Reorder log_ids by connectivity: GIW first, then first order, then flow-through
+connectivity_order_reverse = ['giw', 'first order', 'flow-through']
+plot_data_log_sorted = plot_data.sort_values('log_connectivity_cat', ascending=False)
+unique_log_ids_ordered = plot_data_log_sorted.drop_duplicates(subset='log_id').sort_values(
+    'log_connectivity_cat', ascending=False
+)['log_id'].values
 
 fig, ax = plt.subplots(figsize=(10, 5))
 
 groups = [plot_data_log_sorted.loc[plot_data_log_sorted["log_id"] == id, "mean_depth_change"] 
-          for id in unique_log_ids]
+          for id in unique_log_ids_ordered]
 
-bp = ax.boxplot(groups, tick_labels=unique_log_ids, patch_artist=True)
+bp = ax.boxplot(groups, tick_labels=unique_log_ids_ordered, patch_artist=True)
 
-for i, log_id in enumerate(unique_log_ids):
+for i, log_id in enumerate(unique_log_ids_ordered):
     connectivity = plot_data_log_sorted.loc[plot_data_log_sorted["log_id"] == log_id, "logged_connect"].iloc[0]
     color = connectivity_config[connectivity]['color']
     bp['boxes'][i].set_facecolor(color)
@@ -129,7 +133,8 @@ for median in bp['medians']:
     median.set_color('black')
     median.set_linewidth(1.5)
 
-ax.set_ylabel("Depth Change (cm)", fontsize=14)
+ax.set_ylabel("Depth Change (cm)", fontsize=16)
+ax.set_xlabel("Logged ID", fontsize=18, labelpad=15)
 plt.xticks(rotation=90, fontsize=12)
 ax.tick_params(axis='y', labelsize=12)
 
@@ -138,24 +143,36 @@ ax.axhline(y=0, color='black', linestyle='--', linewidth=1)
 legend_elements = [Patch(facecolor=connectivity_config[conn]['color'],
                          label=connectivity_config[conn]['label'],
                          alpha=0.6)
-                   for conn in connectivity_order]
+                   for conn in ['giw', 'first order', 'flow-through']]
 ax.legend(handles=legend_elements, loc='upper center', fontsize=12)
 
 plt.tight_layout()
 plt.show()
 
-# %% 3.0 Boxplot showing depth_shifts by ref_id
+# %% 3.1 Mean by log_id summary stats
+log_id_summary = plot_data.groupby('log_id')['mean_depth_change'].agg('mean')
 
-plot_data_sorted_ref = plot_data.sort_values('ref_connectivity_cat')
+q25 = log_id_summary.quantile(.25)
+print(q25)
+q75 = log_id_summary.quantile(.75)
+print(q75)
+
+# %% 3.3 Boxplot showing depth_shifts by ref_id
+
+plot_data_sorted_ref = plot_data.sort_values('ref_connectivity_cat', ascending=False)
 
 fig, ax = plt.subplots(figsize=(10, 5))
 
+unique_ref_ids_ordered = plot_data_sorted_ref.drop_duplicates(subset='ref_id').sort_values(
+    'ref_connectivity_cat', ascending=False
+)['ref_id'].values
+
 groups = [plot_data_sorted_ref.loc[plot_data_sorted_ref['ref_id'] == id, "mean_depth_change"]
-          for id in unique_ref_ids]
+          for id in unique_ref_ids_ordered]
 
-bp = ax.boxplot(groups, tick_labels=unique_ref_ids, patch_artist=True)
+bp = ax.boxplot(groups, tick_labels=unique_ref_ids_ordered, patch_artist=True)
 
-for i, ref_id in enumerate(unique_ref_ids):
+for i, ref_id in enumerate(unique_ref_ids_ordered):
     connectivity = plot_data_sorted_ref.loc[plot_data_sorted_ref["ref_id"] == ref_id, "ref_connect"].iloc[0]
     color = connectivity_config[connectivity]['color']
     bp['boxes'][i].set_facecolor(color)
@@ -165,21 +182,23 @@ for median in bp['medians']:
     median.set_color('black')
     median.set_linewidth(1.5)
 
-# Increase font sizes
-ax.set_ylabel("Depth Change (cm)", fontsize=14)
+ax.set_ylabel("Depth Change (cm, in logged)", fontsize=14)
+ax.set_xlabel("Reference ID", fontsize=16, labelpad=15)  
 plt.xticks(rotation=90, fontsize=12)
 ax.tick_params(axis='y', labelsize=12)
 
 ax.axhline(y=0, color='black', linestyle='--', linewidth=1)
 
-# legend_elements = [Patch(facecolor=connectivity_config[conn]['color'],
-#                          label=connectivity_config[conn]['label'],
-#                          alpha=0.6)
-#                    for conn in connectivity_order]
-# ax.legend(handles=legend_elements, loc='best', fontsize=12)
-
-plt.tight_layout()
 plt.show()
+
+# %% 3.4 Mean by ref_id summary stats
+
+ref_id_summary = plot_data.groupby('ref_id')['mean_depth_change'].agg('mean')
+print(ref_id_summary)
+q25 = ref_id_summary.quantile(.25)
+print(q25)
+q75 = ref_id_summary.quantile(.75)
+print(q75)
 
 
 # %% 4.0 Three-series boxplot showing depth shifts by log_id's connectivity class
@@ -201,13 +220,18 @@ for median in bp['medians']:
     median.set_color('black')
     median.set_linewidth(1.5)
 
-ax.set_ylabel("Depth Change (cm)")
+ax.set_ylabel("Depth Change (cm, in logged counterpart)")
+ax.set_xlabel("Reference ID")
 plt.xticks(rotation=0)
 
 ax.axhline(y=0, color='black', linestyle='--', linewidth=1)
 
 plt.tight_layout()
 plt.show()
+
+print(
+    plot_data.groupby('logged_connect')['mean_depth_change'].agg('std')
+)
 
 # %% 5.0 Three-series boxplot showing depth shifts by ref_id's connectivity class
 
@@ -269,7 +293,7 @@ for ref_conn in plot_connectivity_order:
                 fmt='o-', color=color, label=f'Reference: {label}',
                 capsize=4, capthick=1.5, markersize=8, linewidth=2, alpha=0.5)
 
-# Calculate and plot marginal means for logged connectivity as black X's
+# Means for logged connectivity as black X's
 logged_marginal_means = plot_data.groupby('logged_connect')['mean_depth_change'].agg(['mean', 'sem']).reset_index()
 
 for i, conn in enumerate(plot_connectivity_order):
@@ -293,6 +317,7 @@ plt.show()
 # %% 7.0 Heat map grid colored by t-stats (colums = log connect, rows = ref connect)
 
 # Calculate t-stats for each combination of logged and reference connectivity
+connectivity_order = ['giw', 'first order', 'flow-through']
 t_stat_matrix = np.zeros((len(connectivity_order), len(connectivity_order)))
 p_value_matrix = np.zeros((len(connectivity_order), len(connectivity_order)))
 count_matrix = np.zeros((len(connectivity_order), len(connectivity_order)))
@@ -372,7 +397,7 @@ anova_tbl = sm.stats.anova_lm(model, typ=2)
 print(anova_tbl)
 
 
-# %% 9.0 Run a Tukey HSD
+# %% 9.0 Run a Tukey HSD on ref and log connectivity categories
 
 # %% 9.1 Tukey HSD for logged
 

@@ -233,32 +233,28 @@ for wid in log_ids:
         if log_date >= start_date:
             logging_dates.append(log_date)
 
-# Create quarterly bins and count events per quarter
-if logging_dates:
-    logging_df = pd.DataFrame({'date': logging_dates})
-    logging_df['quarter'] = logging_df['date'].dt.to_period('Q')
-    quarter_counts = logging_df['quarter'].value_counts().sort_index()
+
+logging_df = pd.DataFrame({'date': logging_dates})
+logging_df['quarter'] = logging_df['date'].dt.to_period('Q')
+quarter_counts = logging_df['quarter'].value_counts().sort_index()
+
+max_count = quarter_counts.max() if len(quarter_counts) > 0 else 1
+
+for quarter, count in quarter_counts.items():
+    quarter_start = quarter.start_time
+    quarter_end = quarter.end_time
+    quarter_mid = quarter_start + (quarter_end - quarter_start) / 2
     
-    # Plot stacked dots for each quarter
-    max_count = quarter_counts.max() if len(quarter_counts) > 0 else 1
-    
-    for quarter, count in quarter_counts.items():
-        # Use middle of quarter for x-position
-        quarter_start = quarter.start_time
-        quarter_end = quarter.end_time
-        quarter_mid = quarter_start + (quarter_end - quarter_start) / 2
-        
-        # Stack dots vertically
-        for i in range(count):
-            y_pos = (i - (count-1)/2) * 0.15  # Center the stack around y=0
-            ax2.scatter(quarter_mid, y_pos, marker='o', color='red', s=80, alpha=0.8, edgecolor='black', linewidth=1)
+    for i in range(count):
+        y_pos = (i - (count-1)/2) * 0.15 
+        ax2.scatter(quarter_mid, y_pos, marker='o', color='red', s=80, alpha=0.8, edgecolor='black', linewidth=1)
 
 ax2.set_ylabel('Logging\nEvents\n  ', fontsize=22)
-ax2.set_xlabel('Year', fontsize=18)
+#ax2.set_xlabel('Year', fontsize=18)
 ax2.tick_params(axis='both', which='major', labelsize=18)
 ax2.set_ylim(-1, 1) 
 ax2.set_yticks([])
-ax2.set_xlim(start_date, end_date)  # Match x-axis limits
+ax2.set_xlim(start_date, end_date) 
 
 # Add green shading for hydrologic monitoring period
 monitoring_start = pd.to_datetime('2021-11-20')
@@ -280,7 +276,6 @@ combinations_list = []
 for ref_id in ref_ids:
     for log_id in log_ids:
 
-        # Get hydro data sufficiency and connectivity classification values
         hydro_sufficient = logged_summary[
             logged_summary['wetland_id'] == log_id
         ].iloc[0]['hydro_sufficient']

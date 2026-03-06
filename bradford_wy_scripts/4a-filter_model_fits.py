@@ -23,7 +23,7 @@ strong_pairs = model_data[
     (model_data['r2_joint'] >= 0.3)
 ][['log_id', 'log_date', 'ref_id']].copy()
 
-# Outlier of model output
+# Outlier of model output had like 1.5m depth change
 print(len(strong_pairs))
 strong_pairs = strong_pairs[
     ~((strong_pairs['log_id'] == '7_341') & (strong_pairs['ref_id'] == '15_4'))

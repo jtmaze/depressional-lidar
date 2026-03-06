@@ -10,7 +10,9 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
+
 from scipy.stats import t
+import statsmodels.formula.api as smf
 
 from bradford_wy_scripts.functions.lai_vis_functions import read_concatonate_lai
 
@@ -23,7 +25,6 @@ lai_dir = data_dir + f'/in_data/hydro_forcings_and_LAI/well_buffer_{lai_buffer_d
 
 # Path to results
 shift_path = data_dir + f'out_data/modeled_logging_stages/shift_results_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
-#distributions_path = data_dir + f'out_data/modeled_logging_stages/all_wells_hypothetical_distributions_LAI_{lai_buffer_dist}m.csv'
 models_path = data_dir + f'out_data/model_info/model_estimates_LAI_{lai_buffer_dist}m.csv'
 
 # Path to wetland pairs, connnectivity key and strong model fits
@@ -43,6 +44,8 @@ shift_data = shift_data.merge(
     how='inner'
 )
 
+shift_data = shift_data[shift_data['mean_depth_change'] < 1.0]
+
 print(len(shift_data))
 print(len(strong_pairs))
 
@@ -55,6 +58,12 @@ plot_df = shift_data[
 mean_change = plot_df['mean_depth_change'].mean()
 median_change = plot_df['mean_depth_change'].median()
 std_change = plot_df['mean_depth_change'].std()
+print(std_change)
+
+# count how many pairs have non‑negative or negative mean depth change
+increase_num = (plot_df['mean_depth_change'] >= 0).sum()
+decrease_num = (plot_df['mean_depth_change'] < 0).sum()
+print(increase_num, decrease_num)
 
 fig, ax = plt.subplots(figsize=(10, 5))
 
@@ -73,7 +82,7 @@ ax.axvline(mean_change, color='navy', linestyle='--', linewidth=4, alpha=1)
 ax.set_title('Modeled Stage Increase (Unlogged - Logged)', fontsize=18, fontweight='bold')
 ax.set_xlabel('Mean Depth Difference [m]', fontsize=16)
 ax.set_ylabel('Number of Pairs', fontsize=18)
-ax.tick_params(axis='both', labelsize=14)  # Add this line to increase tick label size
+ax.tick_params(axis='both', labelsize=14) 
 
 # Add stats text
 stats_text = f'Mean = {mean_change:.3f}m\nStd = {std_change:.3f}m'
@@ -254,11 +263,11 @@ for connectivity_level, config in connectivity_config.items():
     y_pred = slope * x_range + intercept
 
     ax.plot(x_range, y_pred, '-', linewidth=2, color=config['color'],
-            label=f"{config['label']}: slope={slope:.2f}, R²={r_value**2:.2f}, p={p_value:.4f}")
+            label=f"{config['label']}")
     
     n = len(x)
     dof = n - 2 
-    t_val = t.ppf(0.99, dof) 
+    t_val = t.ppf(0.95, dof) 
 
     x_mean = np.mean(x)
     sxx = np.sum((x - x_mean)**2)
@@ -287,11 +296,11 @@ x_range_ft = np.linspace(x_ft.min(), x_ft.max(), 100)
 y_pred_ft = slope_ft * x_range_ft + intercept_ft
 
 ax.plot(x_range_ft, y_pred_ft, '--', linewidth=2, color='darkred',
-        label=f"Flow-through (excl. outliers): slope={slope_ft:.2f}, R²={r_ft**2:.2f}, p={p_ft:.4f}")
+        label=f"flow-through (excl. outliers)")
 
 n_ft = len(x_ft)
 dof_ft = n_ft - 2
-t_val_ft = t.ppf(0.99, dof_ft)
+t_val_ft = t.ppf(0.95, dof_ft)
 
 x_mean_ft = np.mean(x_ft)
 sxx_ft = np.sum((x_ft - x_mean_ft)**2)
@@ -306,9 +315,9 @@ ax.fill_between(x_range_ft, y_pred_ft - ci_ft, y_pred_ft + ci_ft,
 
 # Formatting
 ax.set_xlabel('Relative LAI Decrease (Pre - Post)', fontsize=18)
-ax.set_ylabel('Modeled Stage Increase (Post - Pre) [m]', fontsize=18)
-ax.set_title(f'LAI Loss vs Wetland Depth Change by Connectivity', 
-            fontsize=20, fontweight='bold')
+ax.set_ylabel('Modeled Depth Change (Post - Pre) [m]', fontsize=18)
+# ax.set_title(f'LAI Loss vs Wetland Depth Change by Connectivity', 
+#             fontsize=20, fontweight='bold')
 ax.tick_params(axis='both', labelsize=14)
 ax.legend(loc='best', fontsize=14, framealpha=0.9)
 ax.grid(True, alpha=0.3)
@@ -317,5 +326,77 @@ plt.tight_layout()
 plt.show()
 
 
+# %% 4.2 Print the stats for each connectivity class on the regression plot
+
+print(f"\n{'Connectivity':<25} {'n pairs':>5} {'slope':>8} {'intercept':>10} {'R²':>8} {'p-value':>10}")
+print("-" * 70)
+
+for connectivity_level, config in connectivity_config.items():
+    subset = plot_df[plot_df['log_connected'] == connectivity_level].copy()
+    subset_clean = subset.dropna(subset=['roll_diff_change', 'mean_depth_change'])
+
+    #print('connectivity_level')
+    x = subset_clean['roll_diff_change']
+    y = subset_clean['mean_depth_change']
+    #print(connectivity_level, y.mean(), y.std())
+
+
+    slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
+
+    print(f"{config['label']:<25} {len(x):>5} {slope:>8.4f} {intercept:>10.4f} {r_value**2:>8.4f} {p_value:>10.4f}")
+
+# Flow-through without outliers
+ft_clean_stats = ft_clean.dropna(subset=['roll_diff_change', 'mean_depth_change'])
+x_ft = ft_clean_stats['roll_diff_change']
+y_ft = ft_clean_stats['mean_depth_change']
+#print(y_ft.mean(), y_ft.std())
+slope_ft, intercept_ft, r_ft, p_ft, _ = stats.linregress(x_ft, y_ft)
+print(f"{'flow-through (excl.)':<25} {len(x_ft):>5} {slope_ft:>8.4f} {intercept_ft:>10.4f} {r_ft**2:>8.4f} {p_ft:>10.4f}")
+
+
+# %% 5.0 Mixed effects model to test slope differences between GIWs and 1st order ditched. 
+
+# %% 5.1 Data prep
+lme_data = plot_df[
+    ['log_id', 'ref_id', 'mean_depth_change', 'roll_diff_change', 'log_connected']
+].copy()
+
+lme_data = lme_data[lme_data['log_connected'].isin(['giw', 'first order'])].copy()
+print(len(lme_data))
+lme_data['log_id'] = lme_data['log_id'].astype('category')
+lme_data['ref_id'] = lme_data['ref_id'].astype('category')
+lme_data['log_connected'] = pd.Categorical(lme_data['log_connected'], categories=['first order', 'giw'])
+
+
+df = lme_data.copy()
+# Between-logged effect (mean across references for each logged wetland)
+df["roll_log_mean"] = df.groupby("log_id")["roll_diff_change"].transform("mean")
+# Within-logged deviation (pair-level deviation from that logged wetland mean)
+df["roll_within"] = df["roll_diff_change"] - df["roll_log_mean"]
+
+# Optional centering for stability / interpretation
+df["roll_log_mean_c"] = df["roll_log_mean"] - df["roll_log_mean"].mean()
+df["roll_within_c"]   = df["roll_within"]   - df["roll_within"].mean()
+
+# %% 5.2 Run the mixed effects model
+
+md = smf.mixedlm(
+    "mean_depth_change ~ roll_log_mean_c * C(log_connected) + roll_within_c",
+    data=df,
+    groups="log_id",
+    re_formula="1",
+    vc_formula={"ref": "0 + C(ref_id)"}
+)
+
+m = md.fit(reml=False, method="lbfgs")
+print(m.summary())
+
+p_ditched = m.pvalues["roll_log_mean_c"]
+print(p_ditched)
+
+ci90 = m.conf_int(alpha=0.10)
+
+interaction_ci = ci90.loc["roll_log_mean_c:C(log_connected)[T.giw]"]
+print(interaction_ci)
 
 # %%

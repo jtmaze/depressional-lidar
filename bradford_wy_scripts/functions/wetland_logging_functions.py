@@ -230,7 +230,7 @@ def plot_correlations_from_model(
     post_r_sq = np.corrcoef(post_df[x_series_name], post_df[y_series_name])[0,1]**2
     
     # Create plot
-    fig, ax = plt.subplots(figsize=(8, 8))
+    fig, ax = plt.subplots(figsize=(10, 8))
     
     # Scatter plots
     ax.scatter(
@@ -257,10 +257,10 @@ def plot_correlations_from_model(
     # Plot regression lines using model parameters
     ax.plot(x_smooth, pre_slope * x_smooth + pre_intercept, 
             '#333333', linewidth=2, linestyle='--',
-            label=f'Pre: m={pre_slope:.2f}, b={pre_intercept:.2f}, R²={pre_r_sq:.2f}')
+            label=f'Pre Model Fit')
     ax.plot(x_smooth, post_slope * x_smooth + post_intercept, 
             '#E69F00', linewidth=2, linestyle='--',
-            label=f'Post: m={post_slope:.2f}, b={post_intercept:.2f}, R²={post_r_sq:.2f}')
+            label=f'Post Model Fit')
     
     # Add significance indicators
     p_slope = model_results['tests']['p_slope_diff']
@@ -275,10 +275,10 @@ def plot_correlations_from_model(
     props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
 
     # Formatting
-    ax.set_xlabel("Reference Stage (m)", fontsize=14)
-    ax.set_ylabel("Logged Stage (m)", fontsize=14)
-    ax.tick_params(axis='both', which='major', labelsize=12)
-    ax.legend(loc='lower right', fontsize=12, framealpha=1)
+    ax.set_xlabel("Reference Stage (m)", fontsize=24, fontweight='bold')
+    ax.set_ylabel("Logged Stage (m)", fontsize=24, fontweight='bold')
+    ax.tick_params(axis='both', which='major', labelsize=18)
+    ax.legend(loc='lower right', fontsize=18, framealpha=1)
     
     plt.tight_layout()
     plt.show()

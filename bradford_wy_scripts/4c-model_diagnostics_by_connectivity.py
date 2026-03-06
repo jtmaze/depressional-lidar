@@ -50,8 +50,8 @@ interaction_stats = model_df[model_df['model_type'] == 'OLS'].groupby(
 
 fig, ax = plt.subplots(figsize=(6, 6))
 
-# Set x-axis order: Flow-through, 1st Order Ditched, GIW
-plot_connectivity_order = ['flow-through', 'first order', 'giw']
+# Set x-axis order: GIW, 1st Order Ditched, Flow-through
+plot_connectivity_order = ['giw', 'first order', 'flow-through']
 x_positions = {conn: i for i, conn in enumerate(plot_connectivity_order)}
 
 for ref_conn in plot_connectivity_order:

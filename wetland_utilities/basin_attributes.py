@@ -108,10 +108,10 @@ class WetlandBasin:
             bounds = buffered.total_bounds
 
         buffer_bounds = [
-            bounds[0] - 100,  # minx
-            bounds[1] - 100,  # miny
-            bounds[2] + 100,  # maxx
-            bounds[3] + 100   # maxy
+            bounds[0] - 0,  # minx
+            bounds[1] - 0,  # miny
+            bounds[2] + 0,  # maxx
+            bounds[3] + 0   # maxy
         ]
         
         with rio.open(self.source_dem_path) as dem:
@@ -128,7 +128,7 @@ class WetlandBasin:
                     cbar.ax.tick_params(labelsize=12)
                     cbar.set_label('Elevation (m)', fontsize=16)
         if show_shape:
-            plot_shape.plot(ax=ax, facecolor='none', edgecolor='red')
+            plot_shape.plot(ax=ax, facecolor='none', edgecolor='red', linewidth=2)
 
         if self.transect_buffer != 0 and self.footprint is not None:
             plot_shape.geometry.buffer(self.transect_buffer).plot(ax=ax, facecolor='none', edgecolor='red', linestyle='--')
