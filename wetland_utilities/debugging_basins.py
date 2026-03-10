@@ -2,6 +2,8 @@
 Tests the WetlandBasin and WetlandDynamics classes.
 """
 
+import sys 
+
 # 1.0 Libraries and file paths
 import geopandas as gpd
 import pandas as pd

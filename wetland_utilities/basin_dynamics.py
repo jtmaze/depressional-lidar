@@ -29,7 +29,7 @@ class WellStageTimeseries:
     
     @classmethod
     def from_csv(cls, file_path: str, well_id: str, basin: WetlandBasin, date_column: str = 'date', 
-                water_level_column: str = 'water_level', well_id_column: str = 'well_id'):
+                water_level_column: str = 'well_depth_m', well_id_column: str = 'wetland_id'):
         """
         Create a WellStageTimeseries from a CSV file.
         

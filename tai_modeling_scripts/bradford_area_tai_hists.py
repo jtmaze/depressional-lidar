@@ -1,40 +1,51 @@
 # %%  1.0 Libraries and File Paths
 
+import sys
+PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from basin_attributes import WetlandBasin
-from basin_dynamics import BasinDynamics, WellStageTimeseries
+from wetland_utilities.basin_attributes import WetlandBasin
+from wetland_utilities.basin_dynamics import BasinDynamics, WellStageTimeseries
 
 
 site = 'bradford'
-source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_veg.tif'
-basins_path = f'D:/depressional_lidar/data/{site}/in_data/{site}_basins_assigned_wetland_ids.shp'
-well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/stage_data/waterlevel_offsets_tracked.csv'
+if site == 'bradford':
+    well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
+    source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_veg.tif'
+    well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/stage_data/{site}_daily_well_depth_Winter2025.csv'
 
-basin_footprints = gpd.read_file(basins_path)
+
 well_points = gpd.read_file(well_points_path)
-print(well_points['type'].unique())
-well_points = well_points[(well_points['site'] == site) & 
-                          ((well_points['type'] == 'core_well') | (well_points['type'] == 'wetland_well'))]
+
+well_points = well_points[
+    ((well_points['type'] == 'main_doe_well') | (well_points['type'] == 'aux_wetland_well'))
+]
                            
 
 # %% 1.1 Clean up the well points gdf
 
-well_points.rename(
-        columns={
-            'rtk_elevat': 'rtk_elevation'
-        },
-        inplace=True
-    )
-
 # %% 1.2 Make a list of wetland_ids to calculate timeseries
 wetland_ids = [
-    '14_612', '15_409', '14_500', '13_410', '13_267'
+    '15_409', '14_500', '5a_582', '13_267', '6_93', '14_612', '13_263', '13_271',
+    '13_274', '13_410', '14.9_601', '14_115', '14_418', '15_268', '15_4', '15_516',
+    '5_161', '5_321', '5_510', '5_546', '5_560', '5_573', '5_597', '5a_550', '5a_598',
+    '9_77', '14.9_168', '14.9_527', '14_15', '14_538', '14_610', '14_616', '3_173',
+    '3_21', '3_23', '3_244', '3_311', '3_34', '3_638', '6_20', '6_300', '6_629',
+    '6a_17', '6a_530', '7_243', '7_341', '7_622', '7_626', '9_332', '9_439', '9_508',
+    '9_609'
+]
+
+wetland_ids = [
+    '15_409', '14_500', '5a_582', '13_267', '6_93', '14_612', '13_263', '13_271',
+    '13_274', '13_410', '14.9_601', '14_115', '14_418', '15_268', '15_4', '15_516',
+    '9_609'
 ]
 
 area_ts_dict = {}
@@ -43,22 +54,22 @@ tai_ts_dict = {}
 # %% 2.0 Run the BasinDynamics Class for each wetland_id
 
 for i in wetland_ids:
-    f = basin_footprints[basin_footprints['wetland_id'] == i]
     pt = well_points[well_points['wetland_id'] == i]
     b = WetlandBasin(
         wetland_id=i,
         source_dem_path=source_dem,
-        footprint=f,
+        footprint=None,
         well_point_info=pt,
-        transect_buffer=20
+        transect_buffer=150
     )
 
     well_stage = WellStageTimeseries.from_csv(
         well_stage_path,
         well_id=i,
-        date_column='Date',
-        water_level_column='revised_depth',
-        well_id_column='Site_ID'
+        basin=i,
+        date_column='date',
+        water_level_column='well_depth_m',
+        well_id_column='wetland_id'
     )
 
     dynamics = BasinDynamics(
@@ -68,8 +79,8 @@ for i in wetland_ids:
     )
 
     area_ts = dynamics.calculate_inundated_area_timeseries()
-    tai_ts = dynamics.calculate_tai_timeseries(min_depth=-0.05, max_depth=0.05)
-    dynamics.map_tai_stacks(max_depth=0.05, min_depth=-0.05)
+    tai_ts = dynamics.calculate_tai_timeseries(max_depth=0.10, min_depth=-0.10)
+    dynamics.map_tai_stacks(max_depth=0.10, min_depth=-0.10)
     
     area_ts_dict[i] = area_ts
     tai_ts_dict[i] = tai_ts

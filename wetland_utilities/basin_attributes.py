@@ -192,6 +192,7 @@ class WetlandBasin:
 
         # Clip DEM to either basin footprint or the well point
         with rio.open(self.source_dem_path) as dem:
+            print(dem.crs)
             data, out_transform = rio_mask(
                 dem, shape, crop=True, filled=True, nodata=dem.nodata
             )
@@ -354,7 +355,10 @@ class WetlandBasin:
             elevation_dem = float(np.nanmean(dem_data))
 
         rtk_val = well_point_info['rtk_z'].values[0]
-        rtk = float(rtk_val) if rtk_val is not None else np.nan
+        if rtk_val is None or rtk_val == "Missing":
+            rtk = np.nan
+        else:
+            rtk = float(rtk_val)
         
         return WellPoint(
             elevation_dem=elevation_dem,

@@ -13,33 +13,44 @@ if PROJECT_ROOT not in sys.path:
 from wetland_utilities.basin_attributes import WetlandBasin
 from wetland_utilities.basin_dynamics import WellStageTimeseries, BasinDynamics
 
-site = 'bradford'
-wetland_id = '13_271'
+site = 'delmarva'
+tgt_wetland_id = 'OB-CH'
 
-source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_veg.tif'
-basins_path = f'D:/depressional_lidar/data/{site}/in_data/{site}_basins_assigned_wetland_ids_KG.shp'
-well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/stage_data/daily_waterlevel_Fall2025.csv'
 
-footprint = gpd.read_file(basins_path)
-footprint = footprint[footprint['wetland_id'] == wetland_id]
-well_point = (
-    gpd.read_file(well_points_path)[['wetland_id', 'type', 'rtk_elevat', 'geometry']]
-    .rename(columns={'rtk_elevat': 'rtk_elevation'})
-    .query("type in ['core_well', 'wetland_well'] and wetland_id == @wetland_id")
+if site == 'bradford':
+    well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
+    source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_veg.tif'
+    well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/stage_data/{site}_daily_well_depth_Winter2025.csv'
+elif site == 'osbs': 
+    well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
+    source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_veg.tif'
+    well_stage_path = f'D:depressional_lidar/data/{site}/in_data/stage_data/{site}_daily_well_depth_Fall2025.csv'
+elif site == 'delmarva':
+    source_dem = f'D:/depressional_lidar/data/{site}/in_data/2007_1m_DEM_modified.tif'
+    well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/waterlevel_data/daily_well_depth_Fall2025.csv'
+    well_points_path = f'D:/depressional_lidar/data/{site}/{site}_well_points.shp'
+
+well_points = (
+    gpd.read_file(well_points_path)[['wetland_id', 'type', 'geometry', 'rtk_z']]
+    .query("type in ['main_doe_well', 'aux_wetland_well', 'SW', 'CH', 'UW']")
 )
+
+well_point = well_points[well_points['wetland_id'] == tgt_wetland_id]
+print(well_point.crs)
 
 # %%
 
 basin = WetlandBasin(
-    wetland_id=wetland_id,
+    wetland_id=tgt_wetland_id,
     source_dem_path=source_dem,
-    footprint=footprint,
+    footprint=None,
     well_point_info=well_point,
     transect_method=None,
     transect_n=None,
-    transect_buffer=30
+    transect_buffer=100
 )
+
+basin.plot_basin_hypsometry()
 well_elevation = basin.well_point.elevation_dem
 hypsometry = basin.calculate_hypsometry(method='pct_trim_pdf')
 hypsometry_cdf = basin.calculate_hypsometry(method='pct_trim_cdf')
@@ -72,7 +83,7 @@ def calc_tai_from_hypsometry(hypsometry_df, lower_step, upper_step):
     out_df = hypsometry_df.copy()
     out_df['tai_area'] = tai_areas
     out_df['tai_percent'] = tai_percents
-    out_df['tai_percent'].replace(np.inf, 0, inplace=True)
+    out_df.replace({'tai_percent': np.inf}, 0, inplace=True)
 
     return out_df
 
@@ -80,10 +91,10 @@ hypsometry = calc_tai_from_hypsometry(hypsometry, lower_step=-0.05, upper_step=0
 
 timeseries = WellStageTimeseries.from_csv(
     well_stage_path, 
-    well_id=wetland_id,
+    well_id=tgt_wetland_id,
     basin=basin,
     date_column='day',
-    water_level_column='well_depth', 
+    water_level_column='well_depth_m', 
     well_id_column='well_id'
 )
 
@@ -96,9 +107,9 @@ dynamics = BasinDynamics(
     well_stage=timeseries,
     well_to_dem_offset=0
 )
-dynamics.plot_tai_area_histogram(max_depth=0.05, min_depth=-0.05, as_pct=True)
-dynamics.map_tai_stacks(max_depth=0.05, min_depth=-0.05, show_basin_footprint=True)
-dynamics.map_inundation_stacks(show_basin_footprint=True)
+dynamics.plot_tai_area_histogram(max_depth=0.10, min_depth=-0.10, as_pct=True)
+dynamics.map_tai_stacks(max_depth=0.10, min_depth=-0.10, show_basin_footprint=False)
+dynamics.map_inundation_stacks(show_basin_footprint=False, cbar_max=100, cbar_min=0)
 
 
 # %%
