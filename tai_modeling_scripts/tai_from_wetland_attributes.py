@@ -61,33 +61,33 @@ hypsometry['depth'] = hypsometry['elevation'] - basin_low_elevation
 hypsometry_cdf['depth'] = hypsometry_cdf['elevation'] - basin_low_elevation
 
 
-def calc_tai_from_hypsometry(hypsometry_df, lower_step, upper_step):
+# def calc_tai_from_hypsometry(hypsometry_df, lower_step, upper_step):
 
-    tai_areas = []
-    tai_percents = []
+#     tai_areas = []
+#     tai_percents = []
 
-    for idx, row in hypsometry_df.iterrows():
-        wtr_elevation = row['elevation']
-        lower = wtr_elevation + lower_step
-        upper = wtr_elevation + upper_step
+#     for idx, row in hypsometry_df.iterrows():
+#         wtr_elevation = row['elevation']
+#         lower = wtr_elevation + lower_step
+#         upper = wtr_elevation + upper_step
 
-        msk_tai = ((hypsometry_df['elevation'] >= lower) &
-               (hypsometry_df['elevation'] <= upper))
-        tai_area = hypsometry_df.loc[msk_tai, 'area'].sum()
-        flooded = hypsometry_df[hypsometry_df['elevation'] < wtr_elevation]
-        total_flooded = flooded['area'].sum()
-        tai_percent = tai_area / total_flooded * 100
-        tai_areas.append(tai_area)
-        tai_percents.append(tai_percent)
+#         msk_tai = ((hypsometry_df['elevation'] >= lower) &
+#                (hypsometry_df['elevation'] <= upper))
+#         tai_area = hypsometry_df.loc[msk_tai, 'area'].sum()
+#         flooded = hypsometry_df[hypsometry_df['elevation'] < wtr_elevation]
+#         total_flooded = flooded['area'].sum()
+#         tai_percent = tai_area / total_flooded * 100
+#         tai_areas.append(tai_area)
+#         tai_percents.append(tai_percent)
 
-    out_df = hypsometry_df.copy()
-    out_df['tai_area'] = tai_areas
-    out_df['tai_percent'] = tai_percents
-    out_df.replace({'tai_percent': np.inf}, 0, inplace=True)
+#     out_df = hypsometry_df.copy()
+#     out_df['tai_area'] = tai_areas
+#     out_df['tai_percent'] = tai_percents
+#     out_df.replace({'tai_percent': np.inf}, 0, inplace=True)
 
-    return out_df
+#     return out_df
 
-hypsometry = calc_tai_from_hypsometry(hypsometry, lower_step=-0.05, upper_step=0.05)
+# hypsometry = calc_tai_from_hypsometry(hypsometry, lower_step=-0.05, upper_step=0.05)
 
 timeseries = WellStageTimeseries.from_csv(
     well_stage_path, 
@@ -107,10 +107,9 @@ dynamics = BasinDynamics(
     well_stage=timeseries,
     well_to_dem_offset=0
 )
-dynamics.plot_tai_area_histogram(max_depth=0.10, min_depth=-0.10, as_pct=True)
-dynamics.map_tai_stacks(max_depth=0.10, min_depth=-0.10, show_basin_footprint=False)
-dynamics.map_inundation_stacks(show_basin_footprint=False, cbar_max=100, cbar_min=0)
-
+# dynamics.plot_tai_area_histogram(max_depth=0.10, min_depth=-0.10, as_pct=True)
+# dynamics.map_tai_stacks(max_depth=0.10, min_depth=-0.10, show_basin_footprint=False)
+# dynamics.map_inundation_stacks(show_basin_footprint=False, cbar_max=100, cbar_min=0)
 
 # %%
 

@@ -1,0 +1,169 @@
+# %% Setup libraries and directories
+
+import sys
+import numpy as np
+import pandas as pd
+import geopandas as gpd
+import matplotlib.pyplot as plt
+
+PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from wetland_utilities.basin_attributes import WetlandBasin
+from wetland_utilities.basin_dynamics import WellStageTimeseries, BasinDynamics
+
+site = 'delmarva'
+tgt_wetland_id = "DV-SW"
+ft_to_m = 0.3048
+
+source_dem = f'D:/depressional_lidar/data/{site}/in_data/2007_1m_DEM_modified.tif'
+well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/waterlevel_data/daily_well_depth_Fall2025.csv'
+well_points_path = f'D:/depressional_lidar/data/{site}/{site}_well_points.shp'
+gw_results_path = f'D:/depressional_lidar/data/{site}/out_data/well_gw_impacts.csv'
+
+well_points = (
+    gpd.read_file(well_points_path)[['wetland_id', 'type', 'geometry', 'rtk_z']]
+    .query("type in ['main_doe_well', 'aux_wetland_well', 'SW', 'CH', 'UW']")
+)
+
+gw_results = pd.read_csv(gw_results_path)
+gw_results = gw_results[gw_results['wetland_id'] == tgt_wetland_id]
+gw_results = gw_results[gw_results['scenario'] == 'thiem_avgd']
+gw_draw = gw_results['gw_draw_ft'].mean()
+gw_draw = gw_draw * ft_to_m
+
+# %% 2.0 Quick dictionary for wetland buffer distances
+
+buffers = {
+    "MB-SW": 55,
+    "XB-SW": 35,
+    "OB-SW": 35, 
+    "HB-SW": 60,
+    "DF-SW": 60,
+    "TI-SW": 45,
+    "QB-SW": 48,
+    "DV-SW": 70
+}
+
+buffer_dist = buffers.get(tgt_wetland_id)
+print(buffer_dist)
+
+# %% 3.0 Run the basin dynamics models
+
+area_results = []
+
+for i in buffers.keys():
+
+    buffer_dist = buffers.get(i)
+    well_point = well_points[well_points['wetland_id'] == i]
+
+
+    basin = WetlandBasin(
+        wetland_id=i,
+        source_dem_path=source_dem,
+        footprint=None,
+        well_point_info=well_point,
+        transect_method=None,
+        transect_n=None,
+        transect_buffer=buffer_dist
+    )
+
+    # basin.plot_basin_hypsometry(plot_points=True)
+    # basin.visualize_shape()
+
+    timeseries = WellStageTimeseries.from_csv(
+        well_stage_path, 
+        well_id=i,
+        basin=basin,
+        date_column='day',
+        water_level_column='well_depth_m', 
+        well_id_column='wetland_id',
+        crop_dates=None
+    )
+
+    timeseries.plot()
+
+    pre_dynamics = BasinDynamics(
+        basin=basin,
+        well_stage=timeseries,
+        well_to_dem_offset=0
+    )
+
+    post_dynamics = BasinDynamics(
+        basin=basin,
+        well_stage=timeseries,
+        well_to_dem_offset=gw_draw
+    )
+
+    pre_dynamics.map_inundation_stacks(cbar_min=0, cbar_max=100)
+    post_dynamics.map_inundation_stacks(cbar_min=0, cbar_max=100)
+
+    pre_timeseries = pre_dynamics._calculate_area_timeseries(stacks=pre_dynamics.calculate_inundation_stacks())
+    post_timeseries = post_dynamics._calculate_area_timeseries(stacks=post_dynamics.calculate_inundation_stacks())
+
+    plt.figure(figsize=(12, 6))
+    # Plot both timeseries
+    pre_timeseries.plot(label='Pre Inundated Area', color='blue')
+    post_timeseries.plot(label='Post Inundated Area', color='red', alpha=0.8)
+    # Add titles and labels
+    plt.title(f'Inundation Area Timeseries: {tgt_wetland_id}')
+    plt.xlabel('Date')
+    plt.ylabel('Inundation Area ($m^2$)')
+    # Formatting
+    plt.legend()
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.tight_layout()
+
+    plt.show()
+
+    result = {
+        'wetland_id': i,
+        'pre_ts': pre_timeseries,
+        'post_ts': post_timeseries
+    }
+
+    area_results.append(result)
+
+# %% 4.0 Plot the area results:
+
+fig, axes = plt.subplots(nrows=4, ncols=2, figsize=(10, 12))
+axes = axes.flatten() 
+
+area_changes = []
+# Loop through the list of results and the axes
+for idx, result in enumerate(area_results):
+    ax = axes[idx]
+    wetland_id = result['wetland_id']
+    pre_ts = result['pre_ts']
+    post_ts = result['post_ts']
+
+    
+    ax.hist(pre_ts.dropna(), bins=30, histtype='step', color='blue', 
+            linewidth=2, label='Pre Inundated Area')
+    ax.hist(post_ts.dropna(), bins=30, histtype='step', color='red', 
+            linewidth=2, label='Post Inundated Area')
+    
+    ax.set_title(f'{wetland_id}')
+    ax.set_xlabel('Inundation Area ($m^2$)')
+    ax.set_ylabel('Frequency (Days)')
+    ax.legend(loc='upper right')
+    ax.grid(True, linestyle='--', alpha=0.6)
+
+    post_mean = post_ts.mean()
+    pre_mean = pre_ts.mean()
+    diff = pre_mean - post_mean
+    change = {'wetland_id': wetland_id, 'diff': diff}
+    area_changes.append(change)
+
+# Automatically adjust subplots to fit into the figure area cleanly
+plt.tight_layout()
+plt.show()
+
+# %%
+
+change_df = pd.DataFrame(area_changes)
+print(change_df)
+print(change_df['diff'].sum())
+
+# %%

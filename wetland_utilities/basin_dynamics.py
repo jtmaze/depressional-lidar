@@ -6,9 +6,10 @@ if PROJECT_ROOT not in sys.path:
 
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Dict
+from typing import Callable, Dict
 
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -29,7 +30,8 @@ class WellStageTimeseries:
     
     @classmethod
     def from_csv(cls, file_path: str, well_id: str, basin: WetlandBasin, date_column: str = 'date', 
-                water_level_column: str = 'well_depth_m', well_id_column: str = 'wetland_id'):
+                water_level_column: str = 'well_depth_m', well_id_column: str = 'wetland_id',
+                crop_dates: tuple = None):
         """
         Create a WellStageTimeseries from a CSV file.
         
@@ -52,11 +54,18 @@ class WellStageTimeseries:
         
         df['date'] = pd.to_datetime(df['date']).dt.tz_localize(None)
         df = df.set_index(df['date'])
+
+        if crop_dates is not None:
+            df = df.loc[crop_dates[0]:crop_dates[1]]
+
+        
         # Keep only necessary columns and aggregate to daily values
         df = df[['water_level', 'flag']].resample('D').agg({
             'water_level': 'mean',
             'flag': lambda x: x.mode().iloc[0] if not x.mode().empty else 0
         }).round({'flag': 0}).astype({'flag': int})
+
+        df = df.dropna(subset='water_level')
 
         return cls(well_id=well_id, timeseries_data=df, basin=basin)
     
@@ -71,7 +80,7 @@ class WellStageTimeseries:
         fig, ax = plt.subplots(figsize=(12, 6))
         self.timeseries_data['water_level'].plot(ax=ax)
         ax.set_ylabel(f'Water Depth at Well (m)')
-        ax.set_title(f'Well {self.well_id} Stage')
+        ax.set_title(f'Well {self.well_id} Well Depth')
         ax.grid(True)
         plt.axhline(y=0, color='blue', linestyle='--', label='Well Depth')
         plt.axhline(y=diff, color='red', linestyle='--', label='Depth of Basin Low')
@@ -92,7 +101,115 @@ class BasinDynamics:
     def well_point(self) -> WellPoint:
         """Get the well point from the basin."""
         return self.basin.well_point
-    
+
+    # ── Private generic engine ──────────────────────────────────────────────
+
+    def _water_elevation_at(self, water_level: float) -> float:
+        """Convert well water level to DEM-referenced water surface elevation."""
+        return self.well_point.elevation_dem + water_level + self.well_to_dem_offset
+
+    def _calculate_map_stacks(
+            self,
+            map_fn: Callable[[float], np.ndarray],
+    ) -> Dict[pd.Timestamp, np.ndarray]:
+        """Apply map_fn(water_elevation) at each timestep in the well timeseries."""
+        stacks = {}
+        for date, row in self.well_stage.timeseries_data.iterrows():
+            water_elv = self._water_elevation_at(row['water_level'])
+            stacks[date] = map_fn(water_elv)
+        return stacks
+
+    def _aggregate_stacks(
+            self,
+            stacks: Dict[pd.Timestamp, np.ndarray],
+            method: str = "frequency",
+    ) -> np.ndarray:
+        """
+        Collapse a stack dict into a summary array.
+        method='frequency': fraction of timesteps with value > 0 (for binary maps)
+        method='mean':      nanmean across timesteps (for continuous maps)
+        """
+        stack = np.stack(list(stacks.values()))
+        if method == "frequency":
+            return np.nansum(stack, axis=0, dtype=np.float32) / stack.shape[0]
+        elif method == "mean":
+            return np.nanmean(stack, axis=0).astype(np.float32)
+        raise ValueError(f"Unknown aggregation method: {method}")
+
+    def _calculate_area_timeseries(
+            self,
+            stacks: Dict[pd.Timestamp, np.ndarray],
+    ) -> pd.Series:
+        """Sum of (cell values * cell_area) at each timestep."""
+        cell_size = abs(self.basin.clipped_dem.transform.a)
+        cell_area = cell_size * cell_size
+        print(cell_area)
+        areas = {}
+        for date, arr in stacks.items():
+            arr = arr.astype(np.float32)
+            arr = np.where(np.isinf(arr), 0, arr)
+            areas[date] = np.nansum(arr) * cell_area
+        return pd.Series(areas)
+
+    # ── Private visualization helpers ───────────────────────────────────────
+
+    def _get_well_xy(self) -> tuple:
+        """Return (x, y) coordinates of the well in CRS space."""
+        wp = self.well_point
+        return wp.location.x.values[0], wp.location.y.values[0]
+
+    def _plot_area_timeseries(self, area_ts, title, ylabel, color='blue'):
+        plt.figure(figsize=(12, 6))
+        plt.plot(area_ts.index, area_ts.values, marker='o', color=color)
+        plt.title(title)
+        plt.xlabel("Date")
+        plt.ylabel(ylabel)
+        plt.grid()
+        plt.show()
+
+    def _plot_area_histogram(self, area_ts, title, xlabel, ylabel="Frequency", color='blue'):
+        plt.figure(figsize=(10, 6))
+        plt.hist(area_ts.values, bins=40, color=color, alpha=0.7, edgecolor='black')
+        plt.title(title)
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.grid()
+        plt.show()
+
+    def _map_frequency(
+            self, frequency, title, cbar_label, cmap='RdYlBu_r',
+            show_basin_footprint=False, vmin=None, vmax=None, as_percent=True,
+    ):
+        """Generic frequency/mean map visualization."""
+        dem = self.basin.clipped_dem.dem
+        data = frequency * 100 if as_percent else frequency
+        data = np.where(np.isnan(dem), np.nan, data)
+        if vmax is None:
+            vmax = np.nanmax(data)
+        well_x, well_y = self._get_well_xy()
+
+        fig, ax = plt.subplots(figsize=(12, 8))
+        im = show(data, ax=ax, cmap=cmap, alpha=0.8,
+                  transform=self.basin.clipped_dem.transform, vmin=vmin, vmax=vmax)
+        cbar = plt.colorbar(im.images[0], ax=ax, shrink=0.8)
+        cbar.set_label(cbar_label, rotation=270, labelpad=20)
+
+        if show_basin_footprint and self.basin.footprint is not None:
+            self.basin.footprint.boundary.plot(
+                ax=ax, color='green', linewidth=2, alpha=0.8, label='Basin Footprint'
+            )
+
+        ax.scatter(well_x, well_y, color='green', marker='x', s=100, linewidths=3,
+                   label=f'Well Location @{self.well_point.elevation_dem:.2f}m')
+        ax.legend(loc='upper right')
+        ax.set_xlabel('(m)')
+        ax.set_ylabel('(m)')
+        ax.set_title(title)
+        plt.tight_layout()
+        plt.show()
+
+    # ── Map kernels ─────────────────────────────────────────────────────────
+
     def calculate_inundation_map(self, water_elevation: float) -> np.ndarray:
         """
         Calculate the inundation map for a given water elevation. 
@@ -118,6 +235,39 @@ class BasinDynamics:
         tai_map = np.where(np.isnan(dem), np.nan, tai_map)  # Keep NaNs outside the basin boundary as NaNs
 
         return tai_map
+
+    def calculate_depth_map(self, water_elevation: float) -> np.ndarray:
+        """Continuous depth-to-water-table. Positive = inundated, negative = unsaturated."""
+        dem = self.basin.clipped_dem.dem
+        depth = water_elevation - dem
+        return np.where(np.isnan(dem), np.nan, depth)
+
+    def _sigmoid_flux(self, depth: np.ndarray, sigmoid_params: dict) -> np.ndarray:
+        """Custom sigmoid """
+
+        y_0 = sigmoid_params['y_0']
+        y_f = sigmoid_params['y_f']
+        k = sigmoid_params['k']
+        x_mid = sigmoid_params['x_mid'] # Transition depth
+        
+        return y_0 + ((y_f - y_0) / (1 + np.exp(-k * (depth - x_mid))))
+
+    def calculate_ch4_flux_map(self, water_elevation: float, sigmoid_params: dict) -> np.ndarray:
+        """CH4 flux (mmol m-2 d-1) as sigmoid function of water depth."""
+        dem = self.basin.clipped_dem.dem
+
+        depth = self.calculate_depth_map(water_elevation)
+        flux = self._sigmoid_flux(depth, sigmoid_params)
+        return np.where(np.isnan(dem), np.nan, flux)
+
+    def calculate_co2_flux_map(self, water_elevation: float, sigmoid_params: dict) -> np.ndarray:
+        """CO2 flux (mmol m-2 d-1) as sigmoid function of water depth."""
+        dem = self.basin.clipped_dem.dem
+        depth = self.calculate_depth_map(water_elevation)
+        flux = self._sigmoid_flux(depth, sigmoid_params)
+        return np.where(np.isnan(dem), np.nan, flux)
+
+    # ── Visualization: single-timestep maps ─────────────────────────────────
 
     def visualize_single_inundation_map(self, date: pd.Timestamp = None, water_elevation: float = None):
         """
@@ -207,61 +357,32 @@ class BasinDynamics:
             )
         plt.show()
 
+    # ── Stacks / aggregation / timeseries ───────────────────────────────────
+
     def calculate_inundation_stacks(self) -> Dict[pd.Timestamp, np.ndarray]:
-        """
-        Calculate inundation maps for the entire time series.
-        """
-        # Get well data
-        well_data = self.well_stage.timeseries_data
-        
-        # Initialize results dictionary
-        inundation_stacks = {}
-        
-        # Calculate inundation map for each date
-        for date, row in well_data.iterrows():
-            # Convert water level in well to water surface elevation in DEM datum
-            water_level = row['water_level']
-            water_elevation = self.well_point.elevation_dem + water_level + self.well_to_dem_offset
-            # Calculate inundation map
-            inundation_map = self.calculate_inundation_map(water_elevation)
-            
-            # Store in dictionary
-            inundation_stacks[date] = inundation_map
-            
-        return inundation_stacks
+        return self._calculate_map_stacks(self.calculate_inundation_map)
 
     def calculate_tai_stacks(self, max_depth: float, min_depth: float) -> Dict[pd.Timestamp, np.ndarray]:
+        return self._calculate_map_stacks(
+            lambda we: self.calculate_tai_map(we, max_depth, min_depth)
+        )
 
-        well_data = self.well_stage.timeseries_data
+    def calculate_depth_stacks(self) -> Dict[pd.Timestamp, np.ndarray]:
+        return self._calculate_map_stacks(self.calculate_depth_map)
 
-        tai_stacks = {}
+    def calculate_ch4_stacks(self, sigmoid_params: dict) -> Dict[pd.Timestamp, np.ndarray]:
+        return self._calculate_map_stacks(
+            lambda we: self.calculate_ch4_flux_map(we, sigmoid_params)
+        )
 
-        for date, row in well_data.iterrows():
-            water_level = row['water_level']
-            water_elevation = self.well_point.elevation_dem + water_level + self.well_to_dem_offset
-            tai_map = self.calculate_tai_map(water_elevation, max_depth, min_depth)
-            tai_stacks[date] = tai_map
-
-        return tai_stacks
+    def calculate_co2_stacks(self, sigmoid_params: dict) -> Dict[pd.Timestamp, np.ndarray]:
+        return self._calculate_map_stacks(
+            lambda we: self.calculate_co2_flux_map(we, sigmoid_params)
+        )
 
     def aggregate_inundation_stacks(self, inundation_stacks: Dict[pd.Timestamp, np.ndarray] = None) -> np.ndarray:
-        """
-        Calculate a summary of inundation frequency across the time series.
-        Takes a dictionary of inundation maps with pd.Timestamp, np.ndarray
-
-        Returns an array with the fraction of time each cell was inundated.
-        """
-        # Calculate inundation maps if not provided
-        if inundation_stacks is None:
-            inundation_stacks = self.calculate_inundation_stacks()
-
-        # Stack inundation maps
-        stack = np.stack(list(inundation_stacks.values()))
-
-        # Calculate frequency of inundation
-        inundation_frequency = np.sum(stack, axis=0, dtype=np.float16) / stack.shape[0]
-        
-        return inundation_frequency
+        stacks = inundation_stacks or self.calculate_inundation_stacks()
+        return self._aggregate_stacks(stacks, method="frequency")
     
     def aggregate_tai_stacks(
             self, 
@@ -269,43 +390,27 @@ class BasinDynamics:
             min_depth: float, 
             tai_stacks: Dict[pd.Timestamp, np.ndarray] = None
         ) -> np.ndarray:
+        stacks = tai_stacks or self.calculate_tai_stacks(max_depth, min_depth)
+        return self._aggregate_stacks(stacks, method="frequency")
 
-        if tai_stacks is None:
-            tai_stacks = self.calculate_tai_stacks(max_depth, min_depth)
+    def aggregate_depth_stacks(self, stacks: Dict[pd.Timestamp, np.ndarray] = None) -> np.ndarray:
+        stacks = stacks or self.calculate_depth_stacks()
+        return self._aggregate_stacks(stacks, method="mean")
 
-        # Stack TAI maps 
-        stack = np.stack(list(tai_stacks.values()))
-        tai_frequency = np.nansum(stack, axis=0, dtype=np.float16) / stack.shape[0]
+    def aggregate_ch4_stacks(self, sigmoid_params: dict, stacks: Dict[pd.Timestamp, np.ndarray] = None) -> np.ndarray:
+        stacks = stacks or self.calculate_ch4_stacks(sigmoid_params)
+        return self._aggregate_stacks(stacks, method="mean")
 
-        return tai_frequency
+    def aggregate_co2_stacks(self, sigmoid_params: dict, stacks: Dict[pd.Timestamp, np.ndarray] = None) -> np.ndarray:
+        stacks = stacks or self.calculate_co2_stacks(sigmoid_params)
+        return self._aggregate_stacks(stacks, method="mean")
     
     def calculate_inundated_area_timeseries(
             self, 
             inundation_stacks: Dict[pd.Timestamp, np.ndarray] = None,
         ) -> pd.Series:
-
-        """
-        Calculate the inundated area for each timestep.
-        """
-        # Calculate inundation maps if not provided
-        if inundation_stacks is None:
-            inundation_stacks = self.calculate_inundation_stacks()
-
-        # NOTE: This assumes the transform in clipped_dem gives us the cell size
-        cell_size = abs(self.basin.clipped_dem.transform.a)  # Cell width in meters
-        print(f'Cell size from DEM meta: {cell_size} m')
-        cell_area = cell_size * cell_size  # Cell area in sq meters
-        
-        # Calculate area for each timestep
-        areas = {}
-        for date, inundation_map in inundation_stacks.items():
-            inundation_map = inundation_map.astype(np.float32)
-            inundation_map = np.where(np.isinf(inundation_map), 0, inundation_map)
-
-            inundated_cells = np.nansum(inundation_map)
-            areas[date] = inundated_cells * cell_area
-
-        return pd.Series(areas)
+        stacks = inundation_stacks or self.calculate_inundation_stacks()
+        return self._calculate_area_timeseries(stacks)
     
     def calculate_tai_timeseries(
             self, 
@@ -313,74 +418,84 @@ class BasinDynamics:
             min_depth: float, 
             tai_stacks: Dict[pd.Timestamp, np.ndarray] = None
         ) -> pd.Series:
+        stacks = tai_stacks or self.calculate_tai_stacks(max_depth, min_depth)
+        return self._calculate_area_timeseries(stacks)
 
-        if tai_stacks is None:
-            tai_stacks = self.calculate_tai_stacks(max_depth=max_depth, min_depth=min_depth)
+    def calculate_ch4_timeseries(self, sigmoid_params: dict, stacks: Dict[pd.Timestamp, np.ndarray] = None) -> pd.Series:
+        stacks = stacks or self.calculate_ch4_stacks(sigmoid_params)
+        return self._calculate_area_timeseries(stacks)
 
-        cell_size = abs(self.basin.clipped_dem.transform.a)
-        print(f'Cell size from DEM meta: {cell_size} m')
-        cell_area = cell_size * cell_size
-
-        tai_areas = {}
-        for date, tai_map in tai_stacks.items():
-            tai_map = tai_map.astype(np.float64)
-            tai_cells = np.nansum(tai_map)
-            tai_areas[date] = tai_cells * cell_area
-
-        return pd.Series(tai_areas)
+    def calculate_co2_timeseries(self, sigmoid_params: dict, stacks: Dict[pd.Timestamp, np.ndarray] = None) -> pd.Series:
+        stacks = stacks or self.calculate_co2_stacks(sigmoid_params)
+        return self._calculate_area_timeseries(stacks)
     
+    # ── Visualization: timeseries ───────────────────────────────────────────
+
     def plot_inundated_area_timeseries(self, area_timeseries: pd.Series = None):
-        """
-        Plot the inundated area timeseries.
-        """
         if area_timeseries is None:
             area_timeseries = self.calculate_inundated_area_timeseries()
-
-        plt.figure(figsize=(12, 6))
-        plt.plot(area_timeseries.index, area_timeseries.values, marker='o')
-        plt.title(f"{self.well_stage.well_id} Inundated Area Timeseries")
-        plt.xlabel("Date")
-        plt.ylabel("Inundated Area (m²)")
-        plt.grid()
-        plt.show()
+        self._plot_area_timeseries(
+            area_timeseries,
+            title=f"{self.well_stage.well_id} Inundated Area Timeseries",
+            ylabel="Inundated Area (m²)",
+        )
 
     def plot_tai_area_timeseries(self, tai_timeseries: pd.Series = None, max_depth: float = None, min_depth: float = None):
-        """
-        Plot the TAI area timeseries.
-        """
         if tai_timeseries is None:
             tai_timeseries = self.calculate_tai_timeseries(max_depth, min_depth)
-
-        plt.figure(figsize=(12, 6))
-        plt.plot(tai_timeseries.index, tai_timeseries.values, color='Orange', marker='o')
-        plt.title(
-            f"{self.well_stage.well_id} TAI Area Timeseries\n"
-            f"Depth {min_depth} to {max_depth} m"
+        self._plot_area_timeseries(
+            tai_timeseries,
+            title=f"{self.well_stage.well_id} TAI Area Timeseries\nDepth {min_depth} to {max_depth} m",
+            ylabel="TAI Area (m²)",
+            color='Orange',
         )
-        plt.xlabel("Date")
-        plt.ylabel("TAI Area (m²)")
+
+    def plot_ch4_timeseries(self, sigmoid_params: dict, ch4_timeseries: pd.Series = None):
+        if ch4_timeseries is None:
+            ch4_timeseries = self.calculate_ch4_timeseries(sigmoid_params)
+        self._plot_area_timeseries(
+            ch4_timeseries,
+            title=f"{self.well_stage.well_id} CH₄ Flux Timeseries",
+            ylabel="Total CH₄ Flux (mmol d⁻¹)",
+            color='red',
+        )
+
+    def plot_co2_timeseries(self, sigmoid_params: dict, co2_timeseries: pd.Series = None):
+        if co2_timeseries is None:
+            co2_timeseries = self.calculate_co2_timeseries(sigmoid_params)
+        self._plot_area_timeseries(
+            co2_timeseries,
+            title=f"{self.well_stage.well_id} CO₂ Flux Timeseries",
+            ylabel="Total CO₂ Flux (mmol d⁻¹)",
+            color='purple',
+        )
+
+    def plot_sigmoid_curve(self, sigmoid_params: dict, depth_range: tuple = (-1.5, 1)):
+
+        domain = np.linspace(depth_range[0], depth_range[1], 200)
+        flux = self._sigmoid_flux(domain, sigmoid_params)
+        plt.figure(figsize=(8, 5))
+        plt.plot(domain, flux)
+        plt.axvline(sigmoid_params['x_mid'], color='red', linestyle='--', label='x₀')
+        plt.axhline(0, color='black', linestyle='-', label='0')
+        plt.xlabel('Depth (m)')
+        plt.ylabel('Flux (mmol m⁻² d⁻¹)')
+        plt.title('Sigmoid Flux Curve')
+        plt.legend()
         plt.grid()
         plt.show()
+
+
+    # ── Visualization: histograms ──────────────────────────────────────────
 
     def plot_inundated_area_histogram(self, area_timeseries: pd.Series = None):
-        """
-        Plot a histogram of inundated areas.
-        """
         if area_timeseries is None:
             area_timeseries = self.calculate_inundated_area_timeseries()
-        # Debug: Check for infinite values
-        infinite_mask = np.isinf(area_timeseries.values)
-        if infinite_mask.any():
-            print(f"Found {infinite_mask.sum()} infinite values")
-            print(f"Dates with infinity: {area_timeseries[infinite_mask].index.tolist()}")
-
-        plt.figure(figsize=(10, 6))
-        plt.hist(area_timeseries.values, bins=40, color='blue', alpha=0.7, edgecolor='black')
-        plt.title(f"{self.well_stage.well_id} Inundated Area Histogram")
-        plt.xlabel("Inundated Area (m²)")
-        plt.ylabel("Frequency")
-        plt.grid()
-        plt.show()
+        self._plot_area_histogram(
+            area_timeseries,
+            title=f"{self.well_stage.well_id} Inundated Area Histogram",
+            xlabel="Inundated Area (m²)",
+        )
 
     def plot_tai_area_histogram(
             self, 
@@ -413,6 +528,28 @@ class BasinDynamics:
         plt.grid()
         plt.show()
 
+    def plot_ch4_histogram(self, sigmoid_params: dict, ch4_timeseries: pd.Series = None):
+        if ch4_timeseries is None:
+            ch4_timeseries = self.calculate_ch4_timeseries(sigmoid_params)
+        self._plot_area_histogram(
+            ch4_timeseries,
+            title=f"{self.well_stage.well_id} CH₄ Flux Histogram",
+            xlabel="Total CH₄ Flux (mmol d⁻¹)",
+            color='red',
+        )
+
+    def plot_co2_histogram(self, sigmoid_params: dict, co2_timeseries: pd.Series = None):
+        if co2_timeseries is None:
+            co2_timeseries = self.calculate_co2_timeseries(sigmoid_params)
+        self._plot_area_histogram(
+            co2_timeseries,
+            title=f"{self.well_stage.well_id} CO₂ Flux Histogram",
+            xlabel="Total CO₂ Flux (mmol d⁻¹)",
+            color='purple',
+        )
+
+    # ── Visualization: frequency / mean maps ───────────────────────────────
+
     def map_tai_stacks(
             self, 
             tai_frequency: np.array = None, 
@@ -422,57 +559,25 @@ class BasinDynamics:
             cbar_min: float = None,
             cbar_max: float = None
         ):
-        """
-        Map the TAI stacks for a given depth range.
-        """
         if tai_frequency is None:
             if max_depth is None or min_depth is None:
                 raise ValueError("Either tai_frequency array or both max_depth and min_depth must be provided")
             tai_frequency = self.aggregate_tai_stacks(max_depth, min_depth)
-
-        dem = self.basin.clipped_dem.dem
-        tai_percent = tai_frequency * 100
-        tai_percent = np.where(np.isnan(dem), np.nan, tai_percent)  # Keep NaNs outside the basin boundary as NaNs
-        well_point = self.well_point
-        well_point_x = well_point.location.x.values[0]
-        well_point_y = well_point.location.y.values[0]
-
-        fig, ax = plt.subplots(figsize=(12, 8))
-        
-        # Show TAI frequency (values from 0-1 representing frequency of being in TAI zone)
-        im = show(tai_percent, ax=ax, cmap='RdYlBu_r', alpha=0.8, 
-                transform=self.basin.clipped_dem.transform, 
-                vmin=0, vmax=np.nanmax(tai_percent))
-
-        # Add colorbar
-        cbar = plt.colorbar(im.images[0], ax=ax, shrink=0.8)
-        cbar.set_label('TAI Frequency (0-100%) of Days', rotation=270, labelpad=20)
-
-        if show_basin_footprint:
-            footprint = self.basin.footprint
-            footprint.boundary.plot(ax=ax, color='green', linewidth=2, alpha=0.8, label='Basin Footprint')
-
-        # Plot well point
-        ax.scatter(well_point_x, well_point_y, color='green', 
-                marker='x', s=100, linewidths=3,
-                label=f'Well Location @{well_point.elevation_dem:.2f}m')
-        
-        # Add legend and labels
-        ax.legend(loc='upper right')
-        ax.set_xlabel('(m)')
-        ax.set_ylabel('(m)')
-        
-        ax.set_title(f'TAI Frequency Map\n Defined by depth range: {min_depth:.2f}m to {max_depth:.2f}m')
-
-        plt.tight_layout()
-        plt.show()
+        self._map_frequency(
+            tai_frequency,
+            title=f'TAI Frequency Map\n Defined by depth range: {min_depth:.2f}m to {max_depth:.2f}m',
+            cbar_label='TAI Frequency (0-100%) of Days',
+            cmap='RdYlBu_r',
+            show_basin_footprint=show_basin_footprint,
+        )
 
     def map_inundation_stacks(
             self, 
             inundation_frequency: np.array = None, 
             show_basin_footprint: bool = False,
             cbar_min: float = 0,
-            cbar_max: float = None
+            cbar_max: float = None,
+            plot_well: bool = True
     ):
         """
         Map the inundation stacks.
@@ -499,7 +604,6 @@ class BasinDynamics:
         
         fig, ax = plt.subplots(figsize=(12, 8))
 
-        from matplotlib.colors import LinearSegmentedColormap
         colors = ['#8B4513', '#FFFFFF', '#0000FF']  # Brown, White, Blue
         custom_cmap = LinearSegmentedColormap.from_list('brown_white_blue', colors, N=256)
 
@@ -521,9 +625,10 @@ class BasinDynamics:
         cbar.ax.tick_params(labelsize=12)
 
         # Plot well point
-        # ax.scatter(well_point_x, well_point_y, color='limegreen', 
-        #         marker='x', s=400, linewidths=7,
-        #         label=f'Well Location')
+        if plot_well:
+            ax.scatter(well_point_x, well_point_y, color='limegreen', 
+                    marker='x', s=400, linewidths=7,
+                    label=f'Well Location')
 
         #plot_shape.plot(ax=ax, facecolor='none', edgecolor='red', linewidth=2)
         
@@ -540,6 +645,55 @@ class BasinDynamics:
 
         plt.show()
 
+    def map_ch4_stacks(self, sigmoid_params: dict, ch4_frequency: np.array = None, show_basin_footprint: bool = False):
+        if ch4_frequency is None:
+            ch4_frequency = self.aggregate_ch4_stacks(sigmoid_params)
 
+        colors = ["green", "white", "red"]
+        custom_cmap = LinearSegmentedColormap.from_list("green_white_red_cmap", colors, N=256)
 
-        
+        # Center the color map at zero
+        abs_max = np.nanmax(np.abs(ch4_frequency))
+
+        self._map_frequency(
+            ch4_frequency,
+            title='Mean CH₄ Flux Map',
+            cbar_label='CH₄ Flux (mmol m⁻² d⁻¹)',
+            cmap=custom_cmap,
+            show_basin_footprint=show_basin_footprint,
+            as_percent=False,
+            vmin=-abs_max,
+            vmax=abs_max
+        )
+
+    def map_co2_stacks(self, sigmoid_params: dict, co2_frequency: np.array = None, show_basin_footprint: bool = False):
+        if co2_frequency is None:
+            co2_frequency = self.aggregate_co2_stacks(sigmoid_params)
+
+        colors = ["green", "white", "red"]
+        custom_cmap = LinearSegmentedColormap.from_list("green_white_red_cmap", colors, N=256)
+
+        abs_max = np.nanmax(np.abs(co2_frequency))
+
+        self._map_frequency(
+            co2_frequency,
+            title='Mean CO₂ Flux Map',
+            cbar_label='CO₂ Flux (mmol m⁻² d⁻¹)',
+            cmap=custom_cmap,
+            show_basin_footprint=show_basin_footprint,
+            as_percent=False,
+            vmin=-abs_max,
+            vmax=abs_max
+        )
+
+    def map_depth_stacks(self, depth_frequency: np.array = None, show_basin_footprint: bool = False):
+        if depth_frequency is None:
+            depth_frequency = self.aggregate_depth_stacks()
+        self._map_frequency(
+            depth_frequency,
+            title='Mean Water Depth Map',
+            cbar_label='Mean Depth (m)',
+            cmap='RdYlBu',
+            show_basin_footprint=show_basin_footprint,
+            as_percent=False,
+        )

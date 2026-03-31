@@ -52,6 +52,9 @@ wtd_surface_early = WTDSurface(
     boundary=boundary
 )
 
+wtd_surface_early.plot_interpolation_result()
+wtd_surface_early.plot_sigma_squared()
+
 well_array_late = WellArray(
     well_pts=well_points,
     well_ts=well_ts,
@@ -65,6 +68,8 @@ wtd_surface_late = WTDSurface(
     coarse_grid_dims=(1000, 1000), 
     boundary=boundary
 )
+
+
 
 
 # %% 4.0 Plot to compare differences as a map. 

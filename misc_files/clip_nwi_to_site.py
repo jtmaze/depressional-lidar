@@ -11,7 +11,7 @@ out_path = f'D:/depressional_lidar/data/{site_name}/in_data/original_basins/{sit
 
 # %% 2.0 Clip NWI to the site boundary
 
-site_boundary = gpd.read_file(site_boundary_path)
+site_boundary = gpd.read_file(site_boundary_path).buffer(3_000)
 print(site_boundary.crs)
 
 # Improve speeds by only reading NWI wetlands within the site bounds

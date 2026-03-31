@@ -13,14 +13,17 @@ from rasterio.mask import mask
 
 wbe = wbw.WbEnvironment()
 
-site = 'bradford'
-lidar_data = 'USGS' # NOTE: 2016 DEM at OSBS has lowest water levels. Still some flooding. 
+site = 'delmarva'
+sub_site = 'JR'
+lidar_data = 'neon_may2025' # NOTE: 2016 DEM at OSBS has lowest water levels. Still some flooding. 
 os.chdir(f'D:/depressional_lidar/data/{site}/')
 
 if site == 'bradford':
     src_path = './in_data/dem_mosaic_all_basins.tif'
 elif site == 'osbs': 
     src_path = f'./in_data/dem_mosaic_all_basins_{lidar_data}.tif'
+elif site == 'delmarva':
+    src_path = f'./in_data/dem_mosaic_{sub_site}.tif'
 
 processing_dir = r'C:\Users\jtmaz\Documents\temp'
 
@@ -35,12 +38,12 @@ base_name = os.path.basename(src_path)
 temp_file_path = os.path.join(processing_dir, f'./{base_name}')
 
 wbt_off_terrain_path = os.path.join(processing_dir, f'{site}_DEM_wbt_off_terrain.tif')
-final_out_path = os.path.join(processing_dir, f'{site}_DEM_cleaned_veg1.tif')
+final_out_path = os.path.join(processing_dir, f'{site}_DEM_cleaned_{lidar_data}.tif')
 
 # %% 3.0 Crop the DEM to immediate watershed areas instead of buffered. Imporves processing speeds.
 # Plus, we don't need filtering on the buffered DEM for now. 
 
-# # Get boundary
+# Get boundary
 # if site == 'bradford':
 #     boundary_path = f'D:/depressional_lidar/data/{site}/in_data/original_basins/watershed_delineations.shp'
 # elif site == 'osbs':
@@ -98,6 +101,8 @@ tile_h, tile_w = 2048, 2048
 # Read the DEM file using the wbe environment instance
 dem_raster = wbe.read_raster(temp_file_path)
 
+# NOTE: adding a "fill_single_cell_pits" step here could be worthwhile
+
 # Apply the terrain object removal
 smoothed_dem = wbe.remove_off_terrain_objects(
     dem=dem_raster,
@@ -105,17 +110,41 @@ smoothed_dem = wbe.remove_off_terrain_objects(
     slope_threshold=off_terrian_slope
 )
 
+del dem_raster
+
 # Save the result to the output path
 wbe.write_raster(smoothed_dem, wbt_off_terrain_path)
 
+del smoothed_dem
+
 # %% 7.0 Define functions for focal percentile and chunking the raster (incase its too large for memory)
 
-def chunk_windows(width, height, tile_w, tile_h):
+def chunk_windows(width, height, tile_w, tile_h, pad):
     for row_off in range(0, height, tile_h):
         for col_off in range(0, width, tile_w):
-            yield Window(col_off, row_off,
-                         min(tile_w,  width  - col_off),
-                         min(tile_h,  height - row_off))
+            core_h = min(tile_h, height - row_off)
+            core_w = min(tile_w, width - col_off)
+
+            core_win = Window(col_off, row_off, core_w, core_h)
+
+            read_col_off = max(0, col_off - pad)
+            read_row_off = max(0, row_off - pad)
+
+            read_col_end = min(width, col_off + core_w + pad)
+            read_row_end = min(height, row_off + core_h + pad)
+
+            read_win = Window(
+                read_col_off,
+                read_row_off,
+                read_col_end - read_col_off,
+                read_row_end - read_row_off
+            )
+
+            # Location of the core tile inside the padded read array
+            core_col_start = col_off - read_col_off
+            core_row_start = row_off - read_row_off
+
+            yield core_win, read_win, core_row_start, core_col_start
 
 def mask_arr(arr: np.ndarray, no_data: float):
     return arr == no_data if no_data is not None else np.isnan(arr)
@@ -184,46 +213,69 @@ with rio.open(wbt_off_terrain_path) as src:
     with rio.open(final_out_path, 'w', **sm_profile)  as dst_sm:
         
         tile_count = 0
-        for win in chunk_windows(src.width, src.height, tile_w, tile_h):
+        # NOTE: adding this pad argument, becuase the chunking process could produce "seams" in the filtered DEM
+        pad = tile_h // 2
+
+        for core_win, read_win, core_row_start, core_col_start in chunk_windows(
+            src.width, src.height, tile_w, tile_h, pad
+        ):
+            
             tile_count += 1
             if tile_count % 10 == 0:  # report rogress every 10 tiles
                 print(f"Processing tile {tile_count}/{total_tiles} ({100*tile_count/total_tiles:.1f}%)")
             
-            # 1) Read core tile
-            orig = src.read(1, window=win)
+            # 1) Read larger tile
+            orig_pad = src.read(1, window=read_win)
 
             # Quick skip if all nodata
-            if nodata is not None and np.all(orig == nodata):
-                dst_sm.write(orig.astype('float32'), 1, window=win)
+            if nodata is not None and np.all(orig_pad == nodata):
+                dst_sm.write(
+                    orig_pad[
+                        core_row_start:core_row_start + int(core_win.height),
+                        core_col_start:core_col_start + int(core_win.width)
+                    ].astype('float32'),
+                    1,
+                    window=core_win
+                )
                 continue
             
             # Skip if mostly nodata (>90%) to avoid processing sparse areas
-            if nodata is not None:
-                nodata_fraction = np.sum(orig == nodata) / orig.size
-                if nodata_fraction > 0.9:
-                    dst_sm.write(orig.astype('float32'), 1, window=win)
-                    continue
+            # if nodata is not None:
+            #     nodata_fraction = np.sum(orig_pad == nodata) / orig_pad.size
+            #     if nodata_fraction > 0.9:
+            #         dst_sm.write(orig_pad.astype('float32'), 1, window=core_win)
+            #         continue
 
             # 2) Focal percentile - using ultra-fast rank filter
-            pctv = focal_percentile_rank(orig, nodata,
+            pctv_pad = focal_percentile_rank(orig_pad, nodata,
                                         minima_window_size,
                                         mininma_pct_thresh)
 
             # 3) Only lower cells, do not raise elevation. Veg will bias most everything high
-            diff    = orig - pctv
-            lowered = np.where(diff > 0, pctv, orig)
+            diff_pad    = orig_pad - pctv_pad
+            lowered_pad = np.where(diff_pad > 0, pctv_pad, orig_pad)
 
             # 4) Limit how far cells can drop
             if max_drop is not None:
-                lowered = np.where(diff > max_drop, orig - max_drop, lowered)
+                lowered_pad = np.where(diff_pad > max_drop, orig_pad - max_drop, lowered_pad)
+            
+            # 5) Drop padded data outside the core chunk, padded data just used for computation
+            core = lowered_pad[
+                core_row_start:core_row_start + int(core_win.height),
+                core_col_start:core_col_start + int(core_win.width)
+            ]
+            orig_core = orig_pad[
+                core_row_start:core_row_start + int(core_win.height),
+                core_col_start:core_col_start + int(core_win.width)
+            ]
 
-            # 5) Restore nodata
+            # 6) Handle no data and write
             if nodata is not None:
-                core_mask = mask_arr(orig, nodata)
-                #pctv      = np.where(core_mask, nodata, pctv)
-                lowered   = np.where(core_mask, nodata, lowered)
+                core_mask = mask_arr(orig_core, nodata)
+                core = np.where(core_mask, nodata, core)
 
-            # 6) Write
-            dst_sm.write(lowered.astype('float32'), 1, window=win)
+            dst_sm.write(core.astype('float32'), 1, window=core_win)
 
 # %%
+
+

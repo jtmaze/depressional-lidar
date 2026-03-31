@@ -2,45 +2,58 @@
 This script takes the raw DEM tiles downloaded from Florida's LiDAR and selects tiles within.
 It then mosaics the DEM tiles that are within the basin shapes and masks the mosaic to the basin shapes.
 """
-
 # %% 1.0 Libraries and Directories
 import os
 import glob 
+import math
 import numpy as np
 import rasterio as rio
 from rasterio.mask import mask
 from rasterio.merge import merge
-from rasterio.warp import calculate_default_transform, reproject, Resampling
+from rasterio.warp import transform_bounds, reproject, Resampling
+from rasterio.transform import from_origin
 
 import geopandas as gpd
 
-target_crs = 'EPSG:26917'
-site_name = 'bradford'  # bradford or osbs
-lidar_data = 'USGS'  # multiple neon flights at OSBS (e.g., sep2016), tbd which works best
-US_SURVEY_FOOT_TO_METER = 0.304800609601219
+target_crs = 'EPSG:26918'
+site_name = 'delmarva'  # bradford or osbs, or delmarva
+sub_site_name = 'JL' # delmarva has two sites None for osbs and bradford
+
+# multiple neon flights at OSBS (e.g., sep2016)
+# For delmarva, use USGS_1m, because data is UTM
+lidar_data = 'USGS_1m'  
+US_SURVEY_FOOT_TO_METER = 0.304800609601219 # FL USGS Lidar data is in feet
 
 os.chdir('D:/depressional_lidar/data/')
 
 if lidar_data == 'USGS' and site_name == 'bradford':
-    dem_tile_paths = glob.glob('./raw_usgs_tiles/*.tif')
+    dem_tile_paths = glob.glob('./raw_usgs_tiles_fl/*.tif')
     basin_shapes_path = f'./{site_name}/in_data/original_basins/watershed_delineations.shp'
 
 elif site_name == 'osbs' and lidar_data == 'USGS':
-    dem_tile_paths = glob.glob('./raw_usgs_tiles/*.tif')
-    basin_shapes_path = f'./{site_name}/in_data/OSBS_boundary.shp'
+    dem_tile_paths = glob.glob('./raw_usgs_tiles_fl/*.tif')
+    basin_shapes_path = f'./{site_name}/OSBS_boundary.shp'
 
 elif site_name == 'osbs' and 'neon' in lidar_data:
-    dem_tile_paths = glob.glob(f'./{site_name}/in_data/raw_DEM_tiles/{lidar_data}/*.tif')
-    basin_shapes_path = f'./{site_name}/in_data/OSBS_boundary.shp'
+    dem_tile_paths = glob.glob(f'./{site_name}/in_data/raw_DEM_tiles_fl/{lidar_data}/*DTM.tif')
+    basin_shapes_path = f'./{site_name}/OSBS_boundary.shp'
+
+elif site_name == 'delmarva' and lidar_data == 'USGS_1m':
+    dem_tile_paths = glob.glob('./raw_usgs_tiles_de/*.tif')
+    basin_shapes_path = f'./{site_name}/in_data/sites_and_boundaries/{sub_site_name}_boundary.shp'
 
 else:
     raise ValueError('Check your site_name and/or lidar_data')
 
 basin_shapes = gpd.read_file(basin_shapes_path)
 
+print(basin_shapes)
+
+# %%
+
 # Convert basin shapes to UTM coordinate system and buffer for landscape detrending
-basin_shapes = basin_shapes.to_crs(basin_shapes.estimate_utm_crs(datum_name='NAD 83')) #NOTE: Is OSBS NAD83??
-basin_shapes['geometry'] = basin_shapes.geometry.buffer(2_000)
+basin_shapes = basin_shapes.to_crs(basin_shapes.estimate_utm_crs(datum_name='WGS 84')) #NOTE: Is OSBS NAD83??
+basin_shapes['geometry'] = basin_shapes.geometry.buffer(2_500)
 
 # Create unified crop shape from all basins
 crop_shape = gpd.GeoDataFrame(geometry=[basin_shapes.union_all()], crs=basin_shapes.crs)
@@ -68,99 +81,161 @@ if not identical_crs:
     unique_crs = set(str(crs) for crs in crs_list)
     print(f"Unique CRS values found: {unique_crs}")
 
-# %% 3.0 Reproject and mosaic tiles
-# Get nodata value from first tile before reprojection loop
-with rio.open(valid_paths[0]) as src:
-    no_data = src.meta.get('nodata')
+# Check nodata consistency
+nodata_list = []
+unique_nodata = set(nodata_list)
+print(f"Unique nodata values found: {unique_nodata}")
+
+with rio.open(valid_paths[0]) as src0:
+    no_data = src0.nodata
+    src_dtype = src0.dtypes[0]
+    src_res_x, src_res_y = src0.res
+
+if lidar_data == "USGS":
+    src_res_x = src_res_x * US_SURVEY_FOOT_TO_METER
+    src_res_y = src_res_y * US_SURVEY_FOOT_TO_METER
+
+# %% 3.0 Build one shared target grid in target_crs
+
+# Use source resolution magnitude as target resolution
+# For north-up rasters, src.res is usually positive magnitudes
+target_res_x = abs(src_res_x)
+target_res_y = abs(src_res_y)
+
+# Compute the unioned bounds of all valid tiles in target_crs
+all_bounds = []
+for fp in valid_paths:
+    with rio.open(fp) as src:
+        b = transform_bounds(src.crs, target_crs, *src.bounds, densify_pts=21)
+        all_bounds.append(b)
+
+left = min(b[0] for b in all_bounds)
+bottom = min(b[1] for b in all_bounds)
+right = max(b[2] for b in all_bounds)
+top = max(b[3] for b in all_bounds)
+
+# Snap the mosaic bounds to the target resolution
+left_snap = math.floor(left / target_res_x) * target_res_x
+right_snap = math.ceil(right / target_res_x) * target_res_x
+bottom_snap = math.floor(bottom / target_res_y) * target_res_y
+top_snap = math.ceil(top / target_res_y) * target_res_y
+
+dst_width = int(round((right_snap - left_snap) / target_res_x))
+dst_height = int(round((top_snap - bottom_snap) / target_res_y))
+dst_transform = from_origin(left_snap, top_snap, target_res_x, target_res_y)
+
+print("Shared target grid:")
+print(f"  resolution: ({target_res_x}, {target_res_y})")
+print(f"  bounds: ({left_snap}, {bottom_snap}, {right_snap}, {top_snap})")
+print(f"  shape: ({dst_height}, {dst_width})")
+
+# %% 4.0 Reproject and mosaic tiles
 
 reprojected_tiles = []
 tile_temp_filepaths = []
 
 for idx, p in enumerate(valid_paths):
     with rio.open(p) as src:
-        trans, width, height = calculate_default_transform(
-            src.crs, target_crs, src.width, src.height, *src.bounds
-        )
-
         meta = src.meta.copy()
         meta.update({
             'crs': target_crs,
-            'transform': trans,
-            'width': width,
-            'height': height,
-            'driver': 'GTiff'
+            'transform': dst_transform,
+            'width': dst_width,
+            'height': dst_height,
+            'driver': 'GTiff',
+            'nodata': no_data
         })
 
-        reprojected_data = np.zeros((src.count, height, width), dtype=meta['dtype'])
+        reprojected_data = np.full((1, dst_height, dst_width), no_data, dtype=src_dtype)
+
         reproject(
             source=rio.band(src, 1),
-            destination=reprojected_data,
+            destination=reprojected_data[0],
             src_transform=src.transform,
             src_crs=src.crs,
-            dst_transform=trans,
+            dst_transform=dst_transform,
             dst_crs=target_crs,
-            resampling=Resampling.cubic
+            resampling=Resampling.cubic,
+            src_nodata=no_data,
+            dst_nodata=no_data
         )
 
     tile_temp_filepath = f'./{site_name}/temp/reprojected_tile_{idx}.tif'
     tile_temp_filepaths.append(tile_temp_filepath)
+
     with rio.open(tile_temp_filepath, 'w', **meta) as dst:
         dst.write(reprojected_data)
 
     reprojected_tiles.append(rio.open(tile_temp_filepath))
 
-# Mosaic the reprojected tiles
-mosaic, out_transform = merge(reprojected_tiles)
+    print(f"Processed {idx + 1} of {len(valid_paths)}")
 
-# Close tiles after mosaicing
+# %% 5.0 Mosaic the aligned tiles
+
+mosaic, out_transform = merge(reprojected_tiles, nodata=no_data)
+
 for ds in reprojected_tiles:
     ds.close()
 
-# Convert USGS data from US survey feet to meters
+# %% 6.0 Convert USGS data from US survey feet to meters
 if lidar_data == 'USGS':
     out_mosaic = np.where(
-        mosaic * US_SURVEY_FOOT_TO_METER < 0,
+        mosaic == no_data,
         no_data,
         mosaic * US_SURVEY_FOOT_TO_METER
-    )
+    ).astype(np.float32)
 else:
-    out_mosaic = mosaic  # NEON data already in meters
+    out_mosaic = mosaic.astype(np.float32)
 
-# %% 4.0 Write mosaic to temp file
+
+# %% 7.0 Write mosaic to temp file
+
 with rio.open(valid_paths[0]) as src:
     first_meta = src.meta.copy()
 
 final_meta = first_meta.copy()
 final_meta.update({
-    'height': mosaic.shape[1],
-    'width': mosaic.shape[2],
+    'driver': 'GTiff',
+    'height': out_mosaic.shape[1],
+    'width': out_mosaic.shape[2],
     'transform': out_transform,
-    'crs': target_crs
+    'crs': target_crs,
+    'nodata': no_data,
+    'dtype': 'float32'
 })
 
-mosaic_fp = f'./{site_name}/temp/dem_mosaic_all_basins.tif'
+
+if sub_site_name is None:
+    mosaic_fp = f'./{site_name}/temp/dem_mosaic_all_basins.tif'
+else:
+    mosaic_fp = f'./{site_name}/temp/dem_mosaic_{sub_site_name}.tif'
+
 with rio.open(mosaic_fp, 'w', **final_meta) as dst:
     dst.write(out_mosaic)
 
-# %% 5.0 Mask the mosaic to the study area's buffered shape and write output
+# %% 8.0 Mask the mosaic to the study area's buffered shape and write output
 with rio.open(mosaic_fp) as src:
     crop_geom = crop_shape.to_crs(target_crs).geometry
-    masked_mosaic, masked_trans = mask(src, crop_geom, crop=True)
+    masked_mosaic, masked_trans = mask(src, crop_geom, crop=True, nodata=no_data)
+
     out_meta = src.meta.copy()
     out_meta.update({
         'height': masked_mosaic.shape[1],
         'width': masked_mosaic.shape[2],
-        'transform': masked_trans
+        'transform': masked_trans,
+        'nodata': no_data
     })
 
 output_path = f'./{site_name}/in_data/dem_mosaic_all_basins.tif'
 if site_name == 'osbs':
     output_path = f'./{site_name}/in_data/dem_mosaic_all_basins_{lidar_data}.tif'
+if sub_site_name is not None:
+    output_path = f'./{site_name}/in_data/dem_mosaic_{sub_site_name}.tif'
 
 with rio.open(output_path, 'w', **out_meta) as dst:
     dst.write(masked_mosaic)
 
-# %% 6.0 Clean up temp directory
+# %% 9.0 Clean up temp directory
 for temp_fp in tile_temp_filepaths:
     try:
         os.remove(temp_fp)
