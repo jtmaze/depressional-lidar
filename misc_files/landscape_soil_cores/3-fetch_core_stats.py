@@ -159,11 +159,24 @@ with rio.open(source_dem_path) as dem_src:
             results.append(r)
 
 
-        
-
 # %% 4.0 Concatonate results and write the file
 
 out_df = pd.DataFrame(results)
+
+# Transform geometry to EPSG:4326 before extracting coordinates
+# Handle rows with valid geometries
+valid_geom_mask = out_df['geom'].apply(lambda x: hasattr(x, 'x') and hasattr(x, 'y'))
+out_df['lon_epsg4326'] = "MISSING COORDS"
+out_df['lat_epsg4326'] = "MISSING COORDS"
+
+if valid_geom_mask.any():
+    valid_df = out_df[valid_geom_mask].copy()
+    out_gdf = gpd.GeoDataFrame(valid_df, geometry='geom', crs=core_points.crs)
+    out_gdf = out_gdf.to_crs('EPSG:4326')
+    out_df.loc[valid_geom_mask, 'lon_epsg4326'] = out_gdf.geometry.x.values
+    out_df.loc[valid_geom_mask, 'lat_epsg4326'] = out_gdf.geometry.y.values
+
+# %% 5.0 Write the file
 out_df.to_csv(f'{data_dir}/bradford/out_data/est_wtd_depth_at_cores.csv', index=False)
 
 

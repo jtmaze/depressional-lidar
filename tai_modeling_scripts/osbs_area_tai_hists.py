@@ -1,62 +1,60 @@
 # %%  1.0 Libraries and File Paths
 
+import sys
+PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from basin_attributes import WetlandBasin
-from basin_dynamics import BasinDynamics, WellStageTimeseries
+from wetland_utilities.basin_attributes import WetlandBasin
+from wetland_utilities.basin_dynamics import BasinDynamics, WellStageTimeseries
 
 
 site = 'osbs'
-source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_veg.tif'
+source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_neon_sep2016.tif'
 basins_path = f'D:/depressional_lidar/data/{site}/in_data/{site}_basins_assigned_wetland_ids.shp'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/stage_data/{site}_core_wells_tracked_datum.csv'
+well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/stage_data/{site}_daily_well_depth_Fall2025.csv'
+out_dir = f'D:/depressional_lidar/data/{site}/out_data/basin_tai_stats/'
 
-basin_footprints = gpd.read_file(basins_path)
 well_points = gpd.read_file(well_points_path)
-well_points = well_points[(well_points['site'] == site) & (well_points['type'] == 'core_well')]
+well_points = well_points[(well_points['site'] == "OSBS") & (well_points['type'].isin(['main_doe_well', 'aux_wetland_well']))]
 
-# %% 1.1 Clean up the well points gdf
-
-well_points.rename(
-        columns={
-            'rtk_elevat': 'rtk_elevation'
-        },
-        inplace=True
-    )
-
-# %% 1.2 Make a list of wetland_ids to calculate timeseries
-wetland_ids = [
-    'Ross', 'Brantley North', 'Devils Den', 
-    'West Ford', 'Fish Cove'
-]
-
-area_ts_dict = {}
-tai_ts_dict = {}
+# %% 1.1 Make a list of wetland_ids to calculate timeseries
+wetland_ids = well_points['wetland_id'].unique()
 
 # %% 2.0 Run the BasinDynamics Class for each wetland_id
 
+hypsometry_cdfs_dict = {}
+area_ts_dict = {}
+tai_ts_dict = {}
+
+
 for i in wetland_ids:
-    f = basin_footprints[basin_footprints['wetland_id'] == i]
     pt = well_points[well_points['wetland_id'] == i]
     b = WetlandBasin(
         wetland_id=i,
         source_dem_path=source_dem,
-        footprint=f,
+        footprint=None,
         well_point_info=pt,
-        transect_buffer=25
+        transect_buffer=250
     )
+    hyp = b.calculate_hypsometry("total_cdf")
 
     well_stage = WellStageTimeseries.from_csv(
         well_stage_path,
         well_id=i,
+        basin=b,
         date_column='date',
-        water_level_column='water_level',
-        well_id_column='well_id'
+        water_level_column='well_depth_m',
+        well_id_column='well_id',
+        crop_dates=("2022-03-01", "2026-01-01")
     )
 
     dynamics = BasinDynamics(
@@ -66,13 +64,59 @@ for i in wetland_ids:
     )
 
     area_ts = dynamics.calculate_inundated_area_timeseries()
-    tai_ts = dynamics.calculate_tai_timeseries(min_depth=-0.05, max_depth=0.05)
+    tai_ts = dynamics.calculate_tai_timeseries(min_depth=-0.10, max_depth=0.10)
+    dynamics.map_tai_stacks(max_depth=0.10, min_depth=-0.10)
     
+    hypsometry_cdfs_dict[i] = hyp
     area_ts_dict[i] = area_ts
     tai_ts_dict[i] = tai_ts
 
 
-# %% 3.0 PDF of inundated Area by Wetland
+# %% 3.0 Write the hypsometry, tai, and inundation data
+
+hyp_frames = []
+for wid, hyp in hypsometry_cdfs_dict.items():
+    cum_area, elevations = hyp
+    df = pd.DataFrame({
+        'wetland_id': wid,
+        'elevation_m': elevations,
+        'cum_area_m2': cum_area
+    })
+    hyp_frames.append(df)
+hypsometry_df = pd.concat(hyp_frames, ignore_index=True)
+hypsometry_df.to_csv(os.path.join(out_dir, 'hypsometry_cdfs_long.csv'), index=False)
+
+area_frames = []
+for wid, series in area_ts_dict.items():
+    s = series.copy()
+    df = s.reset_index()
+    df.columns = ['date', 'area_m2']
+    df['wetland_id'] = wid
+    area_frames.append(df)
+area_long = pd.concat(area_frames, ignore_index=True)
+area_long['date'] = pd.to_datetime(area_long['date'])
+area_long.to_csv(os.path.join(out_dir, 'area_timeseries_long.csv'), index=False)
+
+tai_frames = []
+for wid, series in tai_ts_dict.items():
+    s = series.copy()
+    df = s.reset_index()
+    df.columns = ['date', 'tai_m2']
+    df['wetland_id'] = wid
+    tai_frames.append(df)
+tai_long = pd.concat(tai_frames, ignore_index=True)
+tai_long['date'] = pd.to_datetime(tai_long['date'])
+tai_long.to_csv(os.path.join(out_dir, 'tai_timeseries_long.csv'), index=False)
+
+
+
+
+
+
+# %%
+
+
+
 
 fig, ax = plt.subplots(figsize=(8, 6))
 for wid, ats in area_ts_dict.items():

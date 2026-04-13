@@ -24,6 +24,7 @@ temp_gdf_path = f'{data_dir}/temp/gdf_test_data.shp'
 size = 5
 sd_thresh = 0.01
 slope_thresh = 0.005
+min_area = 10
 
 # %% 2.0 Read the DEM and apply a light gaussian filter
 
@@ -113,7 +114,7 @@ props = measure.regionprops(labels, intensity_image=dem)
 records = []
 
 for prop in props:
-    if prop.area < 25:  # tune this
+    if prop.area < min_area:  
         continue
 
     est_wse = np.percentile(prop.intensity_image[prop.image], 25)

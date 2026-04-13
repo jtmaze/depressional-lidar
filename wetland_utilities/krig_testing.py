@@ -1,13 +1,14 @@
 # %% 1.0 Libraries and file paths
 import sys
-# NOTE: This shim facilites imports by bringing the root directory higher
+# NOTE: This shim facilites lateral imports by bringing the root directory higher
 PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-import numpy as np
 import pandas as pd
+import numpy as np
 import geopandas as gpd
+import matplotlib.pyplot as plt
 
 from wetland_utilities.wtd_wetlandscape_krig import WellArray, WTDSurface
 
@@ -17,7 +18,6 @@ well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 # %% 2.0 Read data
 
 well_ts = pd.read_csv(well_ts_path)
-#print(well_ts.head(10))
 
 well_points = (
     gpd.read_file(well_points_path)[['wetland_id', 'type', 'geometry', 'z_dem', 'site']]
@@ -28,74 +28,143 @@ basin_13_ids = ['13_263', '13_267', '13_271', '13_410', '13_274', 'Donor_wetland
 well_points = well_points[~well_points['wetland_id'].isin(basin_13_ids)]
 print(len(well_points))
 
-boundary = well_points.geometry.unary_union.convex_hull.buffer(500)
+boundary = well_points.geometry.union_all().convex_hull.buffer(500)
 
-import matplotlib.pyplot as plt
+# Quickly visualize the wells
 fig, ax = plt.subplots()
 well_points.plot(ax=ax, color='red', markersize=20)
 gpd.GeoSeries([boundary]).plot(ax=ax, facecolor='none', edgecolor='blue')
 plt.show()
 
-# %% 3.0 
+# %% 3.0 Run Kriging on Depth Scenarios
 
-well_array_early = WellArray(
+well_array_med = WellArray(
     well_pts=well_points,
     well_ts=well_ts,
-    begin='2023-03-01',
-    end='2023-03-28'
+    begin='2020-03-01',
+    end='2027-03-28',
+    percentile=50
 )
 
-wtd_surface_early = WTDSurface(
-    well_array=well_array_early,
-    krig_params={'variogram_model': 'linear', 'n_lags': 6},
-    coarse_grid_dims=(1000, 1000), 
-    boundary=boundary
+wtd_surface_med_gauss = WTDSurface(
+    well_array=well_array_med,
+    krig_params={
+        'variogram_model': 'gaussian',
+        'variogram_parameters': [3, 5000, 0],  # [full_sill, range, nugget]
+        'n_lags': 15,
+    },
+    coarse_grid_dims=(1000, 1000),
+    boundary=boundary,
+    plot_variogram=True
 )
 
-wtd_surface_early.plot_interpolation_result()
-wtd_surface_early.plot_sigma_squared()
-
-well_array_late = WellArray(
-    well_pts=well_points,
-    well_ts=well_ts,
-    begin='2024-04-25',
-    end='2024-04-26'
+wtd_surface_med_gauss_bnug = WTDSurface(
+    well_array=well_array_med,
+    krig_params={
+        'variogram_model': 'gaussian',
+        'variogram_parameters': [3, 5000, 0.1],  # [full_sill, range, nugget]
+        'n_lags': 15,
+    },
+    coarse_grid_dims=(1000, 1000),
+    boundary=boundary,
+    plot_variogram=True
 )
 
-wtd_surface_late = WTDSurface(
-    well_array=well_array_late,
-    krig_params={'variogram_model': 'linear', 'n_lags': 6},
-    coarse_grid_dims=(1000, 1000), 
-    boundary=boundary
+wtd_surface_med_exp = WTDSurface(
+    well_array=well_array_med,
+    krig_params={
+        'variogram_model': 'exponential',
+        'variogram_parameters': [3, 5000, 0],  # [full_sill, range, nugget]
+        'n_lags': 15,
+    },
+    coarse_grid_dims=(1000, 1000),
+    boundary=boundary,
+    plot_variogram=True
 )
 
+wtd_surface_med_gauss.plot_masked_result(sigma_threshold=1.0)
+wtd_surface_med_gauss_bnug.plot_masked_result(sigma_threshold=1.0)
+wtd_surface_med_exp.plot_masked_result(sigma_threshold=1.5)
 
+lags = wtd_surface_med_gauss.okr_result['lags']
+print(lags)
 
+# %% 5.0 Summarize the pair counts for each lag dist
 
-# %% 4.0 Plot to compare differences as a map. 
+# pull x/y coordinates
+coords = np.column_stack([
+    well_points.geometry.x.to_numpy(),
+    well_points.geometry.y.to_numpy()
+])
 
-array_early = wtd_surface_early.okr_result['z']
-array_late = wtd_surface_late.okr_result['z']
-diff = array_late - array_early  # positive = water table rose, negative = fell
+# pairwise Euclidean distance matrix
+dx = coords[:, 0][:, None] - coords[:, 0][None, :]
+dy = coords[:, 1][:, None] - coords[:, 1][None, :]
+dist = np.hypot(dx, dy)
 
-extent = [
-    wtd_surface_early._x_grid.min(), wtd_surface_early._x_grid.max(),
-    wtd_surface_early._y_grid.min(), wtd_surface_early._y_grid.max(),
-]
-vmax = np.nanmax(np.abs(diff))
+n_lags = len(lags)
+dmax = dist[np.triu_indices_from(dist, k=1)].max()
+dmin = dist[np.triu_indices_from(dist, k=1)].min()
+dd = (dmax - dmin) / n_lags
+bins = [dmin + n * dd for n in range(n_lags)]
+bins.append(dmax + 0.001)
 
-fig, ax = plt.subplots(figsize=(8, 8))
-im = ax.imshow(diff, extent=extent, origin='lower', cmap='RdBu', aspect='auto',
-               vmin=-vmax, vmax=vmax)
-plt.colorbar(im, ax=ax, label='WSE change (m): late - early')
-gpd.GeoSeries([boundary]).plot(ax=ax, facecolor='none', edgecolor='black', linewidth=1.5)
-ax.set_title('Water Surface Elevation Change')
-plt.show()
+# Count unique pairs per bin (upper triangle only)
+iu = np.triu_indices_from(dist, k=1)
+pair_dists = dist[iu]
 
+pair_counts = []
+for n in range(n_lags):
+    count = int(((pair_dists >= bins[n]) & (pair_dists < bins[n + 1])).sum())
+    pair_counts.append(count)
 
+lag_pair_df = pd.DataFrame({
+    'low_dist_meters': np.round(bins[:-1], -1).astype(int),
+    'high_dist_meters': np.round(bins[1:], -1).astype(int),
+    'n_pairs': pair_counts
+})
 
+print(lag_pair_df.to_string(index=False))
 
+# %% 6.0 Write the results
 
+x_flat = wtd_surface_med._x_grid.ravel().astype(np.float32)
+y_flat = wtd_surface_med._y_grid.ravel().astype(np.float32)
+wetland_ids = wtd_surface_med.well_array.wtd_points['wetland_id'].to_list()
+
+out_dir = r"D:/depressional_lidar/data/bradford/out_data/well_wse_interpolations"
+
+# # 5.1. CSV ####
+weights_df = pd.DataFrame(weights, columns=wetland_ids)
+# weights_df.to_csv(f"{out_dir}/kriging_weights.csv", index=False, float_format="%.6f")
+
+# # 5.2. HDF5 ###
+with pd.HDFStore(f"{out_dir}/kriging_weights_zero_nug.h5", mode="w") as store:
+    store.put("weights", weights_df, format="fixed")
+    store.put("grid_coords", pd.DataFrame({"x": x_flat, "y": y_flat}), format="fixed")
+
+metadata = {
+    "description": "Zero nugget constraint. Ordinary kriging weights for Bradford median-WSE interpolation surface.",
+    "weights_shape": list(weights.shape),
+    "wetland_ids": wetland_ids,
+    "grid_shape": list(wtd_surface_med._x_grid.shape),
+    "crs": "EPSG:26917",
+    "notes": [
+        "Rows correspond to flattened kriging grid cells in row-major order.",
+        "Columns correspond to wells in the order listed in well_ids.",
+        "NOTE fitted variogram with a zero nugget constraint."
+    ]
+}
+
+import json
+with open(f"{out_dir}/kriging_weights_metadata_zero_nug.json", "w") as f:
+    json.dump(metadata, f, indent=2)
+
+wtd_surface_med.write_masked_tif(
+    out_path='D:/depressional_lidar/data/bradford/out_data/well_wse_interpolations/WSE_med_zero_nug.tif',
+    sigma_threshold=1.5,
+    crs='EPSG:26917'
+)
 
 
 # %%

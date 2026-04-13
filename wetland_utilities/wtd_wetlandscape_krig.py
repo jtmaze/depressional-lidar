@@ -7,6 +7,8 @@ import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import pykrige as pkr
+import rasterio as rio
+from rasterio.transform import from_bounds
 
 @dataclass
 class WellArray:
@@ -24,35 +26,41 @@ class WellArray:
     well_ts: pd.DataFrame       # must have: wetland_id, date, well_depth_m
     begin: str                  # date string, e.g. "2024-01-01"
     end: str                    # date string, e.g. "2024-12-31"
+    percentile: float = None    # if set (0-100), aggregate by this percentile; otherwise use mean
 
     def __post_init__(self):
         filtered = self._filter_timeseries()
-        mean_depth = self._group_mean_depth(filtered)
+        mean_depth = self._group_well_depth(filtered)
         self.wtd_points = self._join_and_compute_wse(mean_depth)
 
     def _filter_timeseries(self) -> pd.DataFrame:
         ts = self.well_ts.copy()
-        ts[ts['flag'] != 2]
         ts['date'] = pd.to_datetime(ts['date'])
         begin = pd.to_datetime(self.begin)
         end = pd.to_datetime(self.end)
 
-        # NOTE: Ignoring flagging issues on well data for now
+        ts = ts[~ts['well_depth_m'].isna()]
+
         if begin == end:
             return ts[ts['date'] == begin]
         return ts[(ts['date'] >= begin) & (ts['date'] <= end)]
 
-    @staticmethod
-    def _group_mean_depth(filtered_ts: pd.DataFrame) -> pd.DataFrame:
+    def _group_well_depth(self, filtered_ts: pd.DataFrame) -> pd.DataFrame:
+        if self.percentile is not None:
+            return (
+                filtered_ts
+                .groupby('wetland_id', as_index=False)
+                .agg(well_depth=('well_depth_m', lambda x: np.percentile(x, self.percentile)))
+            )
         return (
             filtered_ts
             .groupby('wetland_id', as_index=False)
-            .agg(mean_depth=('well_depth_m', 'mean'))
+            .agg(well_depth=('well_depth_m', 'mean'))
         )
 
-    def _join_and_compute_wse(self, mean_depth: pd.DataFrame) -> gpd.GeoDataFrame:
-        pts = self.well_pts.merge(mean_depth, on='wetland_id', how='inner')
-        pts['wse_m'] = pts['z_dem'] - pts['mean_depth']
+    def _join_and_compute_wse(self, well_depth: pd.DataFrame) -> gpd.GeoDataFrame:
+        pts = self.well_pts.merge(well_depth, on='wetland_id', how='inner')
+        pts['wse_m'] = pts['z_dem'] + pts['well_depth']
         return pts
 
 @dataclass 
@@ -65,6 +73,7 @@ class WTDSurface:
     krig_params: dict  # {variogram_model: str, nlags: int}
     coarse_grid_dims: tuple  # (nx, ny) grid resolution
     boundary: gpd.GeoDataFrame
+    plot_variogram: bool
 
     def __post_init__(self):
         self._samples = self._extract_xyz()
@@ -96,10 +105,24 @@ class WTDSurface:
             self._samples['y'],
             self._samples['z'],
             variogram_model=self.krig_params.get('variogram_model', 'linear'),
-            nlags=self.krig_params.get('nlags', 6),
+            variogram_parameters=self.krig_params.get('variogram_parameters', None),  # <-- add this
+            nlags=self.krig_params.get('n_lags', 6),
+            enable_plotting=self.plot_variogram,
+            enable_statistics=self.krig_params.get('enable_statistics', True),
+            verbose=True
         )
-        z_result, sigma_squared = ok.execute('grid', self._x_grid, self._y_grid)
-        return {'z': np.asarray(z_result), 'sigma_squared': np.asarray(sigma_squared)}
+
+        variogram_func = ok.variogram_function
+        print(variogram_func)
+
+        z_result, sigma_squared, weights = ok.execute('grid', self._x_grid, self._y_grid)
+        return {
+            'z': np.asarray(z_result), 
+            'sigma_squared': np.asarray(sigma_squared), 
+            'weights': weights,
+            'variogram_model_parameters': ok.variogram_model_parameters, 
+            'lags': ok.lags
+        }
 
     # ---- Visualization helpers ------------------------------------------------
 
@@ -138,6 +161,18 @@ class WTDSurface:
             title='Kriging Uncertainty (prediction std dev)',
         )
 
+    def plot_weights(self, point_index: int = 0):
+        """Show kriging weight grid for a single sample point (weights shape: n_grid x n_pts)."""
+        weights = self.okr_result['weights']  # (n_grid_points, n_pts)
+        ny, nx = len(self._y_grid), len(self._x_grid)
+        grid = weights[:, point_index].reshape(ny, nx)
+        self._base_plot(
+            grid,
+            cmap='Blues',
+            label='Kriging Weight',
+            title=f'Kriging Weights — Sample Point {point_index}',
+        )
+
     def plot_masked_result(self, sigma_threshold: float):
         """Show interpolation masked where uncertainty exceeds sigma_threshold."""
         sigma = self.okr_result['sigma_squared'] ** 0.5
@@ -148,6 +183,33 @@ class WTDSurface:
             label='Interpolated WSE (m)',
             title=f'Kriging Result (masked where uncertainty > {sigma_threshold} m)',
         )
+
+    def write_masked_tif(self, out_path: str, sigma_threshold: float, crs: str):
+        """Write 2-band GeoTIFF: band 1 = masked kriging result, band 2 = uncertainty (std dev)."""
+        sigma = self.okr_result['sigma_squared'] ** 0.5
+        masked_z = np.where(sigma <= sigma_threshold, self.okr_result['z'], np.nan)
+
+        ny, nx = masked_z.shape
+        transform = from_bounds(
+            self._x_grid.min(), self._y_grid.min(),
+            self._x_grid.max(), self._y_grid.max(),
+            nx, ny,
+        )
+
+        profile = {
+            'driver': 'GTiff',
+            'dtype': 'float32',
+            'width': nx,
+            'height': ny,
+            'count': 2,
+            'crs': crs,
+            'transform': transform,
+            'nodata': np.nan,
+        }
+
+        with rio.open(out_path, 'w', **profile) as dst:
+            dst.write(np.flipud(masked_z).astype(np.float32), 1)
+            dst.write(np.flipud(sigma).astype(np.float32), 2)
 
     # def plot_contour(self):
     #     fig, ax = plt.subplots(figsize=(7, 7))

@@ -143,7 +143,6 @@ class BasinDynamics:
         """Sum of (cell values * cell_area) at each timestep."""
         cell_size = abs(self.basin.clipped_dem.transform.a)
         cell_area = cell_size * cell_size
-        print(cell_area)
         areas = {}
         for date, arr in stacks.items():
             arr = arr.astype(np.float32)
@@ -241,31 +240,6 @@ class BasinDynamics:
         dem = self.basin.clipped_dem.dem
         depth = water_elevation - dem
         return np.where(np.isnan(dem), np.nan, depth)
-
-    def _sigmoid_flux(self, depth: np.ndarray, sigmoid_params: dict) -> np.ndarray:
-        """Custom sigmoid """
-
-        y_0 = sigmoid_params['y_0']
-        y_f = sigmoid_params['y_f']
-        k = sigmoid_params['k']
-        x_mid = sigmoid_params['x_mid'] # Transition depth
-        
-        return y_0 + ((y_f - y_0) / (1 + np.exp(-k * (depth - x_mid))))
-
-    def calculate_ch4_flux_map(self, water_elevation: float, sigmoid_params: dict) -> np.ndarray:
-        """CH4 flux (mmol m-2 d-1) as sigmoid function of water depth."""
-        dem = self.basin.clipped_dem.dem
-
-        depth = self.calculate_depth_map(water_elevation)
-        flux = self._sigmoid_flux(depth, sigmoid_params)
-        return np.where(np.isnan(dem), np.nan, flux)
-
-    def calculate_co2_flux_map(self, water_elevation: float, sigmoid_params: dict) -> np.ndarray:
-        """CO2 flux (mmol m-2 d-1) as sigmoid function of water depth."""
-        dem = self.basin.clipped_dem.dem
-        depth = self.calculate_depth_map(water_elevation)
-        flux = self._sigmoid_flux(depth, sigmoid_params)
-        return np.where(np.isnan(dem), np.nan, flux)
 
     # ── Visualization: single-timestep maps ─────────────────────────────────
 
@@ -370,16 +344,6 @@ class BasinDynamics:
     def calculate_depth_stacks(self) -> Dict[pd.Timestamp, np.ndarray]:
         return self._calculate_map_stacks(self.calculate_depth_map)
 
-    def calculate_ch4_stacks(self, sigmoid_params: dict) -> Dict[pd.Timestamp, np.ndarray]:
-        return self._calculate_map_stacks(
-            lambda we: self.calculate_ch4_flux_map(we, sigmoid_params)
-        )
-
-    def calculate_co2_stacks(self, sigmoid_params: dict) -> Dict[pd.Timestamp, np.ndarray]:
-        return self._calculate_map_stacks(
-            lambda we: self.calculate_co2_flux_map(we, sigmoid_params)
-        )
-
     def aggregate_inundation_stacks(self, inundation_stacks: Dict[pd.Timestamp, np.ndarray] = None) -> np.ndarray:
         stacks = inundation_stacks or self.calculate_inundation_stacks()
         return self._aggregate_stacks(stacks, method="frequency")
@@ -395,14 +359,6 @@ class BasinDynamics:
 
     def aggregate_depth_stacks(self, stacks: Dict[pd.Timestamp, np.ndarray] = None) -> np.ndarray:
         stacks = stacks or self.calculate_depth_stacks()
-        return self._aggregate_stacks(stacks, method="mean")
-
-    def aggregate_ch4_stacks(self, sigmoid_params: dict, stacks: Dict[pd.Timestamp, np.ndarray] = None) -> np.ndarray:
-        stacks = stacks or self.calculate_ch4_stacks(sigmoid_params)
-        return self._aggregate_stacks(stacks, method="mean")
-
-    def aggregate_co2_stacks(self, sigmoid_params: dict, stacks: Dict[pd.Timestamp, np.ndarray] = None) -> np.ndarray:
-        stacks = stacks or self.calculate_co2_stacks(sigmoid_params)
         return self._aggregate_stacks(stacks, method="mean")
     
     def calculate_inundated_area_timeseries(
@@ -421,14 +377,6 @@ class BasinDynamics:
         stacks = tai_stacks or self.calculate_tai_stacks(max_depth, min_depth)
         return self._calculate_area_timeseries(stacks)
 
-    def calculate_ch4_timeseries(self, sigmoid_params: dict, stacks: Dict[pd.Timestamp, np.ndarray] = None) -> pd.Series:
-        stacks = stacks or self.calculate_ch4_stacks(sigmoid_params)
-        return self._calculate_area_timeseries(stacks)
-
-    def calculate_co2_timeseries(self, sigmoid_params: dict, stacks: Dict[pd.Timestamp, np.ndarray] = None) -> pd.Series:
-        stacks = stacks or self.calculate_co2_stacks(sigmoid_params)
-        return self._calculate_area_timeseries(stacks)
-    
     # ── Visualization: timeseries ───────────────────────────────────────────
 
     def plot_inundated_area_timeseries(self, area_timeseries: pd.Series = None):
@@ -449,42 +397,6 @@ class BasinDynamics:
             ylabel="TAI Area (m²)",
             color='Orange',
         )
-
-    def plot_ch4_timeseries(self, sigmoid_params: dict, ch4_timeseries: pd.Series = None):
-        if ch4_timeseries is None:
-            ch4_timeseries = self.calculate_ch4_timeseries(sigmoid_params)
-        self._plot_area_timeseries(
-            ch4_timeseries,
-            title=f"{self.well_stage.well_id} CH₄ Flux Timeseries",
-            ylabel="Total CH₄ Flux (mmol d⁻¹)",
-            color='red',
-        )
-
-    def plot_co2_timeseries(self, sigmoid_params: dict, co2_timeseries: pd.Series = None):
-        if co2_timeseries is None:
-            co2_timeseries = self.calculate_co2_timeseries(sigmoid_params)
-        self._plot_area_timeseries(
-            co2_timeseries,
-            title=f"{self.well_stage.well_id} CO₂ Flux Timeseries",
-            ylabel="Total CO₂ Flux (mmol d⁻¹)",
-            color='purple',
-        )
-
-    def plot_sigmoid_curve(self, sigmoid_params: dict, depth_range: tuple = (-1.5, 1)):
-
-        domain = np.linspace(depth_range[0], depth_range[1], 200)
-        flux = self._sigmoid_flux(domain, sigmoid_params)
-        plt.figure(figsize=(8, 5))
-        plt.plot(domain, flux)
-        plt.axvline(sigmoid_params['x_mid'], color='red', linestyle='--', label='x₀')
-        plt.axhline(0, color='black', linestyle='-', label='0')
-        plt.xlabel('Depth (m)')
-        plt.ylabel('Flux (mmol m⁻² d⁻¹)')
-        plt.title('Sigmoid Flux Curve')
-        plt.legend()
-        plt.grid()
-        plt.show()
-
 
     # ── Visualization: histograms ──────────────────────────────────────────
 
@@ -527,26 +439,6 @@ class BasinDynamics:
         plt.title(f"{self.well_stage.well_id} TAI Area Histogram\nDepth {min_depth} to {max_depth} m")
         plt.grid()
         plt.show()
-
-    def plot_ch4_histogram(self, sigmoid_params: dict, ch4_timeseries: pd.Series = None):
-        if ch4_timeseries is None:
-            ch4_timeseries = self.calculate_ch4_timeseries(sigmoid_params)
-        self._plot_area_histogram(
-            ch4_timeseries,
-            title=f"{self.well_stage.well_id} CH₄ Flux Histogram",
-            xlabel="Total CH₄ Flux (mmol d⁻¹)",
-            color='red',
-        )
-
-    def plot_co2_histogram(self, sigmoid_params: dict, co2_timeseries: pd.Series = None):
-        if co2_timeseries is None:
-            co2_timeseries = self.calculate_co2_timeseries(sigmoid_params)
-        self._plot_area_histogram(
-            co2_timeseries,
-            title=f"{self.well_stage.well_id} CO₂ Flux Histogram",
-            xlabel="Total CO₂ Flux (mmol d⁻¹)",
-            color='purple',
-        )
 
     # ── Visualization: frequency / mean maps ───────────────────────────────
 
@@ -644,47 +536,6 @@ class BasinDynamics:
         ax.set_title('')
 
         plt.show()
-
-    def map_ch4_stacks(self, sigmoid_params: dict, ch4_frequency: np.array = None, show_basin_footprint: bool = False):
-        if ch4_frequency is None:
-            ch4_frequency = self.aggregate_ch4_stacks(sigmoid_params)
-
-        colors = ["green", "white", "red"]
-        custom_cmap = LinearSegmentedColormap.from_list("green_white_red_cmap", colors, N=256)
-
-        # Center the color map at zero
-        abs_max = np.nanmax(np.abs(ch4_frequency))
-
-        self._map_frequency(
-            ch4_frequency,
-            title='Mean CH₄ Flux Map',
-            cbar_label='CH₄ Flux (mmol m⁻² d⁻¹)',
-            cmap=custom_cmap,
-            show_basin_footprint=show_basin_footprint,
-            as_percent=False,
-            vmin=-abs_max,
-            vmax=abs_max
-        )
-
-    def map_co2_stacks(self, sigmoid_params: dict, co2_frequency: np.array = None, show_basin_footprint: bool = False):
-        if co2_frequency is None:
-            co2_frequency = self.aggregate_co2_stacks(sigmoid_params)
-
-        colors = ["green", "white", "red"]
-        custom_cmap = LinearSegmentedColormap.from_list("green_white_red_cmap", colors, N=256)
-
-        abs_max = np.nanmax(np.abs(co2_frequency))
-
-        self._map_frequency(
-            co2_frequency,
-            title='Mean CO₂ Flux Map',
-            cbar_label='CO₂ Flux (mmol m⁻² d⁻¹)',
-            cmap=custom_cmap,
-            show_basin_footprint=show_basin_footprint,
-            as_percent=False,
-            vmin=-abs_max,
-            vmax=abs_max
-        )
 
     def map_depth_stacks(self, depth_frequency: np.array = None, show_basin_footprint: bool = False):
         if depth_frequency is None:

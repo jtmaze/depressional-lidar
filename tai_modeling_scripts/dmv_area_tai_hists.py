@@ -14,24 +14,17 @@ import matplotlib.pyplot as plt
 from wetland_utilities.basin_attributes import WetlandBasin
 from wetland_utilities.basin_dynamics import BasinDynamics, WellStageTimeseries
 
+site = 'delmarva'
 
-site = 'bradford'
-
-well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-source_dem = f'D:/depressional_lidar/data/{site}/in_data/{site}_DEM_cleaned_USGS.tif'
-well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/stage_data/{site}_daily_well_depth_Winter2025.csv'
+source_dem = f'D:/depressional_lidar/data/{site}/in_data/2007_1m_DEM_modified.tif'
+well_points_path = f'D:/depressional_lidar/data/{site}/{site}_well_points.shp'
+well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/waterlevel_data/daily_well_depth_Fall2025.csv'
 out_dir = f'D:/depressional_lidar/data/{site}/out_data/basin_tai_stats/'
 
 well_points = gpd.read_file(well_points_path)
-
-well_points = well_points[
-    ((well_points['type'] == 'main_doe_well') | (well_points['type'] == 'aux_wetland_well'))
-]
-well_points = well_points[well_points['site'] == 'Bradford']
-
-# %% 1.1 Clean up the well points gdf
-
-# %% 1.2 Make a list of wetland_ids to calculate timeseries
+well_points = well_points[well_points['type'] == 'SW']
+print(len(well_points))
+# %% 1.1 Make a list of wetland_ids to calculate timeseries
 wetland_ids = well_points['wetland_id'].unique()
 
 # %% 2.0 Run the BasinDynamics Class for each wetland_id
@@ -39,6 +32,7 @@ wetland_ids = well_points['wetland_id'].unique()
 hypsometry_cdfs_dict = {}
 area_ts_dict = {}
 tai_ts_dict = {}
+
 
 for i in wetland_ids:
     pt = well_points[well_points['wetland_id'] == i]
@@ -54,10 +48,11 @@ for i in wetland_ids:
     well_stage = WellStageTimeseries.from_csv(
         well_stage_path,
         well_id=i,
-        basin=i,
-        date_column='date',
+        basin=b,
+        date_column='day',
         water_level_column='well_depth_m',
-        well_id_column='wetland_id'
+        well_id_column='well_id',
+        crop_dates=("2022-03-01", "2026-01-01")
     )
 
     dynamics = BasinDynamics(
@@ -67,12 +62,13 @@ for i in wetland_ids:
     )
 
     area_ts = dynamics.calculate_inundated_area_timeseries()
-    tai_ts = dynamics.calculate_tai_timeseries(max_depth=0.10, min_depth=-0.10)
+    tai_ts = dynamics.calculate_tai_timeseries(min_depth=-0.10, max_depth=0.10)
+    dynamics.map_tai_stacks(max_depth=0.10, min_depth=-0.10)
     
     hypsometry_cdfs_dict[i] = hyp
     area_ts_dict[i] = area_ts
     tai_ts_dict[i] = tai_ts
-    
+
 
 # %% 3.0 Write the hypsometry, tai, and inundation data
 
@@ -110,7 +106,11 @@ tai_long = pd.concat(tai_frames, ignore_index=True)
 tai_long['date'] = pd.to_datetime(tai_long['date'])
 tai_long.to_csv(os.path.join(out_dir, 'tai_timeseries_long.csv'), index=False)
 
-# %% 3.0 PDF of inundated Area by Wetland
+
+# %%
+
+
+
 
 fig, ax = plt.subplots(figsize=(8, 6))
 for wid, ats in area_ts_dict.items():
@@ -122,7 +122,7 @@ for wid, ats in area_ts_dict.items():
 plt.xlabel('Inundated Area (m2)')
 plt.ylabel('Density')
 plt.title('PDF of Inundated Area by Wetland')
-#plt.legend()
+plt.legend()
 plt.tight_layout()
 
 # %% 3.1 PDF of inundated area by Wetland rescaled 0-1
@@ -153,7 +153,7 @@ for wid, tts in tai_ts_dict.items():
     # Removing zero area for now
     sns.kdeplot(tai, label=wid, ax=ax, fill=True, alpha=0.3)
 
-plt.xlabel('TAI Area (10cm to -10cm) (m2)')
+plt.xlabel('TAI Area (5cm to -5cm) (m2)')
 plt.ylabel('Density')
 plt.title('PDF of TAI Area by Wetland')
 plt.legend()
@@ -203,11 +203,11 @@ boxplot_df = pd.DataFrame({
 fig, ax = plt.subplots(figsize=(12, 6))
 sns.boxplot(data=boxplot_df, x='wetland_id', y='tai_fraction', ax=ax)
 
-plt.xlabel('', fontsize=16)
 plt.ylabel('TAI Area % Relative to Max Wetland Area', fontsize=16)
-plt.title('TAI Area % of Maximum Wetland Area')
-plt.xticks(rotation=15, fontsize=14)
+plt.title('TAI Area % of Maximum Wetland Area', fontsize=18)
+plt.xticks(fontsize=14, rotation=15)
 plt.yticks(fontsize=14)
+plt.xlabel('', fontsize=16)
 plt.tight_layout()
 plt.show()
 
