@@ -14,15 +14,17 @@ from rasterio.mask import mask
 wbe = wbw.WbEnvironment()
 
 site = 'delmarva'
-sub_site = 'JR'
-lidar_data = 'neon_may2025' # NOTE: 2016 DEM at OSBS has lowest water levels. Still some flooding. 
+sub_site = None
+lidar_data = 'NateJ_2007' # NOTE: 2016 DEM at OSBS has lowest water levels. Still some flooding. 
 os.chdir(f'D:/depressional_lidar/data/{site}/')
 
 if site == 'bradford':
     src_path = './in_data/dem_mosaic_all_basins.tif'
 elif site == 'osbs': 
     src_path = f'./in_data/dem_mosaic_all_basins_{lidar_data}.tif'
-elif site == 'delmarva':
+elif site == 'delmarva' and sub_site is None:
+    src_path = f'./in_data/2007_1m_DEM.tif'
+elif site == 'delmarva' and sub_site is not None:
     src_path = f'./in_data/dem_mosaic_{sub_site}.tif'
 
 processing_dir = r'C:\Users\jtmaz\Documents\temp'

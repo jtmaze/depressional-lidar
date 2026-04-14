@@ -46,52 +46,28 @@ well_array_med = WellArray(
     percentile=50
 )
 
-wtd_surface_med_gauss = WTDSurface(
-    well_array=well_array_med,
-    krig_params={
-        'variogram_model': 'gaussian',
-        'variogram_parameters': [3, 5000, 0],  # [full_sill, range, nugget]
-        'n_lags': 15,
-    },
-    coarse_grid_dims=(1000, 1000),
-    boundary=boundary,
-    plot_variogram=True
-)
-
-wtd_surface_med_gauss_bnug = WTDSurface(
-    well_array=well_array_med,
-    krig_params={
-        'variogram_model': 'gaussian',
-        'variogram_parameters': [3, 5000, 0.1],  # [full_sill, range, nugget]
-        'n_lags': 15,
-    },
-    coarse_grid_dims=(1000, 1000),
-    boundary=boundary,
-    plot_variogram=True
-)
-
-wtd_surface_med_exp = WTDSurface(
+wtd_surface_med = WTDSurface(
     well_array=well_array_med,
     krig_params={
         'variogram_model': 'exponential',
-        'variogram_parameters': [3, 5000, 0],  # [full_sill, range, nugget]
-        'n_lags': 15,
+        'variogram_parameters': None,
+        'n_lags': 10,
     },
     coarse_grid_dims=(1000, 1000),
     boundary=boundary,
     plot_variogram=True
 )
 
-wtd_surface_med_gauss.plot_masked_result(sigma_threshold=1.0)
-wtd_surface_med_gauss_bnug.plot_masked_result(sigma_threshold=1.0)
-wtd_surface_med_exp.plot_masked_result(sigma_threshold=1.5)
+# wtd_surface_med_gauss.plot_masked_result(sigma_threshold=1.0)
+wtd_surface_med.plot_masked_result(sigma_threshold=1.25)
 
-lags = wtd_surface_med_gauss.okr_result['lags']
-print(lags)
+lags = wtd_surface_med.okr_result['lags']
+weights = wtd_surface_med.okr_result['weights']
+
+print(wtd_surface_med.okr_result['variogram_model_parameters'])
 
 # %% 5.0 Summarize the pair counts for each lag dist
 
-# pull x/y coordinates
 coords = np.column_stack([
     well_points.geometry.x.to_numpy(),
     well_points.geometry.y.to_numpy()
@@ -124,7 +100,19 @@ lag_pair_df = pd.DataFrame({
     'n_pairs': pair_counts
 })
 
-print(lag_pair_df.to_string(index=False))
+#print(lag_pair_df.to_string(index=False))
+
+bin_centers = [(lo + hi) / 2 for lo, hi in zip(bins[:-1], bins[1:])]
+
+plt.figure(figsize=(8, 4))
+plt.bar(bin_centers, pair_counts, align='center', width=500, edgecolor='k')
+plt.axvline(10000, color='red', linestyle='--', label='10,000 m')
+plt.xlabel('Lag Bin Center (meters)')
+plt.ylabel('Number of Pairs')
+plt.title('Pair Counts per Lag Bin')
+plt.legend()
+plt.tight_layout()
+plt.show()
 
 # %% 6.0 Write the results
 
@@ -134,17 +122,17 @@ wetland_ids = wtd_surface_med.well_array.wtd_points['wetland_id'].to_list()
 
 out_dir = r"D:/depressional_lidar/data/bradford/out_data/well_wse_interpolations"
 
-# # 5.1. CSV ####
+# # 5.1. CSV 
 weights_df = pd.DataFrame(weights, columns=wetland_ids)
 # weights_df.to_csv(f"{out_dir}/kriging_weights.csv", index=False, float_format="%.6f")
 
-# # 5.2. HDF5 ###
-with pd.HDFStore(f"{out_dir}/kriging_weights_zero_nug.h5", mode="w") as store:
+# # 5.2. HDF5 
+with pd.HDFStore(f"{out_dir}/kriging_weights_optimized_fit.h5", mode="w") as store:
     store.put("weights", weights_df, format="fixed")
     store.put("grid_coords", pd.DataFrame({"x": x_flat, "y": y_flat}), format="fixed")
 
 metadata = {
-    "description": "Zero nugget constraint. Ordinary kriging weights for Bradford median-WSE interpolation surface.",
+    "description": "Ordinary Kriging weights, optimized fitted exponential model",
     "weights_shape": list(weights.shape),
     "wetland_ids": wetland_ids,
     "grid_shape": list(wtd_surface_med._x_grid.shape),
@@ -152,17 +140,16 @@ metadata = {
     "notes": [
         "Rows correspond to flattened kriging grid cells in row-major order.",
         "Columns correspond to wells in the order listed in well_ids.",
-        "NOTE fitted variogram with a zero nugget constraint."
     ]
 }
 
 import json
-with open(f"{out_dir}/kriging_weights_metadata_zero_nug.json", "w") as f:
+with open(f"{out_dir}/kriging_weights_metadata_optimized.json", "w") as f:
     json.dump(metadata, f, indent=2)
 
 wtd_surface_med.write_masked_tif(
-    out_path='D:/depressional_lidar/data/bradford/out_data/well_wse_interpolations/WSE_med_zero_nug.tif',
-    sigma_threshold=1.5,
+    out_path=f'{out_dir}/interpolated_median_WSE_optimized_model.tif',
+    sigma_threshold=1.25,
     crs='EPSG:26917'
 )
 

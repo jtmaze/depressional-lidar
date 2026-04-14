@@ -3,9 +3,9 @@ import numpy as np
 import rasterio
 from rasterio.warp import reproject, Resampling
 
-kriging_result_path = 'D:/depressional_lidar/data/bradford/out_data/well_wse_interpolations/WSE_low.tif'
+kriging_result_path = 'D:/depressional_lidar/data/bradford/out_data/well_wse_interpolations/interpolated_median_WSE_optimized_model.tif'
 dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_USGS.tif'
-out_path = 'D:/depressional_lidar/data/bradford/out_data/kriging_inundation_low.tif'
+out_path = 'D:/depressional_lidar/data/bradford/out_data/kriging_inundation_optimized.tif'
 
 # %% 2.0 Read rasters and reproject kriging to DEM grid
 with rasterio.open(dem_path) as dem_src:
@@ -40,8 +40,7 @@ with rasterio.open(dem_path) as dem_src:
             dst_nodata=np.nan,
         )
 
-# Mask where uncertainty > 1 meter
-wse[uncertainty > 1] = np.nan
+wse[uncertainty > 1.25] = np.nan
 
 # %% 3.0 Compute flooded zones and write output
 flooded = (wse > dem).astype(np.uint8)
