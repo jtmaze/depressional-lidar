@@ -8,6 +8,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from wetland_utilities.basin_attributes import WetlandBasin
+dem_buffer = 0
 
 source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_USGS.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
@@ -22,18 +23,19 @@ well_point = (
 )
 
 wetland_ids = well_point['wetland_id'].unique().tolist()
-dem_buffer = 30
+
 
 connectivity = pd.read_excel(wetland_connectivity_path)
 
 
-
 # %% 2.0 Visualize the wetland's DEM
+
+results = []
 
 for i in wetland_ids:
 
     fp = footprints[footprints['wetland_id'] == i]
-    log_basin = WetlandBasin(
+    basin = WetlandBasin(
         wetland_id=i,
         well_point_info=well_point[well_point['wetland_id'] == i],
         source_dem_path=source_dem_path, 
@@ -44,6 +46,28 @@ for i in wetland_ids:
     
     print(f'Well ID: {i}, Connectivity: {connectivity_class}')
 
-    log_basin.visualize_shape(show_shape=True, show_well=True, show_deepest=True)
+    basin.visualize_shape(show_shape=True, show_well=True, show_deepest=True, show_spill=True)
+    basin.plot_basin_hypsometry(plot_points=True, plot_spill=True, plot_deepest=True)
+
+    min_elev = basin.deepest_point.elevation
+    spill_elev = basin.spill_point.elevation
+    well_elev = basin.well_point.elevation_dem
+
+
+    r = {
+        'wetland_id': i,
+        'min_elev': min_elev,
+        'spill_elev': spill_elev,
+        'well_elev': well_elev
+    }
+    results.append(r)
+
+# %% 2.0 Plot the wetland spill depths as a histogram
+
+results_df = pd.DataFrame(results)
+
+results_df['spill_depth'] = results_df['spill_elev'] - results_df['min_elev']
+
+
 
 # %%
