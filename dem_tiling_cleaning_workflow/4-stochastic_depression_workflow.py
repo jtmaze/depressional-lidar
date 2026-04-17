@@ -13,8 +13,8 @@ os.chdir(f'D:/depressional_lidar/data/{site}')
 vegetation_off_dem_path = f"./in_data/{site}_DEM_cleaned_USGS.tif"
 
 rmse = 0.25
-error_range = 20
-iterations = 50
+error_range = 50
+iterations = 25
 
 # %% 2.0 Run the tool
 
@@ -25,9 +25,10 @@ prob_depression = wbe.stochastic_depression_analysis(
     rmse=rmse,
     range=error_range,
     iterations=iterations,
+    verbose_mode=True
 )
 print('done assigning probabilities')
-output_path = f"./out_data/{site}_prob_depressions_{rmse}_{error_range}_highIT.tif"
+output_path = f"./out_data/{site}_prob_depressions_{rmse}_{error_range}_{iterations}.tif"
 wbe.write_raster(prob_depression, output_path)
 
 # %%

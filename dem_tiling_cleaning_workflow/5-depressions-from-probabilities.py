@@ -6,18 +6,23 @@ from rasterio.features import shapes
 import geopandas as gpd
 from shapely.geometry import shape
 import scipy.ndimage as ndi
+from shapely.geometry import Polygon, MultiPolygon
 
-site = 'delmarva'
+
+site = 'bradford'
 data_dir = f'D:/depressional_lidar/data/{site}'
 
-depression_prob_threshold = 0.5
-size_thresh = 100        # minimum area in square meters
-ditch_half_width = 3.0   # erosion radius in meters; ~half the typical ditch width
+depression_prob_threshold = 0.25
+seed_thresh = 50       # minimum area in square meters of binary seeds
+ditch_half_width = 5   # erosion radius in meters; ~half the typical ditch width
 ditch_width_thresh = 5.0  # secondary mean-width filter (catches any ditches not severed by erosion)
-compact_thresh = 0.8
+hole_fill = 50 # Removes any islands up-to 50 square meters
+concavity_thresh = 10 # Fills concave chunks in basin shapes up to X meters
+simplify_tolerance = 2 # smooths the final geometries a bit using the Dounglas-Peucker algorithm
+final_min_area = 1000 # The final minimum area of written depressions
 
 src_path = f'{data_dir}/out_data/{site}_prob_depressions.tif'
-out_path = f'{data_dir}/out_data/{site}_wetland_basins.shp'
+out_path = f'{data_dir}/out_data/{site}_wetland_basins_v10.shp'
 
 # %% 2.0 Read the depression probability and vectorize
 
@@ -26,10 +31,13 @@ with rio.open(src_path) as src:
     transform = src.transform
     crs = src.crs
     nodata = src.nodata
-    pixel_size = abs(transform.a)  # assumes pixels are in m
-    pixel_area = pixel_size ** 2   
+    pixel_size = abs(transform.a)  # CRS is always projected meters
+    pixel_area = pixel_size ** 2
+    print(f'Pixel size: {pixel_size:.4f} m')
 
-# Threshold to binary mask
+# %%
+
+# Threshold depression probabilities to binary mask
 mask = (prob >= depression_prob_threshold).astype(np.uint8)
 if nodata is not None:
     mask[prob == nodata] = 0
@@ -42,10 +50,9 @@ print(f'Erosion radius: {erosion_radius_px} px ({erosion_radius_px * pixel_size:
 r = erosion_radius_px
 y_idx, x_idx = np.ogrid[-r:r + 1, -r:r + 1]
 disk_kernel = (x_idx ** 2 + y_idx ** 2) <= r ** 2
-
 eroded = ndi.binary_erosion(mask.astype(bool), structure=disk_kernel)
 
-# Label eroded components
+# Label eroded components as basins without ditch connections
 struct8 = ndi.generate_binary_structure(2, 2)  # 8-connectivity
 eroded_labeled, n_seeds = ndi.label(eroded, structure=struct8)
 print(f'{n_seeds} seed components after erosion')
@@ -64,12 +71,12 @@ gdf['perimeter'] = gdf.geometry.length
 gdf['mean_width'] = 2 * gdf['area_m2'] / gdf['perimeter']
 gdf['compact']    = (4 * np.pi * gdf['area_m2']) / (gdf['perimeter'] ** 2)
 
-# Filter 1: minimum area (on eroded shapes — slightly smaller than true basins)
-gdf = gdf[gdf['area_m2'] >= size_thresh].copy()
-print(f'{len(gdf)} polygons after area filter (>= {size_thresh} m²)')
+# Filter 1: minimum area seed_area
+gdf = gdf[gdf['area_m2'] >= seed_thresh].copy()
+print(f'{len(gdf)} polygons after seed area filter (>= {seed_thresh} m²)')
 
 # Filter 2: ditch remnants — eroded ditches that weren't fully collapsed
-is_ditch = (gdf['mean_width'] < ditch_width_thresh) & (gdf['compact'] < compact_thresh)
+is_ditch = gdf['mean_width'] < ditch_width_thresh
 gdf = gdf[~is_ditch].copy()
 print(f'{len(gdf)} polygons after ditch filter (mean_width < {ditch_width_thresh} m)')
 
@@ -81,7 +88,32 @@ gdf['geometry'] = gdf.geometry.buffer(ditch_half_width)
 gdf = gdf.dissolve().explode(index_parts=False).reset_index(drop=True)
 print(f'{len(gdf)} polygons after buffer + dissolve')
 
-# %% 4.0 Recompute metrics on final buffered shapes and calculate centroids
+# %% 4.0 Correct/simplify the morphologies
+
+def remove_holes(geom, min_hole_area=None):
+    """Remove interior rings (holes) from a polygon.
+    If min_hole_area is None, removes ALL holes.
+    Otherwise, only removes holes smaller than the threshold.
+    """
+    if geom.geom_type == 'Polygon':
+        kept = [r for r in geom.interiors if Polygon(r).area >= min_hole_area]
+        return Polygon(geom.exterior, kept)
+    elif geom.geom_type == 'MultiPolygon':
+        return MultiPolygon([remove_holes(p, min_hole_area) for p in geom.geoms])
+    return geom
+
+def morphological_close(geom, distance=10):
+    """Buffer outward then inward to fill concavities."""
+    return geom.buffer(distance).buffer(-distance)
+
+gdf['geometry'] = (
+    gdf['geometry']
+    .apply(lambda g: remove_holes(g, min_hole_area=hole_fill))   # drop small islands
+    .apply(lambda g: morphological_close(g, distance=concavity_thresh))  # fill concavities
+    .apply(lambda g: g.simplify(simplify_tolerance, preserve_topology=True)) # smooth edges
+)
+
+# %% 5.0 Recompute metrics on final buffered shapes and calculate centroids
 
 gdf['area_m2']    = gdf.geometry.area
 gdf['perimeter']  = gdf.geometry.length
@@ -90,7 +122,9 @@ gdf['compact']    = (4 * np.pi * gdf['area_m2']) / (gdf['perimeter'] ** 2)
 gdf['centroid_x'] = gdf.geometry.centroid.x
 gdf['centroid_y'] = gdf.geometry.centroid.y
 
-# %% 5.0 Write the output shapefile
+gdf = gdf[gdf['area_m2'] >= final_min_area]
+
+# %% 6.0 Write the output shapefile
 
 gdf = gdf.reset_index(drop=True)
 gdf.to_file(out_path)

@@ -99,7 +99,8 @@ class WetlandBasin:
 
         if self.footprint is not None:
             plot_shape = self.footprint
-            bounds = self.footprint.total_bounds
+            buffer_dist = self.transect_buffer
+            bounds = self.footprint.buffer(buffer_dist).total_bounds
         else:
             well_point = self.well_point.location
             buffer_dist = self.transect_buffer if self.transect_buffer > 0 else 100
@@ -319,7 +320,11 @@ class WetlandBasin:
             well_point_info = well_point_info.to_crs(self.footprint.crs)
 
         elevation_dem = self._find_point_elevation(well_point_info.geometry)
-        rtk = float(well_point_info['rtk_z'].values[0])
+
+        if well_point_info['rtk_z'].values[0] is not None:
+            rtk = float(well_point_info['rtk_z'].values[0])
+        else:
+            rtk = np.nan
 
         return WellPoint(
             elevation_dem=elevation_dem,

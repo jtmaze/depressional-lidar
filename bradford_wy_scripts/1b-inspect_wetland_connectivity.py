@@ -9,9 +9,9 @@ if PROJECT_ROOT not in sys.path:
 
 from wetland_utilities.basin_attributes import WetlandBasin
 
-source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'
+source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_USGS.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-footprints_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_basins_assigned_wetland_ids_KG.shp'
+footprints_path = 'D:/depressional_lidar/data/bradford/out_data/bradford_well_basins.shp'
 wetland_connectivity_path = 'D:/depressional_lidar/data/bradford/bradford_wetland_connect_logging_key.xlsx'
 
 footprints = gpd.read_file(footprints_path)
@@ -22,25 +22,28 @@ well_point = (
 )
 
 wetland_ids = well_point['wetland_id'].unique().tolist()
-dem_buffer = 250
+dem_buffer = 30
 
 connectivity = pd.read_excel(wetland_connectivity_path)
+
+
 
 # %% 2.0 Visualize the wetland's DEM
 
 for i in wetland_ids:
 
+    fp = footprints[footprints['wetland_id'] == i]
     log_basin = WetlandBasin(
         wetland_id=i,
         well_point_info=well_point[well_point['wetland_id'] == i],
         source_dem_path=source_dem_path, 
-        footprint=None,
+        footprint=fp,
         transect_buffer=dem_buffer
     )
     connectivity_class = connectivity[connectivity['wetland_id'] == i].iloc[0]['connectivity']
     
     print(f'Well ID: {i}, Connectivity: {connectivity_class}')
 
-    log_basin.visualize_shape(show_shape=True, show_well=False, show_deepest=False)
+    log_basin.visualize_shape(show_shape=True, show_well=True, show_deepest=True)
 
 # %%
