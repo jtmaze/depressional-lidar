@@ -4,6 +4,7 @@ from functools import cached_property
 from typing import Optional
 
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -77,24 +78,25 @@ class WetlandBasin:
     @cached_property
     def clipped_dem(self) -> ClippedDEM:
         return self.get_clipped_dem()
-    @cached_property
-    def radial_transects(self) -> gpd.GeoDataFrame:
-        return self.establish_radial_transects(
-            method=self.transect_method,
-            n=self.transect_n,
-            buffer_distance=self.transect_buffer
-        )
-    @cached_property
-    def transect_profiles(self) -> pd.DataFrame:
-        return self.find_radial_transects_vals()
     
-    @cached_property
-    def truncated_transect_profiles(self) -> pd.DataFrame:
-        return self.truncate_radial_transects_by_zmin()
+    # @cached_property
+    # def radial_transects(self) -> gpd.GeoDataFrame:
+    #     return self.establish_radial_transects(
+    #         method=self.transect_method,
+    #         n=self.transect_n,
+    #         buffer_distance=self.transect_buffer
+    #     )
+    # @cached_property
+    # def transect_profiles(self) -> pd.DataFrame:
+    #     return self.find_radial_transects_vals()
     
-    @cached_property
-    def aggregated_transect_profiles(self) -> pd.DataFrame:
-        return self.aggregate_radial_transects_vals()
+    # @cached_property
+    # def truncated_transect_profiles(self) -> pd.DataFrame:
+    #     return self.truncate_radial_transects_by_zmin()
+    
+    # @cached_property
+    # def aggregated_transect_profiles(self) -> pd.DataFrame:
+    #     return self.aggregate_radial_transects_vals()
 
     def visualize_shape(
             self, 
@@ -290,7 +292,7 @@ class WetlandBasin:
         Find the lowest point along the perimeter of the basin footprint.
         
         Traces the boundary at DEM-cell resolution, computes the 20th percentile
-        elevation in a 3x3 window around each boundary cell, and returns the
+        elevation in a 5x5 window around each boundary cell, and returns the
         cell with the lowest such value.
         """
         if self.footprint is None:
@@ -322,7 +324,7 @@ class WetlandBasin:
                 seen.add((r, c))
                 unique_cells.append((r, c))
 
-        # For each boundary cell, compute the 20th percentile in a 3x3 window
+        # For each boundary cell, compute the 25th percentile in a 5x5 window
         best_val = np.inf
         best_row, best_col = None, None
         for r, c in unique_cells:
@@ -534,6 +536,59 @@ class WetlandBasin:
         plt.title(f"{self.wetland_id} Hypsometry")
         plt.grid()
         plt.legend()
+        plt.show()
+
+    def map_spill_inundation(self):
+        """
+        Map the inundation extent when water level equals the spill elevation.
+        Renders a greyscale DEM with a semi-transparent blue overlay for inundated cells.
+        """
+        if self.footprint is None:
+            raise ValueError("Cannot map spill inundation without a basin footprint")
+
+        spill = self.spill_point
+        clipped = self.clipped_dem
+        dem_data = clipped.dem
+
+        # Binary inundation: 1 where DEM <= spill elevation, NaN outside footprint
+        inundation = np.where(
+            ~np.isnan(dem_data) & (dem_data <= spill.elevation), 1.0, np.nan
+        )
+
+        fig, ax = plt.subplots(figsize=(10, 8))
+
+        # Greyscale DEM
+        show(dem_data, transform=clipped.transform, ax=ax, cmap='gray')
+        if ax.images:
+            plt.colorbar(ax.images[0], ax=ax, label='Elevation (m)')
+
+        # Navy inundation overlay: transparent where 0/NaN, navy where 1
+        navy_cmap = LinearSegmentedColormap.from_list(
+            'transparent_navy', [(0, (0, 0, 0, 0)), (1, (0, 0, 0.502, 0.7))]
+        )
+        show(inundation, transform=clipped.transform, ax=ax, cmap=navy_cmap, vmin=0, vmax=1)
+
+        # Mark spill point
+        spill.location.plot(ax=ax, color='magenta', marker='v', markersize=120,
+                            label=f"Spill Point ({spill.elevation:.2f}m)")
+
+        # Mark deepest point
+        deepest = self.deepest_point
+        deepest.location.plot(ax=ax, color='blue', marker='*', markersize=100,
+                              label=f"Deepest Point ({deepest.elevation:.2f}m)")
+        
+        # Mark the well location
+        well_point = self.well_point
+        well_point.location.plot(ax=ax, color='red', marker='x', markersize=125,
+                                 label=f"Well location ({well_point.elevation_dem:.2f}")
+
+        ax.legend(loc='upper right')
+        ax.set_title(f"{self.wetland_id} Inundation at Spill Elevation ({spill.elevation:.2f}m)")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_xlabel('')
+        ax.set_ylabel('')
+        plt.tight_layout()
         plt.show()
 
 """

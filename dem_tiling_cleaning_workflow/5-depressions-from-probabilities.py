@@ -12,16 +12,15 @@ from shapely.geometry import Polygon, MultiPolygon
 site = 'bradford'
 data_dir = f'D:/depressional_lidar/data/{site}'
 
-depression_prob_threshold = 0.25
+depression_prob_threshold = 0.3
 seed_thresh = 50       # minimum area in square meters of binary seeds
 ditch_half_width = 5   # erosion radius in meters; ~half the typical ditch width
 ditch_width_thresh = 5.0  # secondary mean-width filter (catches any ditches not severed by erosion)
 hole_fill = 50 # Removes any islands up-to 50 square meters
 concavity_thresh = 10 # Fills concave chunks in basin shapes up to X meters
-simplify_tolerance = 2 # smooths the final geometries a bit using the Dounglas-Peucker algorithm
 final_min_area = 1000 # The final minimum area of written depressions
 
-src_path = f'{data_dir}/out_data/{site}_prob_depressions.tif'
+src_path = f'{data_dir}/out_data/{site}_prob_depressions_SMOOTH_TEST_0.25_50_25.tif'
 out_path = f'{data_dir}/out_data/{site}_wetland_basins_v10.shp'
 
 # %% 2.0 Read the depression probability and vectorize
@@ -110,7 +109,6 @@ gdf['geometry'] = (
     gdf['geometry']
     .apply(lambda g: remove_holes(g, min_hole_area=hole_fill))   # drop small islands
     .apply(lambda g: morphological_close(g, distance=concavity_thresh))  # fill concavities
-    .apply(lambda g: g.simplify(simplify_tolerance, preserve_topology=True)) # smooth edges
 )
 
 # %% 5.0 Recompute metrics on final buffered shapes and calculate centroids
