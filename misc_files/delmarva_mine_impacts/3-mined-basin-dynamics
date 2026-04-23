@@ -14,63 +14,52 @@ from wetland_utilities.basin_attributes import WetlandBasin
 from wetland_utilities.basin_dynamics import WellStageTimeseries, BasinDynamics
 
 site = 'delmarva'
-tgt_wetland_id = "DV-SW"
+tgt_wetland_id = "XB-SW"
 ft_to_m = 0.3048
 
-source_dem = f'D:/depressional_lidar/data/{site}/in_data/2007_1m_DEM_modified.tif'
+source_dem = f'D:/depressional_lidar/data/{site}/in_data/2007_1m_DEM.tif'
 well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/waterlevel_data/daily_well_depth_Fall2025.csv'
 well_points_path = f'D:/depressional_lidar/data/{site}/{site}_well_points.shp'
+basin_shapes_path = f'D:/depressional_lidar/data/{site}/out_data/mdnr_example_wetlands.shp'
 gw_results_path = f'D:/depressional_lidar/data/{site}/out_data/well_gw_impacts.csv'
 
 well_points = (
     gpd.read_file(well_points_path)[['wetland_id', 'type', 'geometry', 'rtk_z']]
     .query("type in ['main_doe_well', 'aux_wetland_well', 'SW', 'CH', 'UW']")
 )
+wetland_footprints = gpd.read_file(basin_shapes_path)
+wetland_footprints.drop(columns=['path', 'centroid_y', 'centroid_x', 'compact', 'mean_width', 'label'], inplace=True)
 
 gw_results = pd.read_csv(gw_results_path)
-gw_results = gw_results[gw_results['wetland_id'] == tgt_wetland_id]
-gw_results = gw_results[gw_results['scenario'] == 'thiem_avgd']
-gw_draw = gw_results['gw_draw_ft'].mean()
-gw_draw = gw_draw * ft_to_m
 
-# %% 2.0 Quick dictionary for wetland buffer distances
-
-buffers = {
-    "MB-SW": 55,
-    "XB-SW": 35,
-    "OB-SW": 35, 
-    "HB-SW": 60,
-    "DF-SW": 60,
-    "TI-SW": 45,
-    "QB-SW": 48,
-    "DV-SW": 70
-}
-
-buffer_dist = buffers.get(tgt_wetland_id)
-print(buffer_dist)
 
 # %% 3.0 Run the basin dynamics models
 
 area_results = []
 
-for i in buffers.keys():
+for i in wetland_footprints['wetland_id'].unique():
 
-    buffer_dist = buffers.get(i)
-    well_point = well_points[well_points['wetland_id'] == i]
+    well_point = well_points[well_points['wetland_id'] == i].copy()
+    well_point['rtk_z'] = np.nan
+    fp = wetland_footprints[wetland_footprints['wetland_id'] == i].copy()
 
+    wetland_result = gw_results[gw_results['wetland_id'] == i]
+    wetland_result = wetland_result[wetland_result['scenario'] == 'thiem_avgd']
+    gw_draw = wetland_result['gw_draw_ft'].mean()
+    gw_draw = gw_draw * ft_to_m
 
     basin = WetlandBasin(
         wetland_id=i,
         source_dem_path=source_dem,
-        footprint=None,
+        footprint=fp,
         well_point_info=well_point,
         transect_method=None,
         transect_n=None,
-        transect_buffer=buffer_dist
+        transect_buffer=5
     )
 
-    # basin.plot_basin_hypsometry(plot_points=True)
-    # basin.visualize_shape()
+    basin.plot_basin_hypsometry(plot_points=True)
+    basin.visualize_shape()
 
     timeseries = WellStageTimeseries.from_csv(
         well_stage_path, 

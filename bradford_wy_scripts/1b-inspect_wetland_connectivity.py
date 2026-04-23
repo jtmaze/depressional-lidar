@@ -9,7 +9,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from wetland_utilities.basin_attributes import WetlandBasin
-dem_buffer = 10
+dem_buffer = 5
 
 source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_USGS.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
@@ -25,19 +25,18 @@ well_point = (
 
 wetland_ids = well_point['wetland_id'].unique().tolist()
 
-
 connectivity = pd.read_excel(wetland_connectivity_path)
 
-wetland_ids = ['6_300']
 
 # %% 2.0 Visualize the wetland's DEM
 
 results = []
+cdfs = []
 
 for i in wetland_ids:
 
     fp = footprints[footprints['wetland_id'] == i]
-    basin = WetlandBasin(
+    delineated_basin = WetlandBasin(
         wetland_id=i,
         well_point_info=well_point[well_point['wetland_id'] == i],
         source_dem_path=source_dem_path, 
@@ -45,45 +44,137 @@ for i in wetland_ids:
         transect_buffer=dem_buffer
     )
     connectivity_class = connectivity[connectivity['wetland_id'] == i].iloc[0]['connectivity']
-    
     print(f'Well ID: {i}, Connectivity: {connectivity_class}')
 
-    basin.visualize_shape(show_shape=True, show_well=True, show_deepest=True, show_spill=True)
-    basin.plot_basin_hypsometry(plot_points=True, plot_spill=True, plot_deepest=True)
-    basin.map_spill_inundation()
+    """
+    Test delineations on rough basin shapes
+    """
 
-    min_elev = basin.deepest_point.elevation
-    spill_elev = basin.spill_point.elevation
-    well_elev = basin.well_point.elevation_dem
+    delineated_basin.visualize_shape(
+        show_shape=True, 
+        show_well=True, 
+        show_deepest=True, 
+        show_spill=True, 
+        show_smoothed_spill=True
+    )
+    delineated_basin.plot_basin_hypsometry(
+        plot_points=True,
+        plot_spill=True, 
+        plot_smoothed_spill=True, 
+        plot_contiguous_spill=True,
+    )
+    delineated_basin.plot_local_fill()
+
+    delineated_basin.map_spill_inundation(
+        use_smoothed=True,
+        plot_contiguous_spill=True,
+        min_flooded_area=100
+    )
+
+    min_elev = delineated_basin.deepest_point.elevation
+    spill_elev = delineated_basin.spill_point.elevation
+    spill_elev_smoothed = delineated_basin.spill_point_smoothed.elevation
+    spill_elev_contiguous = delineated_basin.find_contiguous_spill_z(min_flooded_area=100)
+    well_elev = delineated_basin.well_point.elevation_dem
+    max_fill_delineated, fill_dem_z = delineated_basin.max_fill_depth()
+    max_fill_elev = max_fill_delineated + fill_dem_z
+
+
+    elev_cdf = delineated_basin.calculate_hypsometry(method='total_cdf') # returned as a tuple
+
+    for area, elev in zip(elev_cdf[0], elev_cdf[1]):
+        cdfs.append({
+            'wetland_id': i,
+            'inundated_area': area,
+            'elev_bin_center': elev
+        })
+
+    """
+    Test simple spill on the undelineated basins
+    at 150m and 250m
+
+    basin150 = WetlandBasin(
+        wetland_id=i,
+        well_point_info=well_point[well_point['wetland_id'] == i],
+        source_dem_path=source_dem_path, 
+        footprint=None,
+        transect_buffer=150
+    )
+
+    basin150.plot_local_fill()
+
+    #well_fill150 = basin150.well_fill_depth()
+    max_fill150, fill150_dem_z = basin150.max_fill_depth()
+    
+    basin150_fill_elev = fill150_dem_z + max_fill150
+
+    basin250 = WetlandBasin(
+        wetland_id=i,
+        well_point_info=well_point[well_point['wetland_id'] == i],
+        source_dem_path=source_dem_path, 
+        footprint=None,
+        transect_buffer=250
+    )
+
+    basin250.plot_local_fill()
+    max_fill250, fill250_dem_z = basin250.max_fill_depth()
+    basin250_fill_elev = fill250_dem_z + max_fill250
+
+    """
+
+    # Compile the results
 
 
     r = {
         'wetland_id': i,
         'min_elev': min_elev,
-        'spill_elev': spill_elev,
-        'well_elev': well_elev
+        'well_elev': well_elev,
+        'perimeter_spill_elev': spill_elev,
+        'perimeter_smoothed_spill_elev': spill_elev_smoothed,
+        'contiguous_spill_elev': spill_elev_contiguous,
+        'max_fill_delineated': max_fill_delineated,
+        'max_fill_elev': max_fill_elev,
     }
+    
     results.append(r)
 
 # %% 2.0 Plot the wetland spill depths as a histogram
 
 results_df = pd.DataFrame(results)
 
-results_df['spill_depth'] = results_df['spill_elev'] - results_df['min_elev']
+results_df.to_csv('D:/depressional_lidar/data/bradford/out_data/bradford_estimated_basin_spills.csv', index=False)
 
-fig, ax = plt.subplots(figsize=(10, 6))
-ax.hist(results_df['spill_depth'], bins=15, color='steelblue', edgecolor='black', alpha=0.7)
+# Save hypsometry curves as a flat tidy CSV (one row per bin)
+cdf_df = pd.DataFrame(cdfs)
+cdf_df.to_csv('D:/depressional_lidar/data/bradford/out_data/bradford_hypsometry_curves.csv', index=False)
+
+# %%
+"""
+# %% 3.0 Plot the wetland spill depths as a histogram
+fig, ax = plt.subplots(figsize=(12, 6))
+ax.hist(results_df['spill_depth'], bins=15, color='steelblue', edgecolor='black', alpha=0.6, label='Standard Spill')
+ax.hist(results_df['smoothed_spill_depth'], bins=15, color='cyan', edgecolor='black', alpha=0.6, label='Smoothed Spill')
+ax.hist(results_df['contiguous_spill_depth'], bins=15, color='green', edgecolor='black', alpha=0.6, label='Contiguous Spill')
 ax.set_xlabel('Spill Depth (m)', fontsize=12)
 ax.set_ylabel('Number of Wetlands', fontsize=12)
-ax.set_title('Distribution of Wetland Spill Depths', fontsize=14)
+ax.set_title('Distribution of Wetland Spill Depths (Standard vs. Smoothed vs. Contiguous)', fontsize=14)
 ax.grid(axis='y', alpha=0.3)
 
 # Add summary stats
 mean_spill = results_df['spill_depth'].mean()
 median_spill = results_df['spill_depth'].median()
-ax.axvline(mean_spill, color='red', linestyle='--', linewidth=2, label=f'Mean: {mean_spill:.2f}m')
-ax.axvline(median_spill, color='green', linestyle='--', linewidth=2, label=f'Median: {median_spill:.2f}m')
-ax.legend()
+mean_spill_smooth = results_df['smoothed_spill_depth'].mean()
+median_spill_smooth = results_df['smoothed_spill_depth'].median()
+mean_spill_contig = results_df['contiguous_spill_depth'].mean()
+median_spill_contig = results_df['contiguous_spill_depth'].median()
+
+ax.axvline(mean_spill, color='red', linestyle='--', linewidth=2, label=f'Mean Standard: {mean_spill:.2f}m')
+ax.axvline(median_spill, color='darkred', linestyle=':', linewidth=2, label=f'Median Standard: {median_spill:.2f}m')
+ax.axvline(mean_spill_smooth, color='orange', linestyle='--', linewidth=2, label=f'Mean Smoothed: {mean_spill_smooth:.2f}m')
+ax.axvline(median_spill_smooth, color='darkorange', linestyle=':', linewidth=2, label=f'Median Smoothed: {median_spill_smooth:.2f}m')
+ax.axvline(mean_spill_contig, color='darkgreen', linestyle='--', linewidth=2, label=f'Mean Contiguous: {mean_spill_contig:.2f}m')
+ax.axvline(median_spill_contig, color='forestgreen', linestyle=':', linewidth=2, label=f'Median Contiguous: {median_spill_contig:.2f}m')
+ax.legend(fontsize=10)
 
 plt.tight_layout()
 plt.show()
@@ -96,7 +187,7 @@ plt.show()
 # print(f"  Std Dev: {results_df['spill_depth'].std():.2f}m")
 # print(f"  N wetlands: {len(results_df)}")
 
-# %% 3.0 Box plot of spill depth by connectivity class
+# %% 4.0 Box plot of spill depth by connectivity class
 
 # Merge results with connectivity data
 results_with_connectivity = results_df.merge(
@@ -105,18 +196,36 @@ results_with_connectivity = results_df.merge(
     how='left'
 )
 
-fig, ax = plt.subplots(figsize=(10, 6))
-results_with_connectivity.boxplot(column='spill_depth', by='connectivity', ax=ax)
-ax.set_xlabel('Connectivity Class', fontsize=12)
-ax.set_ylabel('Spill Depth (m)', fontsize=12)
-ax.set_title('Spill Depth by Connectivity Class', fontsize=14)
-plt.suptitle('')  # Remove the automatic title
+fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 6), sharey=True)
+
+# Standard spill depth boxplot
+results_with_connectivity.boxplot(column='spill_depth', by='connectivity', ax=ax1)
+ax1.set_xlabel('Connectivity Class', fontsize=12)
+ax1.set_ylabel('Spill Depth (m)', fontsize=12)
+ax1.set_title('Standard Spill Depth by Connectivity Class', fontsize=12)
+ax1.get_figure().suptitle('')  # Remove automatic title on first subplot
+
+# Smoothed spill depth boxplot
+results_with_connectivity.boxplot(column='smoothed_spill_depth', by='connectivity', ax=ax2)
+ax2.set_xlabel('Connectivity Class', fontsize=12)
+ax2.set_ylabel('Spill Depth (m)', fontsize=12)
+ax2.set_title('Smoothed Spill Depth by Connectivity Class', fontsize=12)
+
+# Contiguous spill depth boxplot
+results_with_connectivity.boxplot(column='contiguous_spill_depth', by='connectivity', ax=ax3)
+ax3.set_xlabel('Connectivity Class', fontsize=12)
+ax3.set_ylabel('Spill Depth (m)', fontsize=12)
+ax3.set_title('Contiguous Spill Depth by Connectivity Class', fontsize=12)
+
+fig.suptitle('Spill Depth Comparison by Connectivity Class', fontsize=14, y=1.00)
+
 plt.tight_layout()
 plt.show()
 
-print("\nSpill Depth by Connectivity Class:")
+print("\nStandard Spill Depth by Connectivity Class:")
 print(results_with_connectivity.groupby('connectivity')['spill_depth'].describe())
 
+print("\nSmoothed Spill Depth by Connectivity Class:")
+print(results_with_connectivity.groupby('connectivity')['smoothed_spill_depth'].describe())
 
-
-# %%
+"""

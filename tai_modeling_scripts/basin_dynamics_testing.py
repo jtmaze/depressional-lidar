@@ -13,8 +13,8 @@ if PROJECT_ROOT not in sys.path:
 from wetland_utilities.basin_attributes import WetlandBasin
 from wetland_utilities.basin_dynamics import WellStageTimeseries, BasinDynamics
 
-site = 'delmarva'
-tgt_wetland_id = "OB-CH"
+site = 'bradford'
+tgt_wetland_id = "6_300"
 buffer_dist = 150
 
 
