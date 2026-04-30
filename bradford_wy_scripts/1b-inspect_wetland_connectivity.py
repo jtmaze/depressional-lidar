@@ -27,7 +27,6 @@ wetland_ids = well_point['wetland_id'].unique().tolist()
 
 connectivity = pd.read_excel(wetland_connectivity_path)
 
-
 # %% 2.0 Visualize the wetland's DEM
 
 results = []
@@ -50,32 +49,32 @@ for i in wetland_ids:
     Test delineations on rough basin shapes
     """
 
-    delineated_basin.visualize_shape(
-        show_shape=True, 
-        show_well=True, 
-        show_deepest=True, 
-        show_spill=True, 
-        show_smoothed_spill=True
-    )
+    # delineated_basin.visualize_shape(
+    #     show_shape=True, 
+    #     show_well=True, 
+    #     show_deepest=True, 
+    #     show_spill=True, 
+    #     show_smoothed_spill=True
+    # )
     delineated_basin.plot_basin_hypsometry(
         plot_points=True,
         plot_spill=True, 
         plot_smoothed_spill=True, 
         plot_contiguous_spill=True,
     )
-    delineated_basin.plot_local_fill()
+    # delineated_basin.plot_local_fill()
 
-    delineated_basin.map_spill_inundation(
-        use_smoothed=True,
-        plot_contiguous_spill=True,
-        min_flooded_area=100
-    )
-
+    # delineated_basin.map_spill_inundation(
+    #     use_smoothed=True,
+    #     plot_contiguous_spill=True,
+    #     min_flooded_area=100
+    # )
+    well_elev = delineated_basin.well_point.elevation_dem
     min_elev = delineated_basin.deepest_point.elevation
-    spill_elev = delineated_basin.spill_point.elevation
+
     spill_elev_smoothed = delineated_basin.spill_point_smoothed.elevation
     spill_elev_contiguous = delineated_basin.find_contiguous_spill_z(min_flooded_area=100)
-    well_elev = delineated_basin.well_point.elevation_dem
+
     max_fill_delineated, fill_dem_z = delineated_basin.max_fill_depth()
     max_fill_elev = max_fill_delineated + fill_dem_z
 
@@ -89,9 +88,8 @@ for i in wetland_ids:
             'elev_bin_center': elev
         })
 
-    """
-    Test simple spill on the undelineated basins
-    at 150m and 250m
+    # Test simple spill on the undelineated basins
+    # at 150m and 250m
 
     basin150 = WetlandBasin(
         wetland_id=i,
@@ -100,13 +98,19 @@ for i in wetland_ids:
         footprint=None,
         transect_buffer=150
     )
-
-    basin150.plot_local_fill()
-
-    #well_fill150 = basin150.well_fill_depth()
     max_fill150, fill150_dem_z = basin150.max_fill_depth()
+    basin150_min = basin150.deepest_point.elevation
+
+    basin200 = WetlandBasin(
+        wetland_id=i,
+        well_point_info=well_point[well_point['wetland_id'] == i],
+        source_dem_path=source_dem_path, 
+        footprint=None,
+        transect_buffer=200
+    )
+    max_fill200, fill200_dem_z = basin200.max_fill_depth()
+    basin200_min = basin200.deepest_point.elevation
     
-    basin150_fill_elev = fill150_dem_z + max_fill150
 
     basin250 = WetlandBasin(
         wetland_id=i,
@@ -115,25 +119,29 @@ for i in wetland_ids:
         footprint=None,
         transect_buffer=250
     )
-
-    basin250.plot_local_fill()
     max_fill250, fill250_dem_z = basin250.max_fill_depth()
-    basin250_fill_elev = fill250_dem_z + max_fill250
-
-    """
+    basin250_min = basin250.deepest_point.elevation
 
     # Compile the results
-
 
     r = {
         'wetland_id': i,
         'min_elev': min_elev,
         'well_elev': well_elev,
-        'perimeter_spill_elev': spill_elev,
         'perimeter_smoothed_spill_elev': spill_elev_smoothed,
         'contiguous_spill_elev': spill_elev_contiguous,
         'max_fill_delineated': max_fill_delineated,
         'max_fill_elev': max_fill_elev,
+        # Agnostic of basin shape
+        'max_fill150': max_fill150, 
+        'basin150_dem_z': fill150_dem_z,
+        'basin150_min': basin150_min,
+        'max_fill200': max_fill200,
+        'basin200_dem_z': fill200_dem_z,
+        'basin200_min': basin200_min,
+        'max_fill250': max_fill250,
+        'basin250_dem_z': fill250_dem_z,
+        'basin250_min': basin250_min
     }
     
     results.append(r)

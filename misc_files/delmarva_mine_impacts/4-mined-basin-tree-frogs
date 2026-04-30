@@ -14,6 +14,31 @@ from wetland_utilities.basin_attributes import WetlandBasin
 from wetland_utilities.basin_dynamics import WellStageTimeseries, BasinDynamics
 
 site = 'delmarva'
+life_period = 'mating'
+
+life_periods = {
+    'mating': ((4, 21), (7, 15)),  # Apr 21st - Jul 15th
+    'larval': ((6, 21), (9, 15)),  # Jun 21st - Sep 15th
+}
+
+life_period_label = life_period.replace('_', ' ').title()
+
+
+def filter_timeseries_to_life_period(timeseries_data: pd.DataFrame, period_name: str) -> pd.DataFrame:
+    """Filter a daily timeseries to a recurring month-day window across all years."""
+    start_month_day, end_month_day = life_periods[period_name]
+    month_day = list(zip(timeseries_data.index.month, timeseries_data.index.day))
+    keep_mask = [start_month_day <= day <= end_month_day for day in month_day]
+    return timeseries_data.loc[keep_mask].copy()
+
+
+def add_plot_gaps(timeseries_obj: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
+    """Reindex to daily frequency so skipped off-period dates plot as gaps instead of connected lines."""
+    if timeseries_obj.empty:
+        return timeseries_obj.copy()
+
+    full_index = pd.date_range(timeseries_obj.index.min(), timeseries_obj.index.max(), freq='D')
+    return timeseries_obj.reindex(full_index)
 
 ft_to_m = 0.3048
 
@@ -69,17 +94,29 @@ for i in ids:
         crop_dates=None
     )
 
-    timeseries.plot()
+    filtered_timeseries = WellStageTimeseries(
+        well_id=timeseries.well_id,
+        timeseries_data=filter_timeseries_to_life_period(timeseries.timeseries_data, life_period),
+        basin=timeseries.basin,
+    )
+
+    filtered_plot_timeseries = WellStageTimeseries(
+        well_id=filtered_timeseries.well_id,
+        timeseries_data=add_plot_gaps(filtered_timeseries.timeseries_data),
+        basin=filtered_timeseries.basin,
+    )
+
+    filtered_plot_timeseries.plot()
 
     pre_dynamics = BasinDynamics(
         basin=basin,
-        well_stage=timeseries,
+        well_stage=filtered_timeseries,
         well_to_dem_offset=0
     )
 
     post_dynamics = BasinDynamics(
         basin=basin,
-        well_stage=timeseries,
+        well_stage=filtered_timeseries,
         well_to_dem_offset=gw_draw
     )
 
@@ -94,27 +131,29 @@ for i in ids:
         inundation_frequency=pre_freq,
         cbar_min=0,
         cbar_max=100,
-        title=f"{i} Pre Inundation Frequency (% Days)"
+        title=f"{i} Pre Inundation Frequency (% Days) - {life_period_label} Stage"
     )
     post_dynamics.map_inundation_stacks(
         inundation_frequency=post_freq,
         cbar_min=0,
         cbar_max=100,
-        title=f"{i} Post Inundation Frequency (% Days)"
+        title=f"{i} Post Inundation Frequency (% Days) - {life_period_label} Stage"
     )
 
     pre_timeseries = pre_dynamics._calculate_area_timeseries(stacks=pre_stacks)
     post_timeseries = post_dynamics._calculate_area_timeseries(stacks=post_stacks)
+    pre_plot_timeseries = add_plot_gaps(pre_timeseries)
+    post_plot_timeseries = add_plot_gaps(post_timeseries)
 
-    pre_ts = timeseries.timeseries_data.copy()
-    post_ts = timeseries.timeseries_data.copy()
+    pre_ts = add_plot_gaps(filtered_timeseries.timeseries_data.copy())
+    post_ts = add_plot_gaps(filtered_timeseries.timeseries_data.copy())
     post_ts['water_level'] = post_ts['water_level'] + gw_draw
 
     # Pre versus post stage timeseries plot
     plt.figure(figsize=(8, 8))
     pre_ts['water_level'].plot(label='Pre Stage', color='blue')
     post_ts['water_level'].plot(label='Post Stage', color='red', alpha=0.8)
-    plt.title(f'Well Stage Timeseries: {i}', fontsize=16, fontweight='bold')
+    plt.title(f'Well Stage Timeseries: {i} ({life_period_label})', fontsize=16, fontweight='bold')
     plt.xlabel('Date', fontsize=14)
     plt.ylabel('Stage (m)', fontsize=14)
     plt.legend(fontsize=14)
@@ -127,10 +166,10 @@ for i in ids:
     # Pre versus post inundated area plot
     plt.figure(figsize=(8, 8))
     # Plot both timeseries
-    pre_timeseries.plot(label='Pre Inundated Area', color='blue')
-    post_timeseries.plot(label='Post Inundated Area', color='red', alpha=0.8)
+    pre_plot_timeseries.plot(label='Pre Inundated Area', color='blue')
+    post_plot_timeseries.plot(label='Post Inundated Area', color='red', alpha=0.8)
     # Add titles and labels
-    plt.title(f'Inundated Area Timeseries: {i}', fontsize=16, fontweight='bold')
+    plt.title(f'Inundated Area Timeseries: {i} ({life_period_label})', fontsize=16, fontweight='bold')
     plt.xlabel('Date', fontsize=14)
     plt.ylabel('Inundated Area ($m^2$)', fontsize=14)
     # Formatting
@@ -182,9 +221,10 @@ for idx, result in enumerate(area_results):
 # Add single legend to figure
 handles, labels = axes[0].get_legend_handles_labels()
 fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=2, fontsize=12, borderaxespad=1.5)
+fig.suptitle(f'Inundated Area Histograms ({life_period_label})', fontsize=16, fontweight='bold')
 
 # Automatically adjust subplots to fit into the figure area cleanly
-plt.tight_layout(rect=[0, 0.06, 1, 1])
+plt.tight_layout(rect=[0, 0.06, 1, 0.97])
 plt.show()
 
 # %%
@@ -192,7 +232,7 @@ plt.show()
 change_df = pd.DataFrame(area_changes)
 change_df[['baseline', 'post_mining', 'diff']] = change_df[['baseline', 'post_mining', 'diff']].apply(lambda x: np.round(x / 10) * 10)
 
-change_df.to_csv(f'D:/depressional_lidar/data/{site}/out_data/example_wetland_mean_areas.csv')
+change_df.to_csv(f'D:/depressional_lidar/data/{site}/out_data/example_wetland_mean_areas_{life_period}.csv', index=False)
 
 
 # %%

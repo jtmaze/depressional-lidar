@@ -10,9 +10,11 @@ from typing import Callable, Dict
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.font_manager import FontProperties
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import rasterio as rio
 from rasterio.plot import show
 from shapely.geometry import Point, Polygon
@@ -129,9 +131,15 @@ class BasinDynamics:
         method='frequency': fraction of timesteps with value > 0 (for binary maps)
         method='mean':      nanmean across timesteps (for continuous maps)
         """
-        stack = np.stack(list(stacks.values()))
+        stack = np.stack(list(stacks.values())).astype(np.float32, copy=False)
         if method == "frequency":
-            return np.nansum(stack, axis=0, dtype=np.float32) / stack.shape[0]
+            valid = np.isfinite(stack)
+            wet = (stack > 0) & valid
+            wet_count = np.sum(wet, axis=0, dtype=np.float32)
+            valid_count = np.sum(valid, axis=0, dtype=np.float32)
+            frequency = np.full(wet_count.shape, np.nan, dtype=np.float32)
+            np.divide(wet_count, valid_count, out=frequency, where=valid_count > 0)
+            return frequency
         elif method == "mean":
             return np.nanmean(stack, axis=0).astype(np.float32)
         raise ValueError(f"Unknown aggregation method: {method}")
@@ -156,6 +164,56 @@ class BasinDynamics:
         """Return (x, y) coordinates of the well in CRS space."""
         wp = self.well_point
         return wp.location.x.values[0], wp.location.y.values[0]
+
+    def _choose_scale_bar_length(self, axis_width: float) -> float:
+        """Pick a readable scale-bar length that spans about 20% of the map width."""
+        if not np.isfinite(axis_width) or axis_width <= 0:
+            return 0.0
+
+        target = axis_width * 0.2
+        magnitude = 10 ** np.floor(np.log10(target))
+        normalized = target / magnitude
+
+        if normalized < 1.5:
+            nice_length = 1
+        elif normalized < 3.5:
+            nice_length = 2
+        elif normalized < 7.5:
+            nice_length = 5
+        else:
+            nice_length = 10
+
+        return float(nice_length * magnitude)
+
+    def _add_scale_bar(self, ax, scale_bar_length: float = None, location: str = 'lower left') -> None:
+        """Add a simple distance scale bar in projected map units."""
+        x_min, x_max = ax.get_xlim()
+        y_min, y_max = ax.get_ylim()
+        axis_width = abs(x_max - x_min)
+        axis_height = abs(y_max - y_min)
+
+        if scale_bar_length is None:
+            scale_bar_length = self._choose_scale_bar_length(axis_width)
+        if scale_bar_length <= 0:
+            return
+
+        label = f"{scale_bar_length:g} m"
+        fontprops = FontProperties(size=11, weight='bold')
+        scale_bar = AnchoredSizeBar(
+            ax.transData,
+            scale_bar_length,
+            label,
+            location,
+            pad=0.4,
+            color='black',
+            frameon=True,
+            size_vertical=max(axis_height * 0.01, 1.0),
+            fontproperties=fontprops,
+        )
+        scale_bar.patch.set_facecolor('white')
+        scale_bar.patch.set_alpha(0.8)
+        scale_bar.patch.set_edgecolor('none')
+        ax.add_artist(scale_bar)
 
     def _plot_area_timeseries(self, area_ts, title, ylabel, color='blue'):
         plt.figure(figsize=(12, 6))
@@ -183,13 +241,21 @@ class BasinDynamics:
         dem = self.basin.clipped_dem.dem
         data = frequency * 100 if as_percent else frequency
         data = np.where(np.isnan(dem), np.nan, data)
+        finite_vals = data[np.isfinite(data)]
+        if finite_vals.size == 0:
+            raise ValueError("No finite map values available for plotting")
+        if vmin is None:
+            vmin = float(np.nanmin(data))
         if vmax is None:
-            vmax = np.nanmax(data)
+            vmax = float(np.nanmax(data))
+        if np.isclose(vmax, vmin):
+            vmax = vmin + 1.0
         well_x, well_y = self._get_well_xy()
 
         fig, ax = plt.subplots(figsize=(12, 8))
         im = show(data, ax=ax, cmap=cmap, alpha=0.8,
-                  transform=self.basin.clipped_dem.transform, vmin=vmin, vmax=vmax)
+                  transform=self.basin.clipped_dem.transform, vmin=vmin, vmax=vmax,
+                  adjust=False)
         cbar = plt.colorbar(im.images[0], ax=ax, shrink=0.8)
         cbar.set_label(cbar_label, rotation=270, labelpad=20)
 
@@ -252,7 +318,7 @@ class BasinDynamics:
             
         if water_elevation is None:
             water_level = self.well_stage.timeseries_data.loc[date, 'water_level']
-            water_elevation = self.well_point.elevation_dem + water_level
+            water_elevation = self._water_elevation_at(water_level)
         
         # Get inundation map, DEM, and well point for visualization
         inundation_map = self.calculate_inundation_map(water_elevation)
@@ -295,7 +361,7 @@ class BasinDynamics:
 
         if water_elevation is None:
             water_level = self.well_stage.timeseries_data.loc[date, 'water_level']
-            water_elevation = self.well_point.elevation_dem + water_level
+            water_elevation = self._water_elevation_at(water_level)
 
         # Get TAI map, DEM, and well point for visualization
         tai_map = self.calculate_tai_map(water_elevation, max_depth, min_depth)
@@ -469,7 +535,10 @@ class BasinDynamics:
             show_basin_footprint: bool = False,
             cbar_min: float = 0,
             cbar_max: float = None,
-            plot_well: bool = True
+            plot_well: bool = True,
+            show_scale_bar: bool = True,
+            scale_bar_length: float = None,
+            title: str = None,
     ):
         """
         Map the inundation stacks.
@@ -482,11 +551,17 @@ class BasinDynamics:
             
         inundation_percent = inundation_frequency * 100
         inundation_percent = np.where(np.isnan(dem), np.nan, inundation_percent)  # Keep NaNs outside the basin boundary as NaNs
+        finite_vals = inundation_percent[np.isfinite(inundation_percent)]
+        if finite_vals.size == 0:
+            raise ValueError("No finite inundation-frequency values available for plotting")
     
         if cbar_max is None:
-            vmax = np.nanmax(inundation_percent)
+            vmax = float(np.nanmax(inundation_percent))
         else:
             vmax = cbar_max
+        vmin = cbar_min
+        if np.isclose(vmax, vmin):
+            vmax = vmin + 1.0
 
         # Add the well point
         well_point = self.well_point
@@ -509,7 +584,8 @@ class BasinDynamics:
         # Show inundation frequency (values from 0-1 representing frequency of being inundated)
         im = show(inundation_percent, ax=ax, cmap=custom_cmap, alpha=1,
                 transform=self.basin.clipped_dem.transform,
-                vmin=cbar_min, vmax=vmax)
+            vmin=vmin, vmax=vmax,
+            adjust=False)
 
         # Add colorbar
         cbar = plt.colorbar(im.images[0], ax=ax, shrink=0.8)
@@ -522,6 +598,9 @@ class BasinDynamics:
                     marker='x', s=400, linewidths=7,
                     label=f'Well Location')
 
+        if show_scale_bar:
+            self._add_scale_bar(ax, scale_bar_length=scale_bar_length)
+
         #plot_shape.plot(ax=ax, facecolor='none', edgecolor='red', linewidth=2)
         
         # Add legend and labels
@@ -533,7 +612,25 @@ class BasinDynamics:
         ax.set_yticks([])
         ax.set_xticklabels([])
         ax.set_yticklabels([])
-        ax.set_title('')
+        if title is None:
+            title = (
+                f"{self.well_stage.well_id} Inundation Frequency (% Days)\n"
+                f"Well-to-DEM offset: {self.well_to_dem_offset:+.2f} m"
+            )
+        ax.set_title(title)
+
+        if np.isclose(float(np.nanmax(inundation_percent)), 0.0):
+            ax.text(
+                0.02,
+                0.98,
+                "All mapped frequencies are 0% for this scenario.",
+                transform=ax.transAxes,
+                va='top',
+                ha='left',
+                fontsize=11,
+                color='black',
+                bbox=dict(facecolor='white', alpha=0.75, edgecolor='none'),
+            )
 
         plt.show()
 

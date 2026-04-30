@@ -1,9 +1,15 @@
 # %% 1.0 Libraries and file paths
+"""
+NOTE: I need to contemplate a minor issue.
+The number of unique wells dramatically decreases at low and high spill depths. 
+For example at -1.5m below, the spill depth there might only be a few logged wetlands with data.
+How can I ensure the upper and lower bounds of the Q-Q plot aren't warped by data from a single well?
+Maybe truncate the curves whenever less than three wells are represented?
+"""
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import stats 
 
 lai_buffer_dist = 150
 data_set = 'no_dry_days'
@@ -12,9 +18,11 @@ data_dir = "D:/depressional_lidar/data/bradford/"
 distributions_path = f'{data_dir}/out_data/modeled_logging_stages/hypothetical_distributions_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
 strong_wetland_pairs_path = f'{data_dir}/out_data/strong_ols_models_{lai_buffer_dist}m_domain_{data_set}.csv'
 connectivity_key_path = data_dir + '/bradford_wetland_connect_logging_key.xlsx'
+est_spills_path = data_dir + '/out_data/bradford_estimated_basin_spills.csv'
 
 # %% 2.0 Read and munge the data
 
+spills = pd.read_csv(est_spills_path)
 distributions = pd.read_csv(distributions_path)
 connect = pd.read_excel(connectivity_key_path)
 
@@ -34,13 +42,22 @@ distributions = distributions.merge(
     how='left'
 )
 
-print(distributions)
+# %% 2.1 Adjust the distributions so that well data is relative to spill depth
 
-#distributions = distributions[distributions['log_id'] != '9_77']
-# %% Plot the aggregated (over all pairs) pre and post logging distributions
+spills = spills[['wetland_id', 'well_elev', 'max_fill_delineated', 'max_fill_elev']]
+spills['well_to_spill'] = spills['well_elev'] - spills['max_fill_elev']
+spills = spills[['wetland_id', 'well_to_spill']]
+print(spills)
 
-# distributions['ref_log'] = distributions['ref_id'] + '_' + distributions['log_id']
-# distributions_clean = distributions[distributions['ref_log'].isin(pairs['ref_log'])]
+distributions = distributions.merge(
+    spills,
+    left_on='log_id',
+    right_on='wetland_id',
+    how='left'
+)
+
+distributions['pre_adj'] = distributions['pre'] + distributions['well_to_spill']
+distributions['post_adj'] = distributions['post'] + distributions['well_to_spill']
 
 distributions_clean = distributions.copy()
 
@@ -48,8 +65,8 @@ distributions_clean = distributions.copy()
 
 fig, ax = plt.subplots(1, 1, figsize=(10, 5))
 
-pre_data = distributions_clean['pre']
-post_data = distributions_clean['post']
+pre_data = distributions_clean['pre_adj']
+post_data = distributions_clean['post_adj']
 
 # Create histograms with normalized counts (% of days)
 # Define common bin edges for consistent bin widths
@@ -71,9 +88,9 @@ ax.axvline(post_data.mean(), color='#E69F00', linestyle='--', linewidth=2,
            label=f'Post mean: {post_data.mean():.2f}m')
 
 # Formatting
-ax.set_title('Aggregate Well Depth Distributions (all ids)', 
+ax.set_title('Aggregate Spill-Adjusted Well Depth Distributions (all ids)', 
              fontsize=16, fontweight='bold')
-ax.set_xlabel('Depth [m]', fontsize=14)
+ax.set_xlabel('Depth Relative to Spill [m]', fontsize=14)
 ax.set_ylabel('% of Days', fontsize=14)
 ax.legend(loc='upper left', fontsize=12)
 ax.tick_params(axis='both', labelsize=12)
@@ -88,12 +105,12 @@ plt.show()
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
 dist_filtered = distributions_clean[
-    (distributions_clean['pre'] >= -1.5) & (distributions_clean['pre'] <= 1.0) &
-    (distributions_clean['post'] >= -1.5) & (distributions_clean['post'] <= 1.0)
+    (distributions_clean['pre_adj'] >= -2) & (distributions_clean['pre_adj'] <= 0.75) &
+    (distributions_clean['post_adj'] >= -2) & (distributions_clean['post_adj'] <= 0.75)
 ].copy()
 
-pre_data = dist_filtered['pre'].dropna()
-post_data = dist_filtered['post'].dropna()
+pre_data = dist_filtered['pre_adj'].dropna()
+post_data = dist_filtered['post_adj'].dropna()
 
 n_quantiles = 1000
 quantiles = np.linspace(0, 1, n_quantiles)
@@ -105,24 +122,24 @@ axes[0].scatter(pre_quantiles, post_quantiles, alpha=0.7, s=30, color='#333333')
 axes[0].plot([pre_quantiles.min(), pre_quantiles.max()],
              [pre_quantiles.min(), pre_quantiles.max()],
              'r--', linewidth=2, label='1:1 line')
-axes[0].set_xlabel('Pre-Logging [m]', fontsize=12)
-axes[0].set_ylabel('Post-Logging [m]', fontsize=12)
-axes[0].set_title('Q-Q Plot: Pre vs Post Logging', fontsize=14, fontweight='bold')
+axes[0].set_xlabel('Pre-Logging Relative to Spill [m]', fontsize=12)
+axes[0].set_ylabel('Post-Logging Relative to Spill [m]', fontsize=12)
+axes[0].set_title('Q-Q Plot: Pre vs Post Logging (Spill-Adjusted)', fontsize=14, fontweight='bold')
 axes[0].grid(True, alpha=0.3)
 axes[0].legend(fontsize=11)
 axes[0].set_aspect('equal', adjustable='box')
-axes[0].set_xlim(-1.25, 0.75)
-axes[0].set_ylim(-1.25, 0.75)
+axes[0].set_xlim(-2, 0.75)
+axes[0].set_ylim(-2, 0.75)
 
 quantile_diff = post_quantiles - pre_quantiles
 axes[1].scatter(pre_quantiles, quantile_diff, alpha=0.7, s=30, color='#333333')
 axes[1].axhline(0, color='red', linestyle='--', linewidth=2, label='No change')
-axes[1].set_xlabel('Pre-Logging [m]', fontsize=12)
-axes[1].set_ylabel('Depth Change (Post - Pre) [m]', fontsize=12)
-axes[1].set_title('Quantile-by-Quantile Depth Change', fontsize=14, fontweight='bold')
+axes[1].set_xlabel('Pre-Logging Relative to Spill [m]', fontsize=12)
+axes[1].set_ylabel('Depth Change (Post - Pre, Relative to Spill) [m]', fontsize=12)
+axes[1].set_title('Quantile-by-Quantile Depth Change (Spill-Adjusted)', fontsize=14, fontweight='bold')
 axes[1].grid(True, alpha=0.3)
 axes[1].legend(fontsize=11)
-axes[1].set_xlim(-1.25, 0.75)
+axes[1].set_xlim(-2, 0.75)
 
 plt.show()
 
@@ -136,12 +153,12 @@ connectivity_config = {
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
 distributions_clean = distributions_clean[
-    (distributions_clean['pre'] >= -1.5) & (distributions_clean['pre'] <= 1.0) &
-    (distributions_clean['post'] >= -1.5) & (distributions_clean['post'] <= 1.0)
+    (distributions_clean['pre_adj'] >= -2) & (distributions_clean['pre_adj'] <= 0.75) &
+    (distributions_clean['post_adj'] >= -2) & (distributions_clean['post_adj'] <= 0.75)
 ].copy()
             
-pre_data = distributions_clean['pre'].dropna()
-post_data = distributions_clean['post'].dropna()
+pre_data = distributions_clean['pre_adj'].dropna()
+post_data = distributions_clean['post_adj'].dropna()
 
 n_quantiles = 1000
 quantiles = np.linspace(0, 1, n_quantiles)
@@ -153,8 +170,8 @@ post_quantiles = np.quantile(post_data, quantiles)
 for conn_class, config in connectivity_config.items():
     mask = distributions_clean['connectivity'] == conn_class
     if mask.sum() > 0:
-        pre_q = np.quantile(distributions_clean[mask]['pre'].dropna(), quantiles)
-        post_q = np.quantile(distributions_clean[mask]['post'].dropna(), quantiles)
+        pre_q = np.quantile(distributions_clean[mask]['pre_adj'].dropna(), quantiles)
+        post_q = np.quantile(distributions_clean[mask]['post_adj'].dropna(), quantiles)
         
         axes[0].scatter(pre_q, post_q, alpha=0.5, s=10, 
                        color=config['color'], label=config['label'])
@@ -166,22 +183,22 @@ for conn_class, config in connectivity_config.items():
 axes[0].plot([pre_quantiles.min(), pre_quantiles.max()], 
              [pre_quantiles.min(), pre_quantiles.max()], 
              'r--', linewidth=2, label='1:1 line')
-axes[0].set_xlabel('Pre-Logging [m]', fontsize=12)
-axes[0].set_ylabel('Post-Logging [m]', fontsize=12)
-axes[0].set_title('Q-Q Plot: Pre vs Post Logging', fontsize=14, fontweight='bold')
+axes[0].set_xlabel('Pre-Logging Relative to Spill [m]', fontsize=12)
+axes[0].set_ylabel('Post-Logging Relative to Spill [m]', fontsize=12)
+axes[0].set_title('Q-Q Plot: Pre vs Post Logging by Connectivity (Spill-Adjusted)', fontsize=14, fontweight='bold')
 axes[0].grid(True, alpha=0.3)
 axes[0].legend(fontsize=11)
 axes[0].set_aspect('equal', adjustable='box')
-axes[0].set_xlim(-1.25, 0.75)
-axes[0].set_ylim(-1.25, 0.75)
+axes[0].set_xlim(-2, 0.75)
+axes[0].set_ylim(-2, 0.75)
 
 axes[1].axhline(0, color='red', linestyle='--', linewidth=2, label='No change')
-axes[1].set_xlabel('Pre-Logging [m]', fontsize=12)
-axes[1].set_ylabel('Depth Change (Post - Pre) [m]', fontsize=12)
-axes[1].set_title('Quantile-by-Quantile Depth Change', fontsize=14, fontweight='bold')
+axes[1].set_xlabel('Pre-Logging Relative to Spill [m]', fontsize=12)
+axes[1].set_ylabel('Depth Change (Post - Pre, Relative to Spill) [m]', fontsize=12)
+axes[1].set_title('Quantile-by-Quantile Depth Change by Connectivity (Spill-Adjusted)', fontsize=14, fontweight='bold')
 axes[1].grid(True, alpha=0.3)
 axes[1].legend(fontsize=11)
-axes[1].set_xlim(-1.25, 0.75)
+axes[1].set_xlim(-2, 0.75)
 
 plt.tight_layout()
 plt.show()

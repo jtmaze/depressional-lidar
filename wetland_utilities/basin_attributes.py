@@ -1,6 +1,8 @@
 
 from dataclasses import dataclass
 from functools import cached_property
+
+import richdem as rd
 from typing import Optional
 
 import matplotlib.pyplot as plt
@@ -53,7 +55,7 @@ class WellPoint:
 
 @dataclass
 class FilledDEM:
-    """Wang-Liu filled DEM and per-cell fill depths."""
+    """Filled DEM and per-cell fill depths."""
     filled: np.ndarray       # 2D filled DEM, np.nan outside footprint
     fill_depth: np.ndarray   # filled - original (>=0), np.nan outside footprint
     transform: Affine
@@ -255,19 +257,22 @@ class WetlandBasin:
 
         # Clip DEM to either basin footprint or the well point
         with rio.open(self.source_dem_path) as dem:
-            print(dem.crs)
+            src_crs = CRS.from_user_input(dem.crs)
             data, out_transform = rio_mask(
-                dem, shape, crop=True, filled=True, nodata=dem.nodata
+                dem, shape, crop=True, filled=False
             )
             band = data[0].astype("float64")
             nodata = dem.nodata
-            # Replace nodata values with np.nan
+
+        # Convert out-of-shape mask to NaN even when source nodata is undefined.
+        band = np.asarray(band.filled(np.nan), dtype="float64")
+        if nodata is not None:
             band = np.where(band == nodata, np.nan, band)
 
         return ClippedDEM(
                 dem=band,
                 transform=out_transform,
-                crs=CRS.from_user_input(dem.crs),
+                crs=src_crs,
                 nodata=nodata
             )
     
@@ -658,7 +663,7 @@ class WetlandBasin:
             elevation_rtk=rtk,
             location=self.well_point_info.geometry.iloc[[0]]
         )
-
+    
     def get_local_fill(self) -> FilledDEM:
         """
         Fill topographic depressions using the Wang & Liu algorithm (via richdem).
@@ -666,7 +671,6 @@ class WetlandBasin:
         epsilon=False produces exact flat fills — spill elevation equals the lowest
         outlet cell, with no artificial gradient added inside the depression.
         """
-        import richdem as rd
 
         clipped = self.clipped_dem
         dem_data = clipped.dem.copy()
@@ -790,7 +794,7 @@ class WetlandBasin:
                            label=f"Well ({well.elevation_dem:.2f}m)")
 
         ax.legend(loc='upper right')
-        ax.set_title(f"{self.wetland_id} — Depression Fill Depths (Wang & Liu)")
+        ax.set_title(f"{self.wetland_id} — Depression Fill Depths")
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_xlabel('')

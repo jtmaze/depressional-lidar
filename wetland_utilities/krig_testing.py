@@ -59,7 +59,7 @@ wtd_surface_med = WTDSurface(
 )
 
 # wtd_surface_med_gauss.plot_masked_result(sigma_threshold=1.0)
-wtd_surface_med.plot_masked_result(sigma_threshold=1.25)
+wtd_surface_med.plot_masked_result(sigma_threshold=1)
 
 lags = wtd_surface_med.okr_result['lags']
 weights = wtd_surface_med.okr_result['weights']
