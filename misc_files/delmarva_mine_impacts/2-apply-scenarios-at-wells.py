@@ -112,7 +112,7 @@ for scenario in wetland_results['scenario'].unique():
     ax.scatter(x_pos, 
                scenario_data['gw_draw_ft'],
                c=scenario_colors.get(scenario, '#888888'),
-               label=scenario,
+               label=scenario_labels.get(scenario, scenario),
                alpha=0.75,
                s=200,
                edgecolor='k',
@@ -122,9 +122,9 @@ ax.scatter(range(len(unique_basins)),
            mean_drawdown, 
            marker='x', 
            color='black', 
-           s=100, 
+           s=200, 
            zorder=5, 
-           linewidths=2,
+           linewidths=4,
            label='Mean Drawdown')
 
 # Format x-axis with basin ID and distance
@@ -133,14 +133,14 @@ xlabels = [f"{basin_id}\n({int(round(basin_distances[basin_id] / 10) * 10)} ft)"
            for basin_id in unique_basins]
 
 ax.set_xticks(range(len(unique_basins)))
-ax.set_xticklabels(xlabels, rotation=0, fontsize=12)
+ax.set_xticklabels(xlabels, rotation=0, fontsize=14)
 
-ax.set_xlabel('Wetland ID (Distance to Mine)', fontsize=14, labelpad=20)
-ax.set_ylabel('Groundwater Drawdown (ft)', fontsize=14)
-ax.set_title('Predicted Aquifer Drawdown by Scenario and Wetland', fontsize=14)
+ax.set_xlabel('Wetland ID (Distance to Mine)', fontsize=16, labelpad=20)
+ax.set_ylabel('Groundwater Drawdown (ft)', fontsize=16)
+#ax.set_title('Predicted Aquifer Drawdown by Scenario and Wetland', fontsize=14)
 ax.tick_params(axis='y', labelsize=11)
 ax.grid(axis='y', linestyle='--', alpha=0.5)
-ax.legend(title='Scenario', loc='best', fontsize=12, title_fontsize=15)
+ax.legend(title='Scenario', loc='best', fontsize=14, title_fontsize=16)
 
 plt.tight_layout()
 plt.show()
@@ -185,6 +185,7 @@ summary_df = summary_df.join(mean_draw)
 summary_df = summary_df.drop(columns='geometry')
 
 print(summary_df)
+print(len(summary_df[summary_df['mean_gw_draw_ft'] < -1]))
 
 # %% 8.0 Plot of wetland counts as function of pit distance
 

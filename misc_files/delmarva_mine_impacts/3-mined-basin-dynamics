@@ -16,6 +16,8 @@ from wetland_utilities.basin_dynamics import WellStageTimeseries, BasinDynamics
 site = 'delmarva'
 
 ft_to_m = 0.3048
+m_to_ft = 1 / ft_to_m
+sq_m_to_acres = 1 / 4046.8564224
 
 source_dem = f'D:/depressional_lidar/data/{site}/in_data/2007_1m_DEM.tif'
 well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/waterlevel_data/daily_well_depth_Fall2025.csv'
@@ -45,7 +47,7 @@ for i in ids:
     fp = wetland_footprints[wetland_footprints['wetland_id'] == i].copy()
 
     wetland_result = gw_results[gw_results['wetland_id'] == i]
-    wetland_result = wetland_result[wetland_result['scenario'] == 'thiem_avgd']
+    print(wetland_result[['scenario', 'gw_draw_ft']])
     gw_draw = wetland_result['gw_draw_ft'].mean()
     gw_draw = gw_draw * ft_to_m
 
@@ -112,11 +114,11 @@ for i in ids:
 
     # Pre versus post stage timeseries plot
     plt.figure(figsize=(8, 8))
-    pre_ts['water_level'].plot(label='Pre Stage', color='blue')
-    post_ts['water_level'].plot(label='Post Stage', color='red', alpha=0.8)
+    (pre_ts['water_level'] * m_to_ft).plot(label='Pre Stage', color='blue')
+    (post_ts['water_level'] * m_to_ft).plot(label='Post Stage', color='red', alpha=0.8)
     plt.title(f'Well Stage Timeseries: {i}', fontsize=16, fontweight='bold')
     plt.xlabel('Date', fontsize=14)
-    plt.ylabel('Stage (m)', fontsize=14)
+    plt.ylabel('Stage (ft)', fontsize=14)
     plt.legend(fontsize=14)
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
@@ -127,12 +129,12 @@ for i in ids:
     # Pre versus post inundated area plot
     plt.figure(figsize=(8, 8))
     # Plot both timeseries
-    pre_timeseries.plot(label='Pre Inundated Area', color='blue')
-    post_timeseries.plot(label='Post Inundated Area', color='red', alpha=0.8)
+    (pre_timeseries * sq_m_to_acres).plot(label='Pre Inundated Area', color='blue')
+    (post_timeseries * sq_m_to_acres).plot(label='Post Inundated Area', color='red', alpha=0.8)
     # Add titles and labels
     plt.title(f'Inundated Area Timeseries: {i}', fontsize=16, fontweight='bold')
     plt.xlabel('Date', fontsize=14)
-    plt.ylabel('Inundated Area ($m^2$)', fontsize=14)
+    plt.ylabel('Inundated Area (acres)', fontsize=14)
     # Formatting
     plt.legend(fontsize=14)
     plt.xticks(fontsize=12)
@@ -163,18 +165,18 @@ for idx, result in enumerate(area_results):
     pre_ts = result['pre_ts']
     post_ts = result['post_ts']
 
-    ax.hist(pre_ts.dropna(), bins=30, histtype='step', color='blue', 
+    ax.hist((pre_ts * sq_m_to_acres).dropna(), bins=30, histtype='step', color='blue', 
             linewidth=2, label='Pre Inundated Area')
-    ax.hist(post_ts.dropna(), bins=30, histtype='step', color='red', 
+    ax.hist((post_ts * sq_m_to_acres).dropna(), bins=30, histtype='step', color='red', 
             linewidth=2, label='Post Inundated Area')
     
     ax.set_title(f'{wetland_id}')
-    ax.set_xlabel('Inundation Area ($m^2$)')
+    ax.set_xlabel('Inundation Area (acres)')
     ax.set_ylabel('Frequency (Days)')
     ax.grid(True, linestyle='--', alpha=0.6)
-
-    post_mean = post_ts.mean()
-    pre_mean = pre_ts.mean()
+    ax.set_xlim(left=0)
+    post_mean = post_ts.mean() * sq_m_to_acres
+    pre_mean = pre_ts.mean() * sq_m_to_acres
     diff = pre_mean - post_mean
     change = {'wetland_id': wetland_id, 'baseline': pre_mean, 'post_mining': post_mean, 'diff': diff}
     area_changes.append(change)
@@ -190,9 +192,14 @@ plt.show()
 # %%
 
 change_df = pd.DataFrame(area_changes)
-change_df[['baseline', 'post_mining', 'diff']] = change_df[['baseline', 'post_mining', 'diff']].apply(lambda x: np.round(x / 10) * 10)
+change_df[['baseline', 'post_mining', 'diff']] = change_df[['baseline', 'post_mining', 'diff']].apply(lambda x: np.round(x, 2))
+change_df['pct_change'] = np.round((change_df['diff'] / change_df['baseline']) * 100).astype(int)
 
-change_df.to_csv(f'D:/depressional_lidar/data/{site}/out_data/example_wetland_mean_areas.csv')
+print(change_df['diff'].sum())
+
+# %%
+
+change_df.to_csv(f'D:/depressional_lidar/data/{site}/out_data/example_wetland_mean_areas.csv', index=False)
 
 
 # %%

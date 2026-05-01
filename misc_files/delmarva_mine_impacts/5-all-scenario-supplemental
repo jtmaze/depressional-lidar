@@ -1,0 +1,191 @@
+# %% Setup libraries and directories
+
+import sys
+import numpy as np
+import pandas as pd
+import geopandas as gpd
+import matplotlib.pyplot as plt
+
+PROJECT_ROOT = r"C:\Users\jtmaz\Documents\projects\depressional-lidar"
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from wetland_utilities.basin_attributes import WetlandBasin
+from wetland_utilities.basin_dynamics import WellStageTimeseries, BasinDynamics
+
+site = 'delmarva'
+
+ft_to_m = 0.3048
+m_to_ft = 1 / ft_to_m
+sq_m_to_acres = 1 / 4046.8564224
+
+source_dem = f'D:/depressional_lidar/data/{site}/in_data/2007_1m_DEM.tif'
+well_stage_path = f'D:/depressional_lidar/data/{site}/in_data/waterlevel_data/daily_well_depth_Fall2025.csv'
+well_points_path = f'D:/depressional_lidar/data/{site}/{site}_well_points.shp'
+basin_shapes_path = f'D:/depressional_lidar/data/{site}/out_data/mdnr_example_wetlands.shp'
+gw_results_path = f'D:/depressional_lidar/data/{site}/out_data/well_gw_impacts.csv'
+
+well_points = (
+    gpd.read_file(well_points_path)[['wetland_id', 'type', 'geometry', 'rtk_z']]
+    .query("type in ['main_doe_well', 'aux_wetland_well', 'SW', 'CH', 'UW']")
+)
+wetland_footprints = gpd.read_file(basin_shapes_path)
+wetland_footprints.drop(columns=['path', 'centroid_y', 'centroid_x', 'compact', 'mean_width', 'label'], inplace=True)
+
+gw_results = pd.read_csv(gw_results_path)
+
+
+# %% 3.0 Run the basin dynamics models
+
+area_changes = []
+ids = wetland_footprints['wetland_id'].unique()
+scenarios = gw_results['scenario'].unique()
+
+# Cache basins and timeseries so they are only built once per wetland
+basin_cache = {}
+timeseries_cache = {}
+
+for i in ids:
+    well_point = well_points[well_points['wetland_id'] == i].copy()
+    well_point['rtk_z'] = np.nan
+    fp = wetland_footprints[wetland_footprints['wetland_id'] == i].copy()
+
+    basin = WetlandBasin(
+        wetland_id=i,
+        source_dem_path=source_dem,
+        footprint=fp,
+        well_point_info=well_point,
+        transect_method=None,
+        transect_n=None,
+        transect_buffer=10
+    )
+
+    timeseries = WellStageTimeseries.from_csv(
+        well_stage_path,
+        well_id=i,
+        basin=basin,
+        date_column='day',
+        water_level_column='well_depth_m',
+        well_id_column='wetland_id',
+        crop_dates=None
+    )
+
+    timeseries.plot()
+    basin_cache[i] = basin
+    timeseries_cache[i] = timeseries
+
+for j in scenarios:
+    for i in ids:
+        basin = basin_cache[i]
+        timeseries = timeseries_cache[i]
+
+        wetland_result = gw_results[gw_results['wetland_id'] == i]
+        wetland_result = wetland_result[wetland_result['scenario'] == j]
+
+        gw_draw = wetland_result['gw_draw_ft'].mean()
+        gw_draw = gw_draw * ft_to_m
+
+        pre_dynamics = BasinDynamics(
+            basin=basin,
+            well_stage=timeseries,
+            well_to_dem_offset=0
+        )
+        pre_dynamics.plot_inundated_area_timeseries()
+
+        post_dynamics = BasinDynamics(
+            basin=basin,
+            well_stage=timeseries,
+            well_to_dem_offset=gw_draw
+        )
+
+        pre_stacks = pre_dynamics.calculate_inundation_stacks()
+        post_stacks = post_dynamics.calculate_inundation_stacks()
+
+        pre_timeseries = pre_dynamics._calculate_area_timeseries(stacks=pre_stacks)
+        post_timeseries = post_dynamics._calculate_area_timeseries(stacks=post_stacks)
+
+        pre_ts = timeseries.timeseries_data.copy()
+        post_ts = timeseries.timeseries_data.copy()
+        post_ts['water_level'] = post_ts['water_level'] + gw_draw
+
+        # # Pre versus post stage timeseries plot
+        # plt.figure(figsize=(8, 8))
+        # (pre_ts['water_level'] * m_to_ft).plot(label='Pre Stage', color='blue')
+        # (post_ts['water_level'] * m_to_ft).plot(label='Post Stage', color='red', alpha=0.8)
+        # plt.title(f'Well Stage Timeseries: {i} — {j}', fontsize=16, fontweight='bold')
+        # plt.xlabel('Date', fontsize=14)
+        # plt.ylabel('Stage (ft)', fontsize=14)
+        # plt.legend(fontsize=14)
+        # plt.xticks(fontsize=12)
+        # plt.yticks(fontsize=12)
+        # plt.grid(True, linestyle='--', alpha=0.6)
+        # plt.tight_layout()
+        # plt.show()
+
+        # # Pre versus post inundated area plot
+        # plt.figure(figsize=(8, 8))
+        # (pre_timeseries * sq_m_to_acres).plot(label='Pre Inundated Area', color='blue')
+        # (post_timeseries * sq_m_to_acres).plot(label='Post Inundated Area', color='red', alpha=0.8)
+        # plt.title(f'Inundated Area Timeseries: {i} — {j}', fontsize=16, fontweight='bold')
+        # plt.xlabel('Date', fontsize=14)
+        # plt.ylabel('Inundated Area (acres)', fontsize=14)
+        # plt.legend(fontsize=14)
+        # plt.xticks(fontsize=12)
+        # plt.yticks(fontsize=12)
+        # plt.grid(True, linestyle='--', alpha=0.6)
+        # plt.tight_layout()
+        # plt.show()
+
+        pre_mean = pre_timeseries.mean() * sq_m_to_acres
+        post_mean = post_timeseries.mean() * sq_m_to_acres
+        diff = pre_mean - post_mean
+        area_changes.append({
+            'scenario': j,
+            'wetland_id': i,
+            'baseline': pre_mean,
+            'post_mining': post_mean,
+            'diff': diff
+        })
+
+
+# %% Write the summary
+
+change_df = pd.DataFrame(area_changes)
+change_df[['baseline', 'post_mining', 'diff']] = change_df[['baseline', 'post_mining', 'diff']].apply(lambda x: np.round(x, 2))
+change_df['pct_change'] = np.round((change_df['diff'] / change_df['baseline']) * 100).astype(int)
+
+
+change_df.to_csv(f'D:/depressional_lidar/data/{site}/out_data/supplemental_monitored_wetland_areas.csv', index=False)
+
+
+# %% Make a quick plot with well depth versus inundated area for a selected site
+
+site = 'XB-SW'
+dataset = 'pre'
+
+_basin = basin_cache[site]
+_timeseries = timeseries_cache[site]
+
+_dynamics = BasinDynamics(basin=_basin, well_stage=_timeseries, well_to_dem_offset=0)
+_stacks = _dynamics.calculate_inundation_stacks()
+_area_ts = _dynamics._calculate_area_timeseries(stacks=_stacks)
+
+_stage_m = _timeseries.timeseries_data['water_level']
+
+_plot_df = pd.DataFrame({'stage_m': _stage_m, 'area_m2': _area_ts}).dropna()
+_plot_df = _plot_df[_plot_df['stage_m'] > 0]
+
+fig, ax = plt.subplots(figsize=(8, 6))
+ax.scatter(_plot_df['stage_m'], _plot_df['area_m2'],
+           alpha=0.4, s=20, color='steelblue', label='Observed')
+ax.set_xlabel('Well Depth (m)', fontsize=14)
+ax.set_ylabel('Inundated Area (m²)', fontsize=14)
+ax.set_title(f'Well Depth vs. Inundated Area: {site}', fontsize=15, fontweight='bold')
+ax.tick_params(labelsize=12)
+ax.legend(fontsize=12)
+ax.grid(True, linestyle='--', alpha=0.5)
+plt.tight_layout()
+plt.show()
+
+# %%
+

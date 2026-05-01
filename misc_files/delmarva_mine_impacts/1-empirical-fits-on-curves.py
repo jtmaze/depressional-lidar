@@ -132,7 +132,7 @@ scenario_labels = {
     'pc_20d': 'Papadopulos-Cooper 1967 (105,633 gpd, 20 days)',
     'pc_30d': 'Papadopulos-Cooper 1967 (116,196 gpd, 30 days)',
     'thiem_avgd': 'Thiem (time-averaged equivalent)',
-    'thiem_lt': 'Thiem (long-term adjustec values)',
+    'thiem_lt': 'Thiem (long-term adjusted values)',
 }
 
 fig, ax = plt.subplots(figsize=(11, 6))
@@ -157,10 +157,12 @@ for i, name in enumerate(df.columns):
 
 plt.xlim(0, 3000)
 plt.ylim(-5, 0)
-plt.xlabel('Distance (ft)', fontsize=12)
-plt.ylabel('Drawdown (ft)', fontsize=12)
-plt.title('Aquifer Drawdown Models', fontsize=13, fontweight='bold')
-plt.legend(fontsize=10, loc='lower right')
+plt.xlabel('Distance (ft)', fontsize=16)
+plt.ylabel('Drawdown (ft)', fontsize=16)
+plt.xticks(fontsize=14)
+plt.yticks(fontsize=14)
+
+plt.legend(fontsize=14, loc='lower right')
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.show()

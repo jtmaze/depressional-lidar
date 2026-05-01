@@ -62,18 +62,9 @@ for i in wetland_ids:
         plot_smoothed_spill=True, 
         plot_contiguous_spill=True,
     )
-    # delineated_basin.plot_local_fill()
 
-    # delineated_basin.map_spill_inundation(
-    #     use_smoothed=True,
-    #     plot_contiguous_spill=True,
-    #     min_flooded_area=100
-    # )
     well_elev = delineated_basin.well_point.elevation_dem
     min_elev = delineated_basin.deepest_point.elevation
-
-    spill_elev_smoothed = delineated_basin.spill_point_smoothed.elevation
-    spill_elev_contiguous = delineated_basin.find_contiguous_spill_z(min_flooded_area=100)
 
     max_fill_delineated, fill_dem_z = delineated_basin.max_fill_depth()
     max_fill_elev = max_fill_delineated + fill_dem_z
@@ -128,8 +119,7 @@ for i in wetland_ids:
         'wetland_id': i,
         'min_elev': min_elev,
         'well_elev': well_elev,
-        'perimeter_smoothed_spill_elev': spill_elev_smoothed,
-        'contiguous_spill_elev': spill_elev_contiguous,
+
         'max_fill_delineated': max_fill_delineated,
         'max_fill_elev': max_fill_elev,
         # Agnostic of basin shape
