@@ -53,13 +53,13 @@ wtd_surface_med = WTDSurface(
         'variogram_parameters': None,
         'n_lags': 10,
     },
-    coarse_grid_dims=(1000, 1000),
+    coarse_grid_dims=(10, 10),
     boundary=boundary,
     plot_variogram=True
 )
 
 # wtd_surface_med_gauss.plot_masked_result(sigma_threshold=1.0)
-wtd_surface_med.plot_masked_result(sigma_threshold=1)
+wtd_surface_med.plot_masked_result(sigma_threshold=1.25)
 
 lags = wtd_surface_med.okr_result['lags']
 weights = wtd_surface_med.okr_result['weights']
@@ -127,7 +127,7 @@ weights_df = pd.DataFrame(weights, columns=wetland_ids)
 # weights_df.to_csv(f"{out_dir}/kriging_weights.csv", index=False, float_format="%.6f")
 
 # # 5.2. HDF5 
-with pd.HDFStore(f"{out_dir}/kriging_weights_optimized_fit.h5", mode="w") as store:
+with pd.HDFStore(f"{out_dir}/kriging_weights_crude_test.h5", mode="w") as store:
     store.put("weights", weights_df, format="fixed")
     store.put("grid_coords", pd.DataFrame({"x": x_flat, "y": y_flat}), format="fixed")
 
@@ -144,11 +144,11 @@ metadata = {
 }
 
 import json
-with open(f"{out_dir}/kriging_weights_metadata_optimized.json", "w") as f:
+with open(f"{out_dir}/kriging_weights_metadata_crude_test.json", "w") as f:
     json.dump(metadata, f, indent=2)
 
 wtd_surface_med.write_masked_tif(
-    out_path=f'{out_dir}/interpolated_median_WSE_optimized_model.tif',
+    out_path=f'{out_dir}/interpolated_median_WSE_crude_test.tif',
     sigma_threshold=1.25,
     crs='EPSG:26917'
 )

@@ -100,7 +100,54 @@ plt.tight_layout()
 plt.xlim(-1, 1)
 plt.show()
 
-# %% 4.0 Q-Q plot aggregated by connectivity class
+# %% 4.0 Q-Q plot for all wells independent of connectivity class. 
+
+dist_all = distributions_clean[
+    (distributions_clean['pre_adj'] >= -2.1) & (distributions_clean['pre_adj'] <= 0.75) &
+    (distributions_clean['post_adj'] >= -2.1) & (distributions_clean['post_adj'] <= 0.75)
+].copy()
+
+pre_all = dist_all['pre_adj'].dropna()
+post_all = dist_all['post_adj'].dropna()
+
+n_quantiles = 1000
+quantiles_all = np.linspace(0, 1, n_quantiles)
+pre_q_all = np.quantile(pre_all, quantiles_all)
+post_q_all = np.quantile(post_all, quantiles_all)
+
+fig, ax = plt.subplots(1, 1, figsize=(8, 7))
+
+ax.scatter(pre_q_all, post_q_all, s=30, alpha=0.8, color='black', label='All wells (aggregate)')
+ax.plot([pre_q_all.min(), pre_q_all.max()],
+        [pre_q_all.min(), pre_q_all.max()],
+        linestyle='--', linewidth=2, color='black', label='1:1 line')
+ax.axvline(0, color='grey', linestyle='-', linewidth=10, alpha=0.5, label='Spill Depth')
+
+ax.set_xlabel('Pre-Logging [m]', fontsize=15)
+ax.set_ylabel('Post-Logging [m]', fontsize=15)
+ax.tick_params(axis='both', labelsize=12)
+ax.grid(True, alpha=0.3)
+ax.set_aspect('equal', adjustable='box')
+ax.set_xlim(-2, 0.75)
+ax.set_ylim(-2, 0.75)
+ax.legend(fontsize=12, loc='upper left', markerscale=1.5)
+
+plt.tight_layout()
+plt.show()
+
+# Print the quantile difference at -0.5 meters below spill and at the spill (0)
+diff_all = post_q_all - pre_q_all
+
+idx_neg05 = np.argmin(np.abs(pre_q_all - (-0.5)))
+idx_spill = np.argmin(np.abs(pre_q_all - 0.0))
+
+print(f"Quantile difference at pre = -0.5m: {diff_all[idx_neg05]:.3f} m  "
+      f"(pre={pre_q_all[idx_neg05]:.3f}, post={post_q_all[idx_neg05]:.3f})")
+print(f"Quantile difference at pre =  0.0m: {diff_all[idx_spill]:.3f} m  "
+      f"(pre={pre_q_all[idx_spill]:.3f}, post={post_q_all[idx_spill]:.3f})")
+
+
+# %% 5.0 Q-Q plot aggregated by connectivity class
 connectivity_config = {
     'first order': {'color': 'green', 'label': 'Outlet Connected'},
     'giw': {'color': 'blue', 'label': 'Unconnected'}, 
@@ -134,6 +181,17 @@ for conn_class, config in connectivity_config.items():
     pre_q = np.quantile(class_df['pre_adj'], quantiles)
     post_q = np.quantile(class_df['post_adj'], quantiles)
 
+    diff = post_q - pre_q
+
+    idx_neg05 = np.argmin(np.abs(pre_q - (-0.5)))
+    idx_spill = np.argmin(np.abs(pre_q - 0.0))
+
+    print(conn_class)
+    print(f"Quantile difference at pre = -0.5m: {diff[idx_neg05]:.3f} m  "
+        f"(pre={pre_q[idx_neg05]:.3f}, post={post_q[idx_neg05]:.3f})")
+    print(f"Quantile difference at pre =  0.0m: {diff[idx_spill]:.3f} m  "
+        f"(pre={pre_q[idx_spill]:.3f}, post={post_q[idx_spill]:.3f})")
+
     ax.scatter(pre_q, post_q, alpha=0.5, s=10,
                     color=config['color'], label=config['label'])
 
@@ -162,7 +220,7 @@ ax.legend(
 plt.tight_layout()
 plt.show()
 
-# %% 5.0 Q-Q plot for each individual wetland
+# %% 6.0 Q-Q plot for each individual wetland
 
 wetland_filtered = distributions_clean[
     (distributions_clean['pre_adj'] >= -2.1) & (distributions_clean['pre_adj'] <= 0.75) &

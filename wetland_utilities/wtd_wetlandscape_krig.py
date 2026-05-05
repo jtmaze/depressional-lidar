@@ -60,7 +60,7 @@ class WellArray:
 
     def _join_and_compute_wse(self, well_depth: pd.DataFrame) -> gpd.GeoDataFrame:
         pts = self.well_pts.merge(well_depth, on='wetland_id', how='inner')
-        pts['wse_m'] = pts['well_depth'] # NOTE using local well depth relative to ground surface instead of WSE to compute weights
+        pts['wse_m'] = pts['well_depth'] + pts['z_dem']
         return pts
 
 @dataclass 
