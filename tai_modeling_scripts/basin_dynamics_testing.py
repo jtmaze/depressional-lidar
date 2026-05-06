@@ -14,7 +14,7 @@ from wetland_utilities.basin_attributes import WetlandBasin
 from wetland_utilities.basin_dynamics import WellStageTimeseries, BasinDynamics
 
 site = 'bradford'
-tgt_wetland_id = "6_300"
+tgt_wetland_id = "14_500"
 buffer_dist = 150
 
 
