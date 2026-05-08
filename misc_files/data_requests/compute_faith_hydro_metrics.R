@@ -15,24 +15,30 @@ soil_core <- read_excel(
 )
 print(unique(soil_core$well_id))
 
-core_ids <- c('Devils Den', 'Ross Pond', 'West Ford', 'Brantley North', 'Fish Cove', 'Surprise')
+core_ids <- c("Devil's Den", 'Ross', 'West Ford', 'Brantley North', 'Fish Cove', 'Surprise Pond')
 
-stage_dir <- "D:/depressional_lidar/data/osbs/in_data/stage_data/daily_well_depth_Fall2025.csv"
+stage_dir <- "D:/depressional_lidar/data/osbs/in_data/stage_data/osbs_daily_well_depth_Fall2025.csv"
 daily_stage <- read_csv(stage_dir) %>%
   # I filter out early data so we have consistent period of record across wetlands, safe comparison
-   filter(date >= as.POSIXct('2022-03-09 12:00:00', tz='UTC')) %>% 
+   filter(date >= as.POSIXct('2022-03-09 12:00:00', tz='UTC')) %>%  
+   rename(well_id = wetland_id) %>% 
    filter(well_id %in% core_ids)
 
 well_id_key <- tibble(
   'Fish Cove' = 'Fishcove',
   'Surprise' = 'Surprise Pond',
+  "Devil's Den" = 'Devils Den',
+  "Ross" = "Ross Pond"
 )
+
 
 daily_stage <- daily_stage %>% 
   mutate(
     well_id = recode(well_id, !!!well_id_key, .default=well_id)
   ) %>% 
   rename('day'='date')
+
+print(unique(daily_stage$well_id))
   
 print(str(daily_stage))
 
@@ -361,10 +367,12 @@ get_prior_hydrograph_inundation <- function(hg, sample_date, look_back){
   # Helper function for calc_sample_date_info()
   
   window_start <- sample_date - days(look_back)
+  print(window_start)
   
   hg_binary <- hg %>% 
     drop_na(sample_stage_m) %>% 
     distinct(day, .keep_all=TRUE) %>% 
+    filter(day >= window_start, day < sample_date) %>%
     arrange(day) %>% 
     transmute(day, inundated=as.integer(sample_stage_m >= 0))
   

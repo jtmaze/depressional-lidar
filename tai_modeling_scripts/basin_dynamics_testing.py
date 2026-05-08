@@ -79,8 +79,9 @@ dynamics = BasinDynamics(
 # co2_params = {'y_0': 15, 'y_f': -10, 'k': 3, 'x_mid': -0.25}
 
 # dynamics.map_depth_stacks()
-# dynamics.map_inundation_stacks()
-dynamics.map_tai_stacks(min_depth=-0.2, max_depth=0.2)
+dynamics.map_inundation_stacks(cbar_min=0, cbar_max=100)
+dynamics.map_tai_stacks(min_depth=-0.2, max_depth=0.2, cbar_min=0, cbar_max=60)
+dynamics.map_inundation_transition_counts(cbar_min=0, cbar_max=45)
 
 # dynamics.plot_sigmoid_curve(ch4_params, depth_range=(-2, 2))
 # dynamics.plot_ch4_timeseries(sigmoid_params=ch4_params)

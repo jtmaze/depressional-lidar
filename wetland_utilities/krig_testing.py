@@ -53,7 +53,7 @@ wtd_surface_med = WTDSurface(
         'variogram_parameters': None,
         'n_lags': 10,
     },
-    coarse_grid_dims=(10, 10),
+    coarse_grid_dims=(1_000, 1_000),
     boundary=boundary,
     plot_variogram=True
 )
@@ -118,6 +118,10 @@ plt.show()
 
 x_flat = wtd_surface_med._x_grid.ravel().astype(np.float32)
 y_flat = wtd_surface_med._y_grid.ravel().astype(np.float32)
+
+coords_df = pd.DataFrame({'x': x_flat, 'y': y_flat})
+coords_df.to_csv(f"{out_dir}/coarse_grid_coords.csv")
+
 wetland_ids = wtd_surface_med.well_array.wtd_points['wetland_id'].to_list()
 
 out_dir = r"D:/depressional_lidar/data/bradford/out_data/well_wse_interpolations"

@@ -263,7 +263,7 @@ hatch_handles = [
     Patch(facecolor='white', edgecolor='black', hatch='///', label='Post PTC')
 ]
 
-ax.legend(handles=connect_handles + hatch_handles, fontsize=10, ncol=3, loc='upper left', frameon=True)
+ax.legend(handles=connect_handles + hatch_handles, fontsize=10, ncol=3, loc='upper right', frameon=True)
 
 plt.tight_layout()
 plt.show()

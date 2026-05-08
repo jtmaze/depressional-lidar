@@ -236,6 +236,8 @@ class BasinDynamics:
     def _map_frequency(
             self, frequency, title, cbar_label, cmap='RdYlBu_r',
             show_basin_footprint=False, vmin=None, vmax=None, as_percent=True,
+            show_scale_bar: bool = False, scale_bar_length: float = None,
+            hide_ticks: bool = False,
     ):
         """Generic frequency/mean map visualization."""
         dem = self.basin.clipped_dem.dem
@@ -266,9 +268,21 @@ class BasinDynamics:
 
         ax.scatter(well_x, well_y, color='green', marker='x', s=100, linewidths=3,
                    label=f'Well Location @{self.well_point.elevation_dem:.2f}m')
+
+        if show_scale_bar:
+            self._add_scale_bar(ax, scale_bar_length=scale_bar_length)
+
         ax.legend(loc='upper right')
-        ax.set_xlabel('(m)')
-        ax.set_ylabel('(m)')
+        if hide_ticks:
+            ax.set_xlabel('')
+            ax.set_ylabel('')
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+        else:
+            ax.set_xlabel('(m)')
+            ax.set_ylabel('(m)')
         ax.set_title(title)
         plt.tight_layout()
         plt.show()
@@ -413,6 +427,65 @@ class BasinDynamics:
     def aggregate_inundation_stacks(self, inundation_stacks: Dict[pd.Timestamp, np.ndarray] = None) -> np.ndarray:
         stacks = inundation_stacks or self.calculate_inundation_stacks()
         return self._aggregate_stacks(stacks, method="frequency")
+
+    def calculate_inundation_transition_counts(
+            self,
+            inundation_stacks: Dict[pd.Timestamp, np.ndarray] = None,
+            transition: str = "any",
+    ) -> np.ndarray:
+        """
+        Count per-cell inundation state transitions across consecutive timesteps.
+
+        transition:
+            - "any":       count both dry->wet and wet->dry transitions
+            - "dry_to_wet": count only dry->wet transitions
+            - "wet_to_dry": count only wet->dry transitions
+        """
+        stacks = inundation_stacks or self.calculate_inundation_stacks()
+        if not stacks:
+            raise ValueError("No inundation stacks available for transition counting")
+
+        valid_modes = {"any", "dry_to_wet", "wet_to_dry"}
+        if transition not in valid_modes:
+            raise ValueError(f"transition must be one of {valid_modes}, got '{transition}'")
+
+        ordered_dates = sorted(stacks.keys())
+        dem = self.basin.clipped_dem.dem
+
+        if len(ordered_dates) < 2:
+            out = np.zeros_like(dem, dtype=np.float32)
+            return np.where(np.isnan(dem), np.nan, out)
+
+        first = stacks[ordered_dates[0]].astype(np.float32, copy=False)
+        prev_valid = np.isfinite(first)
+        prev_wet = first > 0
+
+        transition_counts = np.zeros(first.shape, dtype=np.uint32)
+        valid_pair_counts = np.zeros(first.shape, dtype=np.uint32)
+
+        for date in ordered_dates[1:]:
+            curr = stacks[date].astype(np.float32, copy=False)
+            curr_valid = np.isfinite(curr)
+            curr_wet = curr > 0
+
+            pair_valid = prev_valid & curr_valid
+            if transition == "any":
+                changed = prev_wet != curr_wet
+            elif transition == "dry_to_wet":
+                changed = (~prev_wet) & curr_wet
+            else:  # wet_to_dry
+                changed = prev_wet & (~curr_wet)
+
+            transition_counts += (pair_valid & changed).astype(np.uint32)
+            valid_pair_counts += pair_valid.astype(np.uint32)
+
+            prev_valid = curr_valid
+            prev_wet = curr_wet
+
+        out = transition_counts.astype(np.float32)
+        out = np.where(valid_pair_counts > 0, out, np.nan)
+        out = np.where(np.isnan(dem), np.nan, out)
+        return out
     
     def aggregate_tai_stacks(
             self, 
@@ -515,7 +588,10 @@ class BasinDynamics:
             min_depth: float = None,
             show_basin_footprint: bool = False,
             cbar_min: float = None,
-            cbar_max: float = None
+            cbar_max: float = None,
+            show_scale_bar: bool = True,
+            scale_bar_length: float = None,
+            hide_ticks: bool = True,
         ):
         if tai_frequency is None:
             if max_depth is None or min_depth is None:
@@ -527,6 +603,11 @@ class BasinDynamics:
             cbar_label='TAI Frequency (0-100%) of Days',
             cmap='RdYlBu_r',
             show_basin_footprint=show_basin_footprint,
+            vmin=cbar_min,
+            vmax=cbar_max,
+            show_scale_bar=show_scale_bar,
+            scale_bar_length=scale_bar_length,
+            hide_ticks=hide_ticks,
         )
 
     def map_inundation_stacks(
@@ -624,6 +705,118 @@ class BasinDynamics:
                 0.02,
                 0.98,
                 "All mapped frequencies are 0% for this scenario.",
+                transform=ax.transAxes,
+                va='top',
+                ha='left',
+                fontsize=11,
+                color='black',
+                bbox=dict(facecolor='white', alpha=0.75, edgecolor='none'),
+            )
+
+        plt.show()
+
+    def map_inundation_transition_counts(
+            self,
+            transition_counts: np.ndarray = None,
+            inundation_stacks: Dict[pd.Timestamp, np.ndarray] = None,
+            transition: str = "any",
+            show_basin_footprint: bool = False,
+            cbar_min: float = 0,
+            cbar_max: float = None,
+            plot_well: bool = True,
+            show_scale_bar: bool = True,
+            scale_bar_length: float = None,
+            title: str = None,
+    ):
+        """Map the number of inundation state transitions for each cell."""
+        if transition_counts is None:
+            transition_counts = self.calculate_inundation_transition_counts(
+                inundation_stacks=inundation_stacks,
+                transition=transition,
+            )
+
+        dem = self.basin.clipped_dem.dem
+        transition_counts = np.where(np.isnan(dem), np.nan, transition_counts)
+        finite_vals = transition_counts[np.isfinite(transition_counts)]
+        if finite_vals.size == 0:
+            raise ValueError("No finite transition-count values available for plotting")
+
+        if cbar_max is None:
+            vmax = float(np.nanmax(transition_counts))
+        else:
+            vmax = cbar_max
+        vmin = cbar_min
+        if np.isclose(vmax, vmin):
+            vmax = vmin + 1.0
+
+        well_point = self.well_point
+        well_point_x = well_point.location.x.values[0]
+        well_point_y = well_point.location.y.values[0]
+
+        label_lookup = {
+            "any": "State-change count (dry<->wet)",
+            "dry_to_wet": "Dry->wet transition count",
+            "wet_to_dry": "Wet->dry transition count",
+        }
+        map_label = label_lookup.get(transition, "Transition count")
+
+        fig, ax = plt.subplots(figsize=(12, 8))
+
+        if show_basin_footprint and self.basin.footprint is not None:
+            footprint = self.basin.footprint
+            footprint.boundary.plot(ax=ax, color='red', linewidth=2, alpha=0.8, label='Basin Footprint')
+        elif show_basin_footprint:
+            footprint = well_point.buffer(self.basin.transect_buffer)
+            footprint.boundary.plot(ax=ax, color='red', linewidth=2, alpha=0.8, label='Basin Footprint')
+
+        im = show(
+            transition_counts,
+            ax=ax,
+            cmap='YlOrRd',
+            alpha=1,
+            transform=self.basin.clipped_dem.transform,
+            vmin=vmin,
+            vmax=vmax,
+            adjust=False,
+        )
+
+        cbar = plt.colorbar(im.images[0], ax=ax, shrink=0.8)
+        cbar.set_label(map_label, rotation=270, labelpad=20, fontsize=14)
+        cbar.ax.tick_params(labelsize=12)
+
+        if plot_well:
+            ax.scatter(
+                well_point_x,
+                well_point_y,
+                color='limegreen',
+                marker='x',
+                s=400,
+                linewidths=7,
+                label='Well Location',
+            )
+
+        if show_scale_bar:
+            self._add_scale_bar(ax, scale_bar_length=scale_bar_length)
+
+        ax.set_xlabel('')
+        ax.set_ylabel('')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+
+        if title is None:
+            title = (
+                f"{self.well_stage.well_id} {map_label}\n"
+                f"Well-to-DEM offset: {self.well_to_dem_offset:+.2f} m"
+            )
+        ax.set_title(title)
+
+        if np.isclose(float(np.nanmax(transition_counts)), 0.0):
+            ax.text(
+                0.02,
+                0.98,
+                "No transition events were detected for this scenario.",
                 transform=ax.transAxes,
                 va='top',
                 ha='left',
