@@ -92,7 +92,7 @@ lai_vis = {
 }
 
 Map.addLayer(lai_composite, lai_vis, f'LAI ({start_date} to {end_date})')
-Map.add_colorbar(lai_vis, label='Leaf Area Index (LAI)')
+Map.add_colorbar(lai_vis, label='Leaf Area Index (LAI)', orientation='vertical', position='right')
 
 Map
 

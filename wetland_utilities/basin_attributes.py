@@ -1,25 +1,18 @@
 
 from dataclasses import dataclass
 from functools import cached_property
-
 import richdem as rd
 from typing import Optional
-
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
-import pandas as pd
 import geopandas as gpd
 from pyproj import CRS
 import rasterio as rio
-from rasterio.plot import show
 from rasterio.mask import mask as rio_mask
-from scipy.ndimage import gaussian_filter, label, binary_dilation
-from shapely.geometry import Point, LineString
+from scipy.ndimage import gaussian_filter
+from shapely.geometry import Point
 from affine import Affine
-
-
-#from wetland_attributes_from_dem import well_elevation_estimators
 
 @dataclass
 class ClippedDEM:
@@ -31,11 +24,6 @@ class ClippedDEM:
 
 @dataclass
 class DeepestPoint:
-    elevation: float
-    location: gpd.GeoSeries
-
-@dataclass
-class SpillPoint:
     elevation: float
     location: gpd.GeoSeries
 
@@ -60,6 +48,11 @@ class FilledDEM:
     fill_depth: np.ndarray   # filled - original (>=0), np.nan outside footprint
     transform: Affine
     crs: CRS
+
+# @dataclass
+# class SpillPoint:
+#     elevation: float
+#     location: gpd.GeoSeries
 
 
 @dataclass
@@ -92,15 +85,6 @@ class WetlandBasin:
     def deepest_point(self) -> DeepestPoint:
         return self.find_deepest_point()
     @cached_property
-    def spill_point(self) -> SpillPoint:
-        return self.find_spill_point()
-    @cached_property
-    def spill_point_smoothed(self) -> SpillPoint:
-        return self.find_spill_point_smoothed()
-    @cached_property
-    def spill_point_contiguous(self) -> float:
-        return self.find_contiguous_spill_z()
-    @cached_property
     def clipped_dem(self) -> ClippedDEM:
         return self.get_clipped_dem()
     @cached_property
@@ -110,6 +94,16 @@ class WetlandBasin:
     def local_fill(self) -> FilledDEM:
         return self.get_local_fill()
     
+
+    # @cached_property
+    # def spill_point(self) -> SpillPoint:
+    #     return self.find_spill_point()
+    # @cached_property
+    # def spill_point_smoothed(self) -> SpillPoint:
+    #     return self.find_spill_point_smoothed()
+    # @cached_property
+    # def spill_point_contiguous(self) -> float:
+    #     return self.find_contiguous_spill_z()
     # @cached_property
     # def radial_transects(self) -> gpd.GeoDataFrame:
     #     return self.establish_radial_transects(
@@ -134,8 +128,6 @@ class WetlandBasin:
             show_deepest: bool = False,
             show_centroid: bool = False,
             show_well: bool = False,
-            show_spill: bool = False,
-            show_smoothed_spill: bool = False,
             show_shape: bool = True
         ):
 
@@ -205,26 +197,7 @@ class WetlandBasin:
                 print(len(WellPoint.location))
                 print(WellPoint.location)
                 WellPoint.location.plot(ax=ax, color='red', marker='X', markersize=250)
-                # ax.annotate(f"DEM {WellPoint.elevation_dem:.2f}m", 
-                #         xy=(WellPoint.location.x.values[0], WellPoint.location.y.values[0]),
-                #         xytext=(10, 10), textcoords='offset points',
-                #         color='white', fontweight='bold')
 
-        if show_spill and self.footprint is not None:
-            spill = self.spill_point
-            spill.location.plot(ax=ax, color='magenta', marker='v', markersize=120)
-            ax.annotate(f"Spill: {spill.elevation:.2f}m",
-                xy=(spill.location.x.values[0], spill.location.y.values[0]),
-                xytext=(10, 10), textcoords='offset points',
-                color='white', fontweight='bold')
-
-        if show_smoothed_spill and self.footprint is not None:
-            spill_sm = self.spill_point_smoothed
-            spill_sm.location.plot(ax=ax, color='cyan', marker='v', markersize=120)
-            ax.annotate(f"Smoothed Spill: {spill_sm.elevation:.2f}m",
-                xy=(spill_sm.location.x.values[0], spill_sm.location.y.values[0]),
-                xytext=(10, -20), textcoords='offset points',
-                color='cyan', fontweight='bold')
 
         plt.title(f"Wetland Basin: {self.wetland_id}")
         ax.set_xticks([])
@@ -346,70 +319,6 @@ class WetlandBasin:
 
         return DeepestPoint(elevation=min_val, location=pt)
 
-    def find_spill_point(self) -> SpillPoint:
-        """
-        Find the lowest point along the perimeter of the basin footprint.
-        
-        Traces the boundary at DEM-cell resolution, computes the 25th percentile
-        elevation in a 5x5 window around each boundary cell, and returns the
-        cell with the lowest such value.
-        """
-        if self.footprint is None:
-            raise ValueError("Cannot find spill point without a basin footprint")
-
-        clipped = self.clipped_dem
-        dem_data = clipped.dem
-        rows, cols = dem_data.shape
-
-        # Get the boundary of the footprint as a LineString/MultiLineString
-        boundary = self.footprint.geometry.values[0].boundary
-
-        # Sample points along the boundary at the DEM cell resolution
-        cell_size = abs(clipped.transform.a)
-        step = cell_size  # sample at pixel spacing
-        distances = np.arange(0, boundary.length, step)
-        boundary_points = [boundary.interpolate(d) for d in distances]
-
-        # Convert boundary points to row/col in the clipped DEM
-        xs = [p.x for p in boundary_points]
-        ys = [p.y for p in boundary_points]
-        row_indices, col_indices = rio.transform.rowcol(clipped.transform, xs, ys)
-
-        # Deduplicate to unique cells
-        seen = set()
-        unique_cells = []
-        for r, c in zip(row_indices, col_indices):
-            if (r, c) not in seen and 0 <= r < rows and 0 <= c < cols:
-                seen.add((r, c))
-                unique_cells.append((r, c))
-
-        # For each boundary cell, compute the 25th percentile in a 5x5 window
-        best_val = np.inf
-        best_row, best_col = None, None
-        for r, c in unique_cells:
-            row_start = max(0, r - 2)
-            row_end = min(rows, r + 3)
-            col_start = max(0, c - 2)
-            col_end = min(cols, c + 3)
-
-            window = dem_data[row_start:row_end, col_start:col_end]
-            valid_vals = window[~np.isnan(window)]
-            if len(valid_vals) == 0:
-                continue
-
-            p25 = float(np.percentile(valid_vals, 25))
-            if p25 < best_val:
-                best_val = p25
-                best_row, best_col = r, c
-
-        if best_row is None:
-            raise ValueError("No valid boundary cells found on the clipped DEM")
-
-        x, y = rio.transform.xy(clipped.transform, best_row, best_col, offset="center")
-        pt = gpd.GeoSeries([Point(x, y)], crs=clipped.crs)
-
-        return SpillPoint(elevation=best_val, location=pt)
-
     def get_smoothed_dem(self, sigma: float = 5.0) -> SmoothedDEM:
         """
         Apply Gaussian smoothing to the clipped DEM.
@@ -433,133 +342,6 @@ class WetlandBasin:
             crs=clipped.crs,
             sigma=sigma,
         )
-
-    def find_spill_point_smoothed(self) -> SpillPoint:
-        """
-        Find the spill point using a Gaussian-smoothed DEM for (x, y) location,
-        then extract the z-value from the *unsmoothed* DEM using the 25th
-        percentile in a 5x5 window.
-
-        This avoids DEM noise / vegetation artifacts driving the spill location
-        while preserving accurate elevations (e.g. ditches) for the z-value.
-        """
-        if self.footprint is None:
-            raise ValueError("Cannot find spill point without a basin footprint")
-
-        smoothed = self.smoothed_dem
-        sm_data = smoothed.dem
-        rows, cols = sm_data.shape
-
-        # --- locate spill (x, y) on the smoothed surface ---
-        boundary = self.footprint.geometry.values[0].boundary
-        cell_size = abs(smoothed.transform.a)
-        distances = np.arange(0, boundary.length, cell_size)
-        boundary_points = [boundary.interpolate(d) for d in distances]
-
-        xs = [p.x for p in boundary_points]
-        ys = [p.y for p in boundary_points]
-        row_indices, col_indices = rio.transform.rowcol(smoothed.transform, xs, ys)
-
-        seen = set()
-        unique_cells = []
-        for r, c in zip(row_indices, col_indices):
-            if (r, c) not in seen and 0 <= r < rows and 0 <= c < cols:
-                seen.add((r, c))
-                unique_cells.append((r, c))
-
-        best_val = np.inf
-        best_row, best_col = None, None
-        for r, c in unique_cells:
-            row_start = max(0, r - 2)
-            row_end = min(rows, r + 3)
-            col_start = max(0, c - 2)
-            col_end = min(cols, c + 3)
-
-            window = sm_data[row_start:row_end, col_start:col_end]
-            valid_vals = window[~np.isnan(window)]
-            if len(valid_vals) == 0:
-                continue
-
-            p25 = float(np.percentile(valid_vals, 25))
-            if p25 < best_val:
-                best_val = p25
-                best_row, best_col = r, c
-
-        if best_row is None:
-            raise ValueError("No valid boundary cells found on the smoothed DEM")
-
-        # --- extract z from the unsmoothed DEM ---
-        raw_dem = self.clipped_dem.dem
-        r_start = max(0, best_row - 2)
-        r_end = min(rows, best_row + 3)
-        c_start = max(0, best_col - 2)
-        c_end = min(cols, best_col + 3)
-
-        raw_window = raw_dem[r_start:r_end, c_start:c_end]
-        raw_valid = raw_window[~np.isnan(raw_window)]
-        if len(raw_valid) == 0:
-            raise ValueError("No valid unsmoothed DEM cells in 5x5 window at spill location")
-        spill_z = float(np.percentile(raw_valid, 25))
-
-        x, y = rio.transform.xy(smoothed.transform, best_row, best_col, offset="center")
-        pt = gpd.GeoSeries([Point(x, y)], crs=smoothed.crs)
-
-        return SpillPoint(elevation=spill_z, location=pt)
-    
-    def find_contiguous_spill_z(self, min_flooded_area: float) -> float:
-        """ 
-        Finds the spill elevation such that a contiguous flooded surface reaches 
-        from the deepest point to beyond the buffered basin footprint.
-        Applies a min_flooded_area threshold to handle ditches on basin perimeters. 
-        """
-        if self.footprint is None:
-            raise ValueError("footprint is required for find_contiguous_spill_z")
-
-        clipped = self.clipped_dem
-        dem_data = clipped.dem
-        cell_size = abs(clipped.transform.a)
-        pixel_area = cell_size ** 2
-        nan_mask = np.isnan(dem_data)
-
-        # Locate the deepest point in the clipped DEM grid
-        deep_x = self.deepest_point.location.x.values[0]
-        deep_y = self.deepest_point.location.y.values[0]
-        deep_row, deep_col = rio.transform.rowcol(clipped.transform, deep_x, deep_y)
-
-        z_min = self.deepest_point.elevation
-        z_max = float(np.nanmax(dem_data))
-        dz = 0.01
-
-        while True:
-            surface_z = z_min + dz
-
-            if surface_z > z_max + 1.0:
-                raise ValueError(
-                    f"No spill elevation found for wetland '{self.wetland_id}': "
-                    f"surface_z ({surface_z:.3f} m) exceeded DEM maximum ({z_max:.3f} m)."
-                )
-
-            # Binary flood mask: cells at or below surface_z (exclude nodata)
-            flooded = (dem_data <= surface_z) & ~nan_mask
-
-            # Label 4-connected components
-            labeled, _ = label(flooded)
-
-            # Component label at the deepest point
-            comp_label = labeled[deep_row, deep_col]
-
-            if comp_label != 0:
-                component = labeled == comp_label
-                area = float(np.sum(component)) * pixel_area
-
-                # Connected to boundary = component is adjacent to a NaN cell
-                # (NaN marks cells outside the clipped/buffered footprint extent)
-                connected_to_boundary = bool(np.any(binary_dilation(component) & nan_mask))
-
-                if area > min_flooded_area and connected_to_boundary:
-                    return surface_z
-
-            dz += 0.01
 
     def _find_point_elevation(self, point: gpd.GeoSeries) -> float:
         """
@@ -672,8 +454,8 @@ class WetlandBasin:
         outlet cell, with no artificial gradient added inside the depression.
         """
 
-        clipped = self.clipped_dem
-        dem_data = clipped.dem.copy()
+        clipped_smoothed = self.smoothed_dem
+        dem_data = clipped_smoothed.dem.copy()
         nan_mask = np.isnan(dem_data)
 
         _NODATA = -9999.0
@@ -691,8 +473,8 @@ class WetlandBasin:
         return FilledDEM(
             filled=filled_arr,
             fill_depth=fill_depth,
-            transform=clipped.transform,
-            crs=clipped.crs,
+            transform=clipped_smoothed.transform,
+            crs=clipped_smoothed.crs,
         )
 
     def well_fill_depth(self) -> float:
@@ -739,7 +521,7 @@ class WetlandBasin:
         """
         fill = self.local_fill
         depth = fill.fill_depth.copy()
-        raw_dem = self.clipped_dem.dem
+        raw_dem = self.smoothed_dem.dem
 
         rows, cols = depth.shape
         scores = np.full_like(depth, np.nan)
@@ -844,11 +626,7 @@ class WetlandBasin:
     def plot_basin_hypsometry(
             self,
             plot_points: bool = False,
-            plot_spill: bool = False,
-            plot_smoothed_spill: bool = False, 
             plot_deepest: bool = False,
-            plot_contiguous_spill: bool = False,
-            min_flooded_area: float = 0.0
         ):
 
         cum_area_m2, bin_centers = self.calculate_hypsometry()
@@ -861,20 +639,9 @@ class WetlandBasin:
             
             # Interpolate cumulative area at well point elevations
             dem_area = np.interp(well_pt.elevation_dem, bin_centers, cum_area_m2)
-            # rtk_area = np.interp(well_pt.elevation_rtk, bin_centers, cum_area_m2)
 
             plt.plot(well_pt.elevation_dem, dem_area, 'ro', markersize=8,
                      label=f"Well DEM Elevation ({well_pt.elevation_dem:.2f}m, {dem_area:.2f}m^2)")
-            # if abs(well_pt.elevation_rtk - well_pt.elevation_dem) > 0.25:
-            #     print(f"Warning: RTK elevation ({well_pt.elevation_rtk:.2f}m) differs from DEM elevation ({well_pt.elevation_dem:.2f}m) by more than 0.25m.")
-            # else:
-            #     plt.plot(well_pt.elevation_rtk, rtk_area, 'go', markersize=8,
-            #             label=f"Well RTK Elevation ({well_pt.elevation_rtk:.2f}m, {rtk_area:.2f}m^2)")
-
-        if plot_spill and self.footprint is not None:
-            spill = self.spill_point
-            plt.axvline(x=spill.elevation, color='magenta', linestyle='--', linewidth=3.5,
-                        label=f"Spill Elevation ({spill.elevation:.2f}m)")
 
         if plot_deepest:
             deepest = self.deepest_point
@@ -882,15 +649,6 @@ class WetlandBasin:
             plt.plot(deepest.elevation, deepest_area, 'b*', markersize=12,
                      label=f"Deepest Point ({deepest.elevation:.2f}m, {deepest_area:.2f}m\u00b2)")
             
-        if plot_smoothed_spill and self.footprint is not None:
-            spill_smoothed = self.spill_point_smoothed
-            plt.axvline(x=spill_smoothed.elevation, color='cyan', linestyle=':', linewidth=3.5,
-                        label=f"Smoothed Spill Elevation ({spill_smoothed.elevation:.2f}m)")
-            
-        if plot_contiguous_spill and self.footprint is not None:
-            contiguous_spill_z = self.find_contiguous_spill_z(min_flooded_area=min_flooded_area)
-            plt.axvline(x=contiguous_spill_z, color='green', linestyle='-.', linewidth=3.5,
-                        label=f"Contiguous Spill Elevation ({contiguous_spill_z:.2f}m)")
 
         plt.xlabel("Elevation (m)")
         plt.ylabel("Inundated Area (m^2)")
@@ -899,128 +657,9 @@ class WetlandBasin:
         plt.legend()
         plt.show()
 
-    def map_spill_inundation(
-            self,
-            use_smoothed: bool = True,
-            plot_contiguous_spill: bool = False,
-            min_flooded_area: float = 0.0
-        ):
-        """
-        Map the inundation extent when water level equals the spill elevation.
-        Renders a greyscale DEM with a semi-transparent blue overlay for inundated cells.
-
-        Parameters
-        ----------
-        use_smoothed : bool
-            If True (default), use the smoothed spill point and render the
-            smoothed DEM as the background.
-        plot_contiguous_spill : bool
-            If True, overlay the contiguous flooded region at the contiguous spill
-            elevation as a semi-transparent green layer.
-        min_flooded_area : float
-            Minimum flooded area (m²) passed to find_contiguous_spill_z().
-        """
-        if self.footprint is None:
-            raise ValueError("Cannot map spill inundation without a basin footprint")
-
-        if use_smoothed:
-            spill = self.spill_point_smoothed
-            display_dem = self.smoothed_dem.dem
-            display_transform = self.smoothed_dem.transform
-        else:
-            spill = self.spill_point
-            display_dem = self.clipped_dem.dem
-            display_transform = self.clipped_dem.transform
-
-        # Inundation mask uses the *unsmoothed* DEM for accuracy
-        raw_dem = self.clipped_dem.dem
-        inundation = np.where(
-            ~np.isnan(raw_dem) & (raw_dem <= spill.elevation), 1.0, np.nan
-        )
-
-        fig, ax = plt.subplots(figsize=(10, 8))
-
-        # Greyscale DEM
-        vmin, vmax = np.nanmin(display_dem), np.nanmax(display_dem)
-        h_d, w_d = display_dem.shape
-        t_d = display_transform
-        extent_bg = [t_d.c, t_d.c + w_d * t_d.a, t_d.f + h_d * t_d.e, t_d.f]
-        ax.imshow(np.ma.masked_invalid(display_dem), extent=extent_bg, origin='upper',
-                  cmap='gray', vmin=vmin, vmax=vmax, interpolation='nearest')
-        if ax.images:
-            plt.colorbar(ax.images[0], ax=ax, label='Elevation (m)')
-
-        # Compute geographic extent for overlays (raw DEM grid).
-        h, w = raw_dem.shape
-        t = self.clipped_dem.transform
-        overlay_extent = [t.c, t.c + w * t.a, t.f + h * t.e, t.f]  # [xmin, xmax, ymin, ymax]
-
-        # Navy inundation overlay: transparent where NaN, navy where 1
-        # navy_cmap = LinearSegmentedColormap.from_list(
-        #     'transparent_navy', [(0, (0, 0, 0, 0)), (1, (0, 0, 0.502, 0.7))]
-        # )
-        # navy_cmap.set_bad(alpha=0)
-        # ax.imshow(
-        #     np.ma.masked_invalid(inundation),
-        #     extent=overlay_extent, origin='upper',
-        #     cmap=navy_cmap, vmin=0, vmax=1,
-        #     interpolation='nearest', aspect='auto'
-        # )
-
-        # Contiguous spill overlay
-        if plot_contiguous_spill:
-            contiguous_z = self.find_contiguous_spill_z(min_flooded_area=min_flooded_area)
-            from scipy.ndimage import label as nd_label
-
-            deep_x = self.deepest_point.location.x.values[0]
-            deep_y = self.deepest_point.location.y.values[0]
-            deep_row, deep_col = rio.transform.rowcol(self.clipped_dem.transform, deep_x, deep_y)
-
-            flooded = (raw_dem <= contiguous_z) & ~np.isnan(raw_dem)
-            labeled, _ = nd_label(flooded)
-            comp_label = labeled[deep_row, deep_col]
-            contiguous_mask = np.where(labeled == comp_label, 1.0, np.nan) if comp_label != 0 else np.full_like(raw_dem, np.nan)
-
-            green_cmap = LinearSegmentedColormap.from_list(
-                'transparent_green', [(0, (0, 0, 0, 0)), (1, (0, 0.6, 0, 0.55))]
-            )
-            green_cmap.set_bad(alpha=0)
-            ax.imshow(
-                np.ma.masked_invalid(contiguous_mask),
-                extent=overlay_extent, origin='upper',
-                cmap=green_cmap, vmin=0, vmax=1,
-                interpolation='nearest', aspect='auto'
-            )
-
-        # Mark spill point
-        spill.location.plot(ax=ax, color='magenta', marker='v', markersize=120,
-                            label=f"Spill Point ({spill.elevation:.2f}m)")
-
-        # Mark deepest point
-        deepest = self.deepest_point
-        deepest.location.plot(ax=ax, color='blue', marker='*', markersize=100,
-                              label=f"Deepest Point ({deepest.elevation:.2f}m)")
-        
-        # Mark the well location
-        well_point = self.well_point
-        well_point.location.plot(ax=ax, color='red', marker='x', markersize=125,
-                                 label=f"Well location ({well_point.elevation_dem:.2f}")
-
-        # if plot_contiguous_spill:
-        #     ax.axhline(y=np.nan, color='green', linestyle='-.', linewidth=2,
-        #                label=f"Contiguous Spill ({contiguous_z:.2f}m)")
-
-        ax.legend(loc='upper right')
-        ax.set_title(f"{self.wetland_id} Inundation at Spill Elevation ({spill.elevation:.2f}m)")
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_xlabel('')
-        ax.set_ylabel('')
-        plt.tight_layout()
-        plt.show()
-
 """
-NOTE: this is old code from back when we were interested in TAI curvature metrics. 
+NOTE: this is old code for Hayashi P calculations and 
+experiementation with different ways to estimate spill depth
 """
 
     # def establish_radial_transects(
@@ -1423,5 +1062,197 @@ NOTE: this is old code from back when we were interested in TAI curvature metric
     #         f"z is uniform {uniform}"
     #     )
     #     plt.show()
+
+    #  def find_contiguous_spill_z(self, min_flooded_area: float) -> float:
+    #     """ 
+    #     Finds the spill elevation such that a contiguous flooded surface reaches 
+    #     from the deepest point to beyond the buffered basin footprint.
+    #     Applies a min_flooded_area threshold to handle ditches on basin perimeters. 
+    #     """
+    #     if self.footprint is None:
+    #         raise ValueError("footprint is required for find_contiguous_spill_z")
+
+    #     clipped = self.clipped_dem
+    #     dem_data = clipped.dem
+    #     cell_size = abs(clipped.transform.a)
+    #     pixel_area = cell_size ** 2
+    #     nan_mask = np.isnan(dem_data)
+
+    #     # Locate the deepest point in the clipped DEM grid
+    #     deep_x = self.deepest_point.location.x.values[0]
+    #     deep_y = self.deepest_point.location.y.values[0]
+    #     deep_row, deep_col = rio.transform.rowcol(clipped.transform, deep_x, deep_y)
+
+    #     z_min = self.deepest_point.elevation
+    #     z_max = float(np.nanmax(dem_data))
+    #     dz = 0.01
+
+    #     while True:
+    #         surface_z = z_min + dz
+
+    #         if surface_z > z_max + 1.0:
+    #             raise ValueError(
+    #                 f"No spill elevation found for wetland '{self.wetland_id}': "
+    #                 f"surface_z ({surface_z:.3f} m) exceeded DEM maximum ({z_max:.3f} m)."
+    #             )
+
+    #         # Binary flood mask: cells at or below surface_z (exclude nodata)
+    #         flooded = (dem_data <= surface_z) & ~nan_mask
+
+    #         # Label 4-connected components
+    #         labeled, _ = label(flooded)
+
+    #         # Component label at the deepest point
+    #         comp_label = labeled[deep_row, deep_col]
+
+    #         if comp_label != 0:
+    #             component = labeled == comp_label
+    #             area = float(np.sum(component)) * pixel_area
+
+    #             # Connected to boundary = component is adjacent to a NaN cell
+    #             # (NaN marks cells outside the clipped/buffered footprint extent)
+    #             connected_to_boundary = bool(np.any(binary_dilation(component) & nan_mask))
+
+    #             if area > min_flooded_area and connected_to_boundary:
+    #                 return surface_z
+
+    #         dz += 0.01
+
+
+    # def find_spill_point_smoothed(self) -> SpillPoint:
+    #     """
+    #     Find the spill point using a Gaussian-smoothed DEM for (x, y) location,
+    #     then extract the z-value from the *unsmoothed* DEM using the 25th
+    #     percentile in a 5x5 window.
+
+    #     This avoids DEM noise / vegetation artifacts driving the spill location
+    #     while preserving accurate elevations (e.g. ditches) for the z-value.
+    #     """
+    #     if self.footprint is None:
+    #         raise ValueError("Cannot find spill point without a basin footprint")
+
+    #     smoothed = self.smoothed_dem
+    #     sm_data = smoothed.dem
+    #     rows, cols = sm_data.shape
+
+    #     # --- locate spill (x, y) on the smoothed surface ---
+    #     boundary = self.footprint.geometry.values[0].boundary
+    #     cell_size = abs(smoothed.transform.a)
+    #     distances = np.arange(0, boundary.length, cell_size)
+    #     boundary_points = [boundary.interpolate(d) for d in distances]
+
+    #     xs = [p.x for p in boundary_points]
+    #     ys = [p.y for p in boundary_points]
+    #     row_indices, col_indices = rio.transform.rowcol(smoothed.transform, xs, ys)
+
+    #     seen = set()
+    #     unique_cells = []
+    #     for r, c in zip(row_indices, col_indices):
+    #         if (r, c) not in seen and 0 <= r < rows and 0 <= c < cols:
+    #             seen.add((r, c))
+    #             unique_cells.append((r, c))
+
+    #     best_val = np.inf
+    #     best_row, best_col = None, None
+    #     for r, c in unique_cells:
+    #         row_start = max(0, r - 2)
+    #         row_end = min(rows, r + 3)
+    #         col_start = max(0, c - 2)
+    #         col_end = min(cols, c + 3)
+
+    #         window = sm_data[row_start:row_end, col_start:col_end]
+    #         valid_vals = window[~np.isnan(window)]
+    #         if len(valid_vals) == 0:
+    #             continue
+
+    #         p25 = float(np.percentile(valid_vals, 25))
+    #         if p25 < best_val:
+    #             best_val = p25
+    #             best_row, best_col = r, c
+
+    #     if best_row is None:
+    #         raise ValueError("No valid boundary cells found on the smoothed DEM")
+
+    #     # --- extract z from the unsmoothed DEM ---
+    #     raw_dem = self.clipped_dem.dem
+    #     r_start = max(0, best_row - 2)
+    #     r_end = min(rows, best_row + 3)
+    #     c_start = max(0, best_col - 2)
+    #     c_end = min(cols, best_col + 3)
+
+    #     raw_window = raw_dem[r_start:r_end, c_start:c_end]
+    #     raw_valid = raw_window[~np.isnan(raw_window)]
+    #     if len(raw_valid) == 0:
+    #         raise ValueError("No valid unsmoothed DEM cells in 5x5 window at spill location")
+    #     spill_z = float(np.percentile(raw_valid, 25))
+
+    #     x, y = rio.transform.xy(smoothed.transform, best_row, best_col, offset="center")
+    #     pt = gpd.GeoSeries([Point(x, y)], crs=smoothed.crs)
+
+    #     return SpillPoint(elevation=spill_z, location=pt)
+
+    # def find_spill_point(self) -> SpillPoint:
+    #     """
+    #     Find the lowest point along the perimeter of the basin footprint.
+        
+    #     Traces the boundary at DEM-cell resolution, computes the 25th percentile
+    #     elevation in a 5x5 window around each boundary cell, and returns the
+    #     cell with the lowest such value.
+    #     """
+    #     if self.footprint is None:
+    #         raise ValueError("Cannot find spill point without a basin footprint")
+
+    #     clipped = self.clipped_dem
+    #     dem_data = clipped.dem
+    #     rows, cols = dem_data.shape
+
+    #     # Get the boundary of the footprint as a LineString/MultiLineString
+    #     boundary = self.footprint.geometry.values[0].boundary
+
+    #     # Sample points along the boundary at the DEM cell resolution
+    #     cell_size = abs(clipped.transform.a)
+    #     step = cell_size  # sample at pixel spacing
+    #     distances = np.arange(0, boundary.length, step)
+    #     boundary_points = [boundary.interpolate(d) for d in distances]
+
+    #     # Convert boundary points to row/col in the clipped DEM
+    #     xs = [p.x for p in boundary_points]
+    #     ys = [p.y for p in boundary_points]
+    #     row_indices, col_indices = rio.transform.rowcol(clipped.transform, xs, ys)
+
+    #     # Deduplicate to unique cells
+    #     seen = set()
+    #     unique_cells = []
+    #     for r, c in zip(row_indices, col_indices):
+    #         if (r, c) not in seen and 0 <= r < rows and 0 <= c < cols:
+    #             seen.add((r, c))
+    #             unique_cells.append((r, c))
+
+    #     # For each boundary cell, compute the 25th percentile in a 5x5 window
+    #     best_val = np.inf
+    #     best_row, best_col = None, None
+    #     for r, c in unique_cells:
+    #         row_start = max(0, r - 2)
+    #         row_end = min(rows, r + 3)
+    #         col_start = max(0, c - 2)
+    #         col_end = min(cols, c + 3)
+
+    #         window = dem_data[row_start:row_end, col_start:col_end]
+    #         valid_vals = window[~np.isnan(window)]
+    #         if len(valid_vals) == 0:
+    #             continue
+
+    #         p25 = float(np.percentile(valid_vals, 25))
+    #         if p25 < best_val:
+    #             best_val = p25
+    #             best_row, best_col = r, c
+
+    #     if best_row is None:
+    #         raise ValueError("No valid boundary cells found on the clipped DEM")
+
+    #     x, y = rio.transform.xy(clipped.transform, best_row, best_col, offset="center")
+    #     pt = gpd.GeoSeries([Point(x, y)], crs=clipped.crs)
+
+    #     return SpillPoint(elevation=best_val, location=pt)
 
 

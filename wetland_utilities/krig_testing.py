@@ -68,51 +68,51 @@ print(wtd_surface_med.okr_result['variogram_model_parameters'])
 
 # %% 5.0 Summarize the pair counts for each lag dist
 
-coords = np.column_stack([
-    well_points.geometry.x.to_numpy(),
-    well_points.geometry.y.to_numpy()
-])
+# coords = np.column_stack([
+#     well_points.geometry.x.to_numpy(),
+#     well_points.geometry.y.to_numpy()
+# ])
 
-# pairwise Euclidean distance matrix
-dx = coords[:, 0][:, None] - coords[:, 0][None, :]
-dy = coords[:, 1][:, None] - coords[:, 1][None, :]
-dist = np.hypot(dx, dy)
+# # pairwise Euclidean distance matrix
+# dx = coords[:, 0][:, None] - coords[:, 0][None, :]
+# dy = coords[:, 1][:, None] - coords[:, 1][None, :]
+# dist = np.hypot(dx, dy)
 
-n_lags = len(lags)
-dmax = dist[np.triu_indices_from(dist, k=1)].max()
-dmin = dist[np.triu_indices_from(dist, k=1)].min()
-dd = (dmax - dmin) / n_lags
-bins = [dmin + n * dd for n in range(n_lags)]
-bins.append(dmax + 0.001)
+# n_lags = len(lags)
+# dmax = dist[np.triu_indices_from(dist, k=1)].max()
+# dmin = dist[np.triu_indices_from(dist, k=1)].min()
+# dd = (dmax - dmin) / n_lags
+# bins = [dmin + n * dd for n in range(n_lags)]
+# bins.append(dmax + 0.001)
 
-# Count unique pairs per bin (upper triangle only)
-iu = np.triu_indices_from(dist, k=1)
-pair_dists = dist[iu]
+# # Count unique pairs per bin (upper triangle only)
+# iu = np.triu_indices_from(dist, k=1)
+# pair_dists = dist[iu]
 
-pair_counts = []
-for n in range(n_lags):
-    count = int(((pair_dists >= bins[n]) & (pair_dists < bins[n + 1])).sum())
-    pair_counts.append(count)
+# pair_counts = []
+# for n in range(n_lags):
+#     count = int(((pair_dists >= bins[n]) & (pair_dists < bins[n + 1])).sum())
+#     pair_counts.append(count)
 
-lag_pair_df = pd.DataFrame({
-    'low_dist_meters': np.round(bins[:-1], -1).astype(int),
-    'high_dist_meters': np.round(bins[1:], -1).astype(int),
-    'n_pairs': pair_counts
-})
+# lag_pair_df = pd.DataFrame({
+#     'low_dist_meters': np.round(bins[:-1], -1).astype(int),
+#     'high_dist_meters': np.round(bins[1:], -1).astype(int),
+#     'n_pairs': pair_counts
+# })
 
 #print(lag_pair_df.to_string(index=False))
 
-bin_centers = [(lo + hi) / 2 for lo, hi in zip(bins[:-1], bins[1:])]
+# bin_centers = [(lo + hi) / 2 for lo, hi in zip(bins[:-1], bins[1:])]
 
-plt.figure(figsize=(8, 4))
-plt.bar(bin_centers, pair_counts, align='center', width=500, edgecolor='k')
-plt.axvline(10000, color='red', linestyle='--', label='10,000 m')
-plt.xlabel('Lag Bin Center (meters)')
-plt.ylabel('Number of Pairs')
-plt.title('Pair Counts per Lag Bin')
-plt.legend()
-plt.tight_layout()
-plt.show()
+# plt.figure(figsize=(8, 4))
+# plt.bar(bin_centers, pair_counts, align='center', width=500, edgecolor='k')
+# plt.axvline(10000, color='red', linestyle='--', label='10,000 m')
+# plt.xlabel('Lag Bin Center (meters)')
+# plt.ylabel('Number of Pairs')
+# plt.title('Pair Counts per Lag Bin')
+# plt.legend()
+# plt.tight_layout()
+# plt.show()
 
 # %% 6.0 Write the results
 
@@ -120,42 +120,54 @@ x_flat = wtd_surface_med._x_grid.ravel().astype(np.float32)
 y_flat = wtd_surface_med._y_grid.ravel().astype(np.float32)
 
 coords_df = pd.DataFrame({'x': x_flat, 'y': y_flat})
-coords_df.to_csv(f"{out_dir}/coarse_grid_coords.csv")
 
-wetland_ids = wtd_surface_med.well_array.wtd_points['wetland_id'].to_list()
+wells = wtd_surface_med.well_array.well_pts.copy()
+wells['x'] = wells.geometry.x
+wells['y'] = wells.geometry.y
+
+wells_df = wells[['wetland_id', 'z_dem', 'x', 'y']]
+print(wells_df)
+
+wetland_ids = wells_df['wetland_id']
 
 out_dir = r"D:/depressional_lidar/data/bradford/out_data/well_wse_interpolations"
 
-# # 5.1. CSV 
+# %% 6.1  Write excel 
+ 
 weights_df = pd.DataFrame(weights, columns=wetland_ids)
-# weights_df.to_csv(f"{out_dir}/kriging_weights.csv", index=False, float_format="%.6f")
+out_path = f"{out_dir}/kriging_results_fixed.xlsx"
 
-# # 5.2. HDF5 
-with pd.HDFStore(f"{out_dir}/kriging_weights_crude_test.h5", mode="w") as store:
-    store.put("weights", weights_df, format="fixed")
-    store.put("grid_coords", pd.DataFrame({"x": x_flat, "y": y_flat}), format="fixed")
+with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
+    weights_df.to_excel(writer, sheet_name="weights", index=False)
+    wells_df.to_excel(writer, sheet_name="wells", index=False)
+    coords_df.to_excel(writer, sheet_name="coords", index=False)
 
-metadata = {
-    "description": "Ordinary Kriging weights, optimized fitted exponential model",
-    "weights_shape": list(weights.shape),
-    "wetland_ids": wetland_ids,
-    "grid_shape": list(wtd_surface_med._x_grid.shape),
-    "crs": "EPSG:26917",
-    "notes": [
-        "Rows correspond to flattened kriging grid cells in row-major order.",
-        "Columns correspond to wells in the order listed in well_ids.",
-    ]
-}
+# %% 5.2. HDF5 
+# with pd.HDFStore(f"{out_dir}/kriging_weights_crude_test.h5", mode="w") as store:
+#     store.put("weights", weights_df, format="fixed")
+#     store.put("grid_coords", pd.DataFrame({"x": x_flat, "y": y_flat}), format="fixed")
 
-import json
-with open(f"{out_dir}/kriging_weights_metadata_crude_test.json", "w") as f:
-    json.dump(metadata, f, indent=2)
+# metadata = {
+#     "description": "Ordinary Kriging weights, optimized fitted exponential model",
+#     "weights_shape": list(weights.shape),
+#     "wetland_ids": wetland_ids,
+#     "grid_shape": list(wtd_surface_med._x_grid.shape),
+#     "crs": "EPSG:26917",
+#     "notes": [
+#         "Rows correspond to flattened kriging grid cells in row-major order.",
+#         "Columns correspond to wells in the order listed in well_ids.",
+#     ]
+# }
 
-wtd_surface_med.write_masked_tif(
-    out_path=f'{out_dir}/interpolated_median_WSE_crude_test.tif',
-    sigma_threshold=1.25,
-    crs='EPSG:26917'
-)
+# import json
+# with open(f"{out_dir}/kriging_weights_metadata_crude_test.json", "w") as f:
+#     json.dump(metadata, f, indent=2)
+
+# wtd_surface_med.write_masked_tif(
+#     out_path=f'{out_dir}/interpolated_median_WSE_crude_test.tif',
+#     sigma_threshold=1.25,
+#     crs='EPSG:26917'
+# )
 
 
 # %%

@@ -3,12 +3,16 @@
 import ee 
 import geopandas as gpd
 
-ee.Authenticate()
-ee.Initialize()
+ee.Initialize(project='wetland-ditching-prelim')
 
-all_wetlands_path = f'D:/depressional_lidar/data/bradford/in_data/original_basins/bradford_original_depressions_all_wetlands.shp'
-all_wetlands = gpd.read_file(all_wetlands_path)
-all_wetlands.to_crs('EPSG:4326', inplace=True)
+# all_wetlands_path = f'D:/depressional_lidar/data/bradford/in_data/original_basins/bradford_original_depressions_all_wetlands.shp'
+# all_wetlands = gpd.read_file(all_wetlands_path)
+# all_wetlands.to_crs('EPSG:4326', inplace=True)
+
+wetland_shapes_path = 'D:/depressional_lidar/data/bradford/out_data/bradford_well_basins.shp'
+
+basin_shapes = gpd.read_file(wetland_shapes_path)
+print(basin_shapes.head())
 
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 well_points = (gpd.read_file(well_points_path)[['wetland_id', 'type', 'site', 'geometry']]
@@ -24,10 +28,10 @@ def convert_gpd_geom_to_ee(geom, est_utm):
     """
     Takes a geopandas geom object and coverts it to an Earth Engine polygon
     """
-    if est_utm is None:
-        out_crs = 'EPSG:4326'
-    else:
-        out_crs = est_utm
+    out_crs = 'EPSG:4326' if est_utm is None else est_utm
+
+    if geom.geom_type == 'MultiPolygon':
+        geom = max(geom.geoms, key=lambda p: p.area)
 
     coords = list(geom.exterior.coords)
     coords_list = [[x, y] for x, y in coords]
@@ -148,6 +152,10 @@ def process_wetland_by_year_chunks(wetland_id, buffer_size, tgt_shape, start_yea
     original_geom = tgt_shape.geometry.iloc[0]
     # Buffer radius around a well and convert to web mapping crs
     buffered_geom = original_geom.buffer(buffer_size)
+
+    # NOTE: Excluding local wetland area from LAI calculations
+    #upland_geom = buffered_geom.difference(original_geom)
+
     buffered_geom_4326 = gpd.GeoSeries([buffered_geom], crs=tgt_shape.crs).to_crs('EPSG:4326').iloc[0]
     # Convert to Earth Engine Polygon
     poly = convert_gpd_geom_to_ee(buffered_geom_4326, est_utm='EPSG:4326')
@@ -171,9 +179,9 @@ def process_wetland_by_year_chunks(wetland_id, buffer_size, tgt_shape, start_yea
             # Export well's monthly timeseries
             task = ee.batch.Export.table.toDrive(
                 collection=monthly_data_export,
-                description=f'well_buffer_{buffer_size}m_nomasking_{wetland_id}_{chunk_start}_{chunk_end}',
-                folder=f'well_buffer_{buffer_size}m_nomasking',
-                fileNamePrefix=f'well_buffer_{buffer_size}m_nomasking_{wetland_id}_{chunk_start}_{chunk_end}',
+                description=f'basin_buffer_{buffer_size}m_nomasking_{wetland_id}_{chunk_start}_{chunk_end}',
+                folder=f'basin_buffer_{buffer_size}m_nomasking',
+                fileNamePrefix=f'basin_buffer_{buffer_size}m_nomasking_{wetland_id}_{chunk_start}_{chunk_end}',
                 fileFormat='CSV'
             )
             task.start()
@@ -184,11 +192,14 @@ def process_wetland_by_year_chunks(wetland_id, buffer_size, tgt_shape, start_yea
 
 # %% 4.0 Calculate the LAI timeseries
 
-target_shapes = well_points
 
-for idx, i in enumerate(well_points['wetland_id'].unique()):
+for idx, i in enumerate(basin_shapes['wetland_id'].unique()):
     #print(f"Processing wetland {idx+1}/{len(target_shapes['wetland_id'].unique())}: {i}")
-    tgt_shape = well_points[well_points['wetland_id'] == i]
+    tgt_shape = basin_shapes[basin_shapes['wetland_id'] == i]
+
+    if len(tgt_shape) > 1:
+        raise ValueError('Only one basin per calculation')
+    
     process_wetland_by_year_chunks(
         i, 
         buffer_size=150,

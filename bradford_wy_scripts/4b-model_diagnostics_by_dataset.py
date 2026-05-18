@@ -1,6 +1,7 @@
 # %% 1.0 Libraries and file paths
 
 import pandas as pd
+import geopandas as gpd
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -9,6 +10,7 @@ lai_buffer_dist = 150
 data_dir = "D:/depressional_lidar/data/bradford/out_data/"
 wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer_dist}m_all_wells.csv'
 strong_models_path = f"D:/depressional_lidar/data/bradford/out_data/strong_ols_models_{lai_buffer_dist}m_domain_no_dry_days.csv"
+well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 
 datasets = ['no_dry_days', 'full_obs']
 
@@ -36,6 +38,7 @@ shift_data = pd.concat(shift_dfs)
 shift_data.head()
 
 strong_models = pd.read_csv(strong_models_path)
+
 shift_data = shift_data.merge(
     strong_models[['log_id', 'ref_id']].assign(in_strong_models=1),
     on=['log_id', 'ref_id'],
@@ -44,9 +47,18 @@ shift_data = shift_data.merge(
 # Fill NaN values with 0 for records not in strong_models
 shift_data['in_strong_models'] = shift_data['in_strong_models'].fillna(0).astype(int)
 
-all_wells_correlations = pd.read_csv(
+all_well_correlations = pd.read_csv(
     f"D:/depressional_lidar/data/bradford/out_data/all_wells_correlations_domain_no_dry_days.csv"
 )
+
+# well points
+well_points = (
+    gpd.read_file(well_points_path)[['wetland_id', 'type', 'rtk_z', 'geometry', 'site']]
+    .rename(columns={'rtk_z': 'rtk_z'})
+    .query("type in ['main_doe_well', 'aux_wetland_well'] and site == 'Bradford'")
+)
+
+print(well_points)
 
 
 # %% 2.1 Compare pearson's-r for different datasets with threshold curves
@@ -63,7 +75,7 @@ for i, d in enumerate(datasets):
     exceedance_perc = (exceedance / len(exceedance)) * 100
     ax.plot(sorted_r, exceedance_perc, label=dataset_labels[d], color=colors[i], linewidth=2)
 
-sorted_r_all_wells = np.sort(all_wells_correlations['r_squared'])
+sorted_r_all_wells = np.sort(all_well_correlations['r_squared'])
 exceedance_all_wells = np.arange(len(sorted_r_all_wells), 0, -1)
 exceedance_perc_all_wells = (exceedance_all_wells / len(exceedance_all_wells)) * 100
 ax.plot(sorted_r_all_wells, exceedance_perc_all_wells, label='All Data (52 Wells, 1326 pairs)', 
@@ -115,6 +127,123 @@ ax.set_title('Pre & Post Models', fontsize=16)
 ax.tick_params(axis='both', which='major', labelsize=12)
 
 plt.show()
+
+# %% 3.0 Evaluate r's relationship with well distance
+well_geom_lookup = (
+    well_points[['wetland_id', 'geometry']]
+    .drop_duplicates(subset='wetland_id')
+    .assign(wetland_id=lambda df: df['wetland_id'].astype(str))
+    .set_index('wetland_id')['geometry']
+)
+
+distance_corr_df = all_well_correlations.copy()
+distance_corr_df['wetland1'] = distance_corr_df['wetland1'].astype(str)
+distance_corr_df['wetland2'] = distance_corr_df['wetland2'].astype(str)
+distance_corr_df['geom1'] = distance_corr_df['wetland1'].map(well_geom_lookup)
+distance_corr_df['geom2'] = distance_corr_df['wetland2'].map(well_geom_lookup)
+
+distance_corr_df = distance_corr_df.dropna(subset=['geom1', 'geom2', 'correlation']).copy()
+distance_corr_df['distance_m'] = distance_corr_df.apply(
+    lambda row: row['geom1'].distance(row['geom2']),
+    axis=1
+)
+
+fig, ax = plt.subplots(figsize=(7, 6))
+ax.scatter(
+    distance_corr_df['distance_m'],
+    distance_corr_df['correlation'],
+    s=28,
+    alpha=0.6,
+    color='steelblue',
+    edgecolors='none'
+)
+
+lin_coef = np.polyfit(distance_corr_df['distance_m'], distance_corr_df['correlation'], 1)
+lin_model = np.poly1d(lin_coef)
+x_line = np.linspace(distance_corr_df['distance_m'].min(), distance_corr_df['distance_m'].max(), 200)
+y_line = lin_model(x_line)
+ax.plot(x_line, y_line, color='crimson', linewidth=2, label='Linear fit')
+
+r_value = np.corrcoef(distance_corr_df['distance_m'], distance_corr_df['correlation'])[0, 1]
+r_squared = r_value ** 2
+eqn_text = f"y = {lin_coef[0]:.4f}x + {lin_coef[1]:.3f}\n$R^2$ = {r_squared:.3f}"
+ax.text(
+    0.02,
+    0.98,
+    eqn_text,
+    transform=ax.transAxes,
+    ha='left',
+    va='top',
+    fontsize=10,
+    bbox=dict(facecolor='white', alpha=0.8, edgecolor='none')
+)
+
+ax.set_xlabel('Distance between wells (m)', fontsize=12)
+ax.set_ylabel("Pearson correlation (r)", fontsize=12)
+ax.set_title('Well Pair Correlation vs Distance', fontsize=14)
+ax.grid(True, alpha=0.3)
+ax.legend(frameon=False)
+plt.show()
+
+# %% Well correlations by depth range
+
+well_data = pd.read_csv("D:/depressional_lidar/data/bradford/in_data/stage_data/bradford_daily_well_depth_Winter2025.csv")
+# %%
+# find min and max well_depth_m for each wetland_id using groupby
+well_depth_minmax = well_data.groupby('wetland_id')['well_depth_m'].agg(['min', 'max']).reset_index()
+well_depth_minmax['depth_range'] = well_depth_minmax['max'] - well_depth_minmax['min']
+
+well_depth_range_lookup = (
+    well_depth_minmax.assign(wetland_id=lambda df: df['wetland_id'].astype(str))
+    .set_index('wetland_id')['depth_range']
+)
+
+depth_range_corr_df = all_well_correlations.copy()
+depth_range_corr_df['wetland1'] = depth_range_corr_df['wetland1'].astype(str)
+depth_range_corr_df['wetland2'] = depth_range_corr_df['wetland2'].astype(str)
+depth_range_corr_df['range1'] = depth_range_corr_df['wetland1'].map(well_depth_range_lookup)
+depth_range_corr_df['range2'] = depth_range_corr_df['wetland2'].map(well_depth_range_lookup)
+depth_range_corr_df['pair_min_depth_range'] = depth_range_corr_df[['range1', 'range2']].min(axis=1)
+depth_range_corr_df = depth_range_corr_df.dropna(subset=['pair_min_depth_range', 'correlation']).copy()
+
+fig, ax = plt.subplots(figsize=(7, 6))
+ax.scatter(
+    depth_range_corr_df['pair_min_depth_range'],
+    depth_range_corr_df['correlation'],
+    s=28,
+    alpha=0.6,
+    color='steelblue',
+    edgecolors='none'
+)
+
+lin_coef = np.polyfit(depth_range_corr_df['pair_min_depth_range'], depth_range_corr_df['correlation'], 1)
+lin_model = np.poly1d(lin_coef)
+x_line = np.linspace(depth_range_corr_df['pair_min_depth_range'].min(), depth_range_corr_df['pair_min_depth_range'].max(), 200)
+y_line = lin_model(x_line)
+ax.plot(x_line, y_line, color='crimson', linewidth=2, label='Linear fit')
+
+r_value = np.corrcoef(depth_range_corr_df['pair_min_depth_range'], depth_range_corr_df['correlation'])[0, 1]
+r_squared = r_value ** 2
+eqn_text = f"y = {lin_coef[0]:.4f}x + {lin_coef[1]:.3f}\n$R^2$ = {r_squared:.3f}"
+ax.text(
+    0.02,
+    0.98,
+    eqn_text,
+    transform=ax.transAxes,
+    ha='left',
+    va='top',
+    fontsize=10,
+    bbox=dict(facecolor='white', alpha=0.8, edgecolor='none')
+)
+
+ax.set_xlabel('Pair minimum well depth range (m)', fontsize=12)
+ax.set_ylabel("Pearson correlation (r)", fontsize=12)
+ax.set_title('Well Pair Correlation vs Minimum Depth Range', fontsize=14)
+ax.grid(True, alpha=0.3)
+ax.legend(frameon=False)
+plt.show()
+
+
 
 # %% 3.0 Summary stats for each dataset
 

@@ -148,16 +148,18 @@ print(f"Quantile difference at pre =  0.0m: {diff_all[idx_spill]:.3f} m  "
 
 
 # %% 5.0 Q-Q plot aggregated by connectivity class
+
 connectivity_config = {
-    'first order': {'color': 'green', 'label': 'Outlet Connected'},
-    'giw': {'color': 'blue', 'label': 'Unconnected'}, 
-    'flow-through': {'color': 'red', 'label': 'Flow-through Connected'}
+    'first order': {'color': '#6C5B7B', 'label': 'Ditch connected', 'marker': 's'},
+    'giw': {'color': '#1B7F79', 'label': 'Unconnected', 'marker': '^'}, 
+    'flow-through': {'color': '#C46A1A', 'label': 'Flow-through connected', 'marker': 'X'}
 }
+
 
 fig, ax = plt.subplots(1, 1, figsize=(9, 8))
 
-axis_label_fs = 15
-tick_label_fs = 12
+axis_label_fs = 17
+tick_label_fs = 14
 
 dist_filtered = distributions_clean[
     (distributions_clean['pre_adj'] >= -2.1) & (distributions_clean['pre_adj'] <= 0.75) &
@@ -178,8 +180,8 @@ for conn_class, config in connectivity_config.items():
     class_df = dist_filtered[dist_filtered['connectivity'] == conn_class]
     class_df = class_df.dropna(subset=['pre_adj', 'post_adj'])
 
-    pre_q = np.quantile(class_df['pre_adj'], quantiles)
-    post_q = np.quantile(class_df['post_adj'], quantiles)
+    pre_q = (np.quantile(class_df['pre_adj'], quantiles)) * 100
+    post_q = np.quantile(class_df['post_adj'], quantiles) * 100
 
     diff = post_q - pre_q
 
@@ -192,29 +194,29 @@ for conn_class, config in connectivity_config.items():
     print(f"Quantile difference at pre =  0.0m: {diff[idx_spill]:.3f} m  "
         f"(pre={pre_q[idx_spill]:.3f}, post={post_q[idx_spill]:.3f})")
 
-    ax.scatter(pre_q, post_q, alpha=0.5, s=10,
+    ax.scatter(pre_q, post_q, alpha=1, s=10,
                     color=config['color'], label=config['label'])
 
-ax.plot([pre_quantiles.min(), pre_quantiles.max()],
-             [pre_quantiles.min(), pre_quantiles.max()],
+ax.plot([pre_quantiles.min() * 100, pre_quantiles.max() * 100],
+             [pre_quantiles.min() * 100, pre_quantiles.max() * 100],
              'r--', linewidth=2, label='1:1 line', color='black')
-ax.set_xlabel('Pre-Logging [m]', fontsize=axis_label_fs)
-ax.set_ylabel('Post-Logging [m]', fontsize=axis_label_fs)
-ax.axvline(0, color='grey', linestyle='-', linewidth=10, label='Spill Depth', alpha=0.5)
+ax.set_xlabel('h$_{L,\\ pre}$ (cm)', fontsize=axis_label_fs)
+ax.set_ylabel('h$_{L,\\ post}$ (cm)', fontsize=axis_label_fs)
+ax.axvline(0, color='red', linestyle='-', linewidth=4, label='Spill Depth', alpha=0.7)
 ax.grid(True, alpha=0.3)
 ax.tick_params(axis='both', labelsize=tick_label_fs)
 ax.set_aspect('equal', adjustable='box')
-ax.set_xlim(-2, 0.75)
-ax.set_ylim(-2, 0.75)
+ax.set_xlim(-100, 75)
+ax.set_ylim(-100, 75)
 
 handles, labels = ax.get_legend_handles_labels()
 ax.legend(
     handles,
     labels,
     loc='upper left',
-    fontsize=12,
+    fontsize=14,
     frameon=True,
-    markerscale=2.5
+    markerscale=3.5
 )
 
 plt.tight_layout()

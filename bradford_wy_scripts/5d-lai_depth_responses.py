@@ -156,7 +156,6 @@ plot_df = shift_data[
     (shift_data['data_set'] == data_set)
 ].copy()
 
-
 slope, intercept, r_value, p_value, std_err = stats.linregress(
     plot_df['roll_diff_change'], 
     plot_df['mean_depth_change']
@@ -203,9 +202,9 @@ plt.show()
 connectivity_key = pd.read_excel(connectivity_key_path)
 
 connectivity_config = {
-    'first order': {'color': 'green', 'label': 'Outlet', 'marker': 's'},
-    'giw': {'color': 'blue', 'label': 'Unconnected', 'marker': '^'}, 
-    'flow-through': {'color': 'red', 'label': 'Flow-through', 'marker': 'X'}
+    'first order': {'color': '#6C5B7B', 'label': 'Ditch connected', 'marker': 's'},
+    'giw': {'color': '#1B7F79', 'label': 'Unconnected', 'marker': '^'}, 
+    'flow-through': {'color': '#C46A1A', 'label': 'Flow-through connected', 'marker': 'X'}
 }
 
 shift_data['LAI_normalized_depth'] = (shift_data['mean_depth_change'] / shift_data['roll_diff_change']) * 100 # NOTE for cm
@@ -229,65 +228,62 @@ interaction_stats = shift_data.groupby(['log_connected', 'ref_connected'])['LAI_
 
 # %% 4.2 Generate plot
 
-fig, ax = plt.subplots(figsize=(10, 8))
+# fig, ax = plt.subplots(figsize=(10, 8))
 
-plot_connectivity_order = ['giw', 'first order', 'flow-through']
-x_positions = {conn: i for i, conn in enumerate(plot_connectivity_order)}
+# plot_connectivity_order = ['giw', 'first order', 'flow-through']
+# x_positions = {conn: i for i, conn in enumerate(plot_connectivity_order)}
 
-for ref_conn in plot_connectivity_order:
-    subset = interaction_stats[interaction_stats['ref_connected'] == ref_conn]
-    print(subset)
+# for ref_conn in plot_connectivity_order:
+#     subset = interaction_stats[interaction_stats['ref_connected'] == ref_conn]
+#     print(subset)
 
-    x_vals = [x_positions[log_conn] for log_conn in subset['log_connected']]
-    y_vals = subset['mean'].values
-    yerr_vals = subset['sem'].values
+#     x_vals = [x_positions[log_conn] for log_conn in subset['log_connected']]
+#     y_vals = subset['mean'].values
+#     yerr_vals = subset['sem'].values
     
-    sorted_indices = sorted(range(len(x_vals)), key=lambda i: x_vals[i])
-    x_sorted = [x_vals[i] for i in sorted_indices]
-    y_sorted = [y_vals[i] for i in sorted_indices]
-    yerr_sorted = [yerr_vals[i] for i in sorted_indices]
+#     sorted_indices = sorted(range(len(x_vals)), key=lambda i: x_vals[i])
+#     x_sorted = [x_vals[i] for i in sorted_indices]
+#     y_sorted = [y_vals[i] for i in sorted_indices]
+#     yerr_sorted = [yerr_vals[i] for i in sorted_indices]
     
-    color = connectivity_config[ref_conn]['color']
-    label = connectivity_config[ref_conn]['label']
+#     color = connectivity_config[ref_conn]['color']
+#     label = connectivity_config[ref_conn]['label']
     
-    ax.errorbar(x_sorted, y_sorted, yerr=yerr_sorted, 
-                fmt='o-', color=color, label=f'Reference: {label}',
-                capsize=4, capthick=1.5, markersize=8, linewidth=2, alpha=0.5)
+#     ax.errorbar(x_sorted, y_sorted, yerr=yerr_sorted, 
+#                 fmt='o-', color=color, label=f'Reference: {label}',
+#                 capsize=4, capthick=1.5, markersize=8, linewidth=2, alpha=0.5)
 
-# Means for logged connectivity as black X's
-logged_marginal_means = shift_data.groupby('log_connected')['LAI_normalized_depth'].agg(['mean', 'sem']).reset_index()
+# # Means for logged connectivity as black X's
+# logged_marginal_means = shift_data.groupby('log_connected')['LAI_normalized_depth'].agg(['mean', 'sem']).reset_index()
 
-for i, conn in enumerate(plot_connectivity_order):
-    if conn in logged_marginal_means['log_connected'].values:
-        mean_val = logged_marginal_means[logged_marginal_means['log_connected'] == conn]['mean'].iloc[0]
-        ax.plot(i, mean_val, 'x', color='black', markersize=18, markeredgewidth=3,
-               label='Logged Mean' if i == 0 else "")
+# for i, conn in enumerate(plot_connectivity_order):
+#     if conn in logged_marginal_means['log_connected'].values:
+#         mean_val = logged_marginal_means[logged_marginal_means['log_connected'] == conn]['mean'].iloc[0]
+#         ax.plot(i, mean_val, 'x', color='black', markersize=18, markeredgewidth=3,
+#                label='Logged Mean' if i == 0 else "")
 
-ax.set_xticks(range(len(plot_connectivity_order)))
-ax.set_xticklabels([connectivity_config[conn]['label'] for conn in plot_connectivity_order], fontsize=12)
-ax.set_xlabel("Logged Wetland Connectivity", fontsize=18, labelpad=20)  # small downward offset
-ax.set_ylabel("Modeled Depth Change (cm increase / LAI decrease)", fontsize=14)
-ax.tick_params(axis='y', labelsize=12)
+# ax.set_xticks(range(len(plot_connectivity_order)))
+# ax.set_xticklabels([connectivity_config[conn]['label'] for conn in plot_connectivity_order], fontsize=12)
+# ax.set_xlabel("Logged Wetland Connectivity", fontsize=18, labelpad=20)  # small downward offset
+# ax.set_ylabel("Modeled Depth Change (cm increase / LAI decrease)", fontsize=14)
+# ax.tick_params(axis='y', labelsize=12)
 
-ax.axhline(y=0, color='black', linestyle='--', linewidth=2.5)
-ax.legend(loc='best', fontsize=12, title_fontsize=14)
+# ax.axhline(y=0, color='black', linestyle='--', linewidth=2.5)
+# ax.legend(loc='best', fontsize=12, title_fontsize=14)
 
-plt.tight_layout()
-plt.show()
+# plt.tight_layout()
+# plt.show()
 
 # %% 5.0 Boxplot LAI normalized depth change aggregated by logged connectivity (panel a) and colored by reference connectivity (panel b)
 
-plot_connectivity_order = ['giw', 'first order', 'flow-through']
-ref_connectivity_order = ['giw', 'first order', 'flow-through']
+plot_connectivity_order = ['first order', 'giw', 'flow-through']
+ref_connectivity_order = ['first order', 'giw', 'flow-through']
 
 box_df = shift_data.dropna(subset=['log_connected', 'ref_connected', 'LAI_normalized_depth']).copy()
 box_df = box_df[
     box_df['log_connected'].isin(plot_connectivity_order)
     & box_df['ref_connected'].isin(ref_connectivity_order)
 ]
-
-fig, axes = plt.subplots(1, 2, figsize=(16, 8), sharey=True)
-ax_a, ax_b = axes
 
 rng = np.random.default_rng(42)
 
@@ -296,6 +292,8 @@ panel_a_data = [
     box_df.loc[box_df['log_connected'] == conn, 'LAI_normalized_depth'].values
     for conn in plot_connectivity_order
 ]
+
+fig, ax_a = plt.subplots(1, 1, figsize=(8, 10))
 
 ax_a.boxplot(
     panel_a_data,
@@ -316,10 +314,21 @@ for i, y_vals in enumerate(panel_a_data):
 
 ax_a.set_ylabel('Depth Increase (cm) / LAI Decrease', fontsize=16)
 ax_a.set_xticks(np.arange(len(plot_connectivity_order)))
-ax_a.set_xticklabels([connectivity_config[c]['label'] for c in plot_connectivity_order], fontsize=16)
+ax_a.set_xticklabels(
+    [connectivity_config[c]['label'] for c in plot_connectivity_order],
+    fontsize=16,
+    rotation=20,
+    ha='right'
+)
+ax_a.axhline(0, color='black', linestyle='--', linewidth=2)
+ax_a.tick_params(axis='y', labelsize=14)
+
+plt.tight_layout()
+plt.show()
 
 # Panel B: grouped by reference connectivity for each logged-connectivity class
-centers = np.arange(len(plot_connectivity_order))
+center_spacing = 1.35
+centers = np.arange(len(plot_connectivity_order)) * center_spacing
 group_width = 0.78
 n_ref = len(ref_connectivity_order)
 box_width = group_width / n_ref * 0.85
@@ -328,6 +337,8 @@ offsets = np.linspace(
     group_width / 2 - box_width / 2,
     n_ref
 )
+
+fig, ax_b = plt.subplots(1, 1, figsize=(10, 8))
 
 for j, ref_conn in enumerate(ref_connectivity_order):
     grouped_data = [
@@ -347,14 +358,19 @@ for j, ref_conn in enumerate(ref_connectivity_order):
         widths=box_width,
         patch_artist=True,
         showfliers=False,
-        boxprops=dict(facecolor=ref_color, edgecolor=ref_color, alpha=0.25, linewidth=1.8),
+        boxprops=dict(facecolor=ref_color, edgecolor=ref_color, alpha=0.7, linewidth=1.8),
         whiskerprops=dict(color=ref_color, linewidth=1.4),
         capprops=dict(color=ref_color, linewidth=1.4),
         medianprops=dict(color='black', linewidth=1.8)
     )
 
 ax_b.set_xticks(centers)
-ax_b.set_xticklabels([connectivity_config[c]['label'] for c in plot_connectivity_order], fontsize=16)
+ax_b.set_xticklabels(
+    [connectivity_config[c]['label'] for c in plot_connectivity_order],
+    fontsize=16,
+    rotation=0,
+)
+ax_b.set_ylabel('Depth Increase (cm) / LAI Decrease', fontsize=16)
 
 legend_handles = [
     plt.Rectangle(
@@ -363,17 +379,15 @@ legend_handles = [
         1,
         facecolor=connectivity_config[ref_conn]['color'],
         edgecolor=connectivity_config[ref_conn]['color'],
-        alpha=0.25,
+        alpha=0.7,
         label=f"Reference: {connectivity_config[ref_conn]['label']}"
     )
     for ref_conn in ref_connectivity_order
 ]
-ax_b.legend(handles=legend_handles, loc='best', fontsize=16)
-
-for axis in (ax_a, ax_b):
-    axis.axhline(0, color='black', linestyle='--', linewidth=2)
-    axis.tick_params(axis='y', labelsize=14)
-
+ax_b.axhline(0, color='grey', linestyle='--', linewidth=2, label='No Depth Change')
+ax_b.legend(handles=legend_handles, loc='upper left', fontsize=16)
+ax_b.tick_params(axis='y', labelsize=14)
+plt.ylim(top=45)
 plt.tight_layout()
 plt.show()
 
@@ -420,29 +434,29 @@ for connectivity_level, config in connectivity_config.items():
     subset = plot_df_conn[plot_df_conn['log_connected'] == connectivity_level].copy()
 
     subset_clean = subset.dropna(subset=['roll_diff_change', 'mean_depth_change', 'log_id'])
+    
+    ax.scatter(
+        subset_clean['roll_diff_change'],
+        subset_clean['mean_depth_change'],
+        alpha=0.5,
+        s=20,
+        edgecolors='black',
+        linewidth=0.5,
+        color=config['color'],
+        marker=config['marker']
+    )
 
-    # ax.scatter(
-    #     subset_clean['roll_diff_change'],
-    #     subset_clean['mean_depth_change'],
-    #     alpha=0.5,
-    #     s=20,
-    #     edgecolors='black',
-    #     linewidth=0.5,
-    #     color=config['color'],
-    #     marker=config['marker']
-    # )
-
-    # if connectivity_level == 'giw':
-    #     for _, row in subset_clean.iterrows():
-    #         ax.annotate(
-    #             str(row['log_id']),
-    #             xy=(row['roll_diff_change'], row['mean_depth_change']),
-    #             xytext=(6, 4),
-    #             textcoords='offset points',
-    #             fontsize=9,
-    #             alpha=0.9,
-    #             bbox=dict(boxstyle='round,pad=0.1', fc='white', alpha=0.6)
-    #         )
+    if connectivity_level == 'giw':
+        for _, row in subset_clean.iterrows():
+            ax.annotate(
+                str(row['log_id']),
+                xy=(row['roll_diff_change'], row['mean_depth_change']),
+                xytext=(6, 4),
+                textcoords='offset points',
+                fontsize=9,
+                alpha=0.9,
+                bbox=dict(boxstyle='round,pad=0.1', fc='white', alpha=0.6)
+            )
 
     x = subset_clean['roll_diff_change']
     y = subset_clean['mean_depth_change']
@@ -522,7 +536,6 @@ ax.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.show()
 
-
 # %% 6.1 Print the stats for each connectivity class on the regression plot
 
 print(f"\n{'Connectivity':<25} {'n pairs':>5} {'slope':>8} {'intercept':>10} {'R²':>8} {'p-value':>10}")
@@ -550,7 +563,6 @@ y_ft = ft_clean_stats['mean_depth_change']
 slope_ft, intercept_ft, r_ft, p_ft, _ = stats.linregress(x_ft, y_ft)
 print(f"{'flow-through (excl.)':<25} {len(x_ft):>5} {slope_ft:>8.4f} {intercept_ft:>10.4f} {r_ft**2:>8.4f} {p_ft:>10.4f}")
 
-
 # %% 7.0 Mixed effects model to test slope differences between GIWs and 1st order ditched. 
 
 # %% 7.1 Data prep
@@ -558,16 +570,16 @@ lme_data = plot_df_conn[
     ['log_id', 'ref_id', 'mean_depth_change', 'roll_diff_change', 'log_connected', 'ref_connected']
 ].copy()
 
-lme_data = lme_data[lme_data['log_connected'].isin(['giw', 'first order', 'flow-through'])].copy()
+lme_data = lme_data[lme_data['log_connected'].isin(['giw', 'first order'])].copy()
 print(len(lme_data))
 lme_data['log_id'] = lme_data['log_id'].astype('category')
 lme_data['ref_id'] = lme_data['ref_id'].astype('category')
-lme_data['log_connected'] = pd.Categorical(lme_data['log_connected'], categories=['first order', 'giw', 'flow-through'])
+lme_data['log_connected'] = pd.Categorical(lme_data['log_connected'], categories=['giw', 'first order'])
 
 
 df = lme_data.copy()
 # Between-logged effect (mean across references for each logged wetland)
-df["roll_log_mean"] = df.groupby("log_id")["roll_diff_change"].transform("mean")
+df["roll_log_mean"] = df.groupby("log_id", observed=True)["roll_diff_change"].transform("mean")
 # Within-logged deviation (pair-level deviation from that logged wetland mean)
 df["roll_within"] = df["roll_diff_change"] - df["roll_log_mean"]
 
@@ -575,40 +587,53 @@ df["roll_within"] = df["roll_diff_change"] - df["roll_log_mean"]
 df["roll_log_mean_c"] = df["roll_log_mean"] - df["roll_log_mean"].mean()
 df["roll_within_c"]   = df["roll_within"]   - df["roll_within"].mean()
 
-# %% 7.2 Run the mixed effects model
-
+# %% 7.2 Run the mixed effects model with crossed random intercepts and between-with decomposition
+df['all_group'] = 1
 md = smf.mixedlm(
-    "mean_depth_change ~ roll_log_mean_c * (C(log_connected) + C(ref_connected)) + roll_within_c",
+    "mean_depth_change ~ roll_log_mean_c * C(log_connected) + roll_within_c",
     data=df,
-    groups="log_id",
-    re_formula="1",
-    vc_formula={"ref": "0 + C(ref_id)"}
+    groups="all_group",
+    vc_formula={
+        "log": "0 + C(log_id)",
+        "ref": "0 + C(ref_id)"
+    }
 )
 
 m = md.fit(reml=False, method="lbfgs")
+print(m.summary())
 
-# %%
+ci95 = m.conf_int(alpha=0.05)
 
-b, p = m.fe_params, m.pvalues
-ci90 = m.conf_int(alpha=0.10)
+int_term = "roll_log_mean_c:C(log_connected)[T.first order]"
 
-giw_term = "C(log_connected)[T.giw]"
-int_term = "roll_log_mean_c:C(log_connected)[T.giw]"
+print(f"Interaction estimate: {m.params[int_term]:.3f}")
+print(f"95% CI: {ci95.loc[int_term, 0]:.3f} to {ci95.loc[int_term, 1]:.3f}")
+print(f"p-value: {m.pvalues[int_term]:.4f}")
 
-print("\nFixed effects:")
-print(m.fe_params.round(4))
+# %% 7.3 Simpler logged-only mixed model
 
-print("\nAt average LAI loss:")
-print(f"First order expected depth change: {b['Intercept']:.3f} m")
-print(f"GIW expected depth change: {(b['Intercept'] + b[giw_term]):.3f} m")
+# md = smf.mixedlm(
+#     "mean_depth_change ~ roll_log_mean_c * C(log_connected)",
+#     data=df,
+#     groups="log_id",
+#     re_formula="1"
+# )
+# m = md.fit(reml=False, method="lbfgs")
+# print(m.summary())
 
-print("\nLAI slopes:")
-print(f"First order slope: {b['roll_log_mean_c']:.3f}, p={p['roll_log_mean_c']:.4f}")
-print(f"GIW slope: {(b['roll_log_mean_c'] + b[int_term]):.3f}")
-print(f"GIW - first order slope difference: {b[int_term]:.3f}, p={p[int_term]:.4f}")
-print(f"90% CI for slope difference: {ci90.loc[int_term, 0]:.3f} to {ci90.loc[int_term, 1]:.3f}")
+# %% 7.4 Test fixed effects GLM with cluster errors to handle potential non-independence
 
-print("\nVariance:")
-print(f"log_id var={m.cov_re.iloc[0,0]:.4f} | ref_id var={m.vcomp[0]:.4f} | residual var={m.scale:.4f}")
+import statsmodels.api as sm
+glm_mod = smf.glm(
+    "mean_depth_change ~ roll_log_mean_c * C(log_connected) + roll_within_c",
+    data=df,
+    family=sm.families.Gaussian()
+).fit(
+    cov_type="cluster",
+    cov_kwds={"groups": df["log_id"]}
+)
+
+print(glm_mod.summary())
+
 
 # %%

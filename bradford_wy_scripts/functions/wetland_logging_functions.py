@@ -230,7 +230,7 @@ def plot_correlations_from_model(
     post_r_sq = np.corrcoef(post_df[x_series_name], post_df[y_series_name])[0,1]**2
     
     # Create plot
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(10, 12))
     
     # Scatter plots
     ax.scatter(
@@ -275,8 +275,8 @@ def plot_correlations_from_model(
     props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
 
     # Formatting
-    ax.set_xlabel("Reference Stage (m)", fontsize=24, fontweight='bold')
-    ax.set_ylabel("Logged Stage (m)", fontsize=24, fontweight='bold')
+    ax.set_xlabel("Reference Depth (m)", fontsize=24, fontweight='bold')
+    ax.set_ylabel("Logged Depth (m)", fontsize=24, fontweight='bold')
     ax.tick_params(axis='both', which='major', labelsize=18)
     ax.legend(loc='lower right', fontsize=18, framealpha=1)
     

@@ -92,27 +92,6 @@ for i in wetland_ids:
     max_fill150, fill150_dem_z = basin150.max_fill_depth()
     basin150_min = basin150.deepest_point.elevation
 
-    basin200 = WetlandBasin(
-        wetland_id=i,
-        well_point_info=well_point[well_point['wetland_id'] == i],
-        source_dem_path=source_dem_path, 
-        footprint=None,
-        transect_buffer=200
-    )
-    max_fill200, fill200_dem_z = basin200.max_fill_depth()
-    basin200_min = basin200.deepest_point.elevation
-    
-
-    basin250 = WetlandBasin(
-        wetland_id=i,
-        well_point_info=well_point[well_point['wetland_id'] == i],
-        source_dem_path=source_dem_path, 
-        footprint=None,
-        transect_buffer=250
-    )
-    max_fill250, fill250_dem_z = basin250.max_fill_depth()
-    basin250_min = basin250.deepest_point.elevation
-
     # Compile the results
 
     r = {
@@ -122,16 +101,6 @@ for i in wetland_ids:
 
         'max_fill_delineated': max_fill_delineated,
         'max_fill_elev': max_fill_elev,
-        # Agnostic of basin shape
-        'max_fill150': max_fill150, 
-        'basin150_dem_z': fill150_dem_z,
-        'basin150_min': basin150_min,
-        'max_fill200': max_fill200,
-        'basin200_dem_z': fill200_dem_z,
-        'basin200_min': basin200_min,
-        'max_fill250': max_fill250,
-        'basin250_dem_z': fill250_dem_z,
-        'basin250_min': basin250_min
     }
     
     results.append(r)

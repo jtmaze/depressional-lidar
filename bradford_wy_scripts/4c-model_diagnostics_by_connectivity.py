@@ -1,6 +1,7 @@
 # %% 1.0 Libraries and file paths
 
 import pandas as pd
+import geopandas as gpd
 import numpy as np
 import matplotlib.pyplot as plt
 

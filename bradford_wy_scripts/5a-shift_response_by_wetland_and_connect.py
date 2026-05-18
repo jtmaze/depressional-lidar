@@ -104,11 +104,14 @@ plot_data['mean_depth_change'] = plot_data['mean_depth_change'] * 100
 # Define connectivity color palette
 
 connectivity_config = {
-    'flow-through': {'color': 'red', 'label': 'Flow-through'},
-    'first order': {'color': 'green', 'label': '1st Order Ditched'},
-    'giw': {'color': 'blue', 'label': 'GIW'}
+    'flow-through': {'color': '#C46A1A', 'label': 'Flow-through Connected'},
+    'first order': {'color': '#6C5B7B', 'label': 'Ditched Connected'},
+    'giw': {'color': '#1B7F79', 'label': 'GIW'}
 }
 
+'#2A6F97'
+'#7AA95C'
+'#C97C5D'
 # Reorder log_ids by connectivity: GIW first, then first order, then flow-through
 connectivity_order_reverse = ['giw', 'first order', 'flow-through']
 plot_data_log_sorted = plot_data.sort_values('log_connectivity_cat', ascending=False)
