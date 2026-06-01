@@ -4,6 +4,7 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 
 lai_buffer_dist = 150
 
@@ -243,8 +244,6 @@ ax.grid(True, alpha=0.3)
 ax.legend(frameon=False)
 plt.show()
 
-
-
 # %% 3.0 Summary stats for each dataset
 
 summary_stats = []
@@ -268,8 +267,6 @@ summary_table = pd.DataFrame(summary_stats)
 print(summary_table.to_string(index=False, float_format='%.2f'))
 
 # %% 4.0 Boxplot for shift data colored by dataset.
-
-from matplotlib.patches import Patch
 
 fig, ax = plt.subplots(figsize=(7, 6))
 
@@ -333,7 +330,7 @@ ax.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, -0.2
 plt.subplots_adjust(bottom=0.28)
 plt.show()
 
-# %%
+# %% 5.0 Shift statistics by filtering and dataset
 # Print shift statistics
 
 for d in datasets:
@@ -344,6 +341,60 @@ for d in datasets:
         print(f"  Mean shift: {subset['mean_depth_change'].mean():.3f} m")
         print(f"  Median shift: {subset['mean_depth_change'].median():.3f} m")
         print(f"  Std deviation: {subset['mean_depth_change'].std():.3f} m")
+
+
+# %% 6.0 Boxplot showing difference between all pairs and strong models for Exc. dry obs data
+# %% 6.0 Boxplot showing difference between all pairs and strong models for Exc. dry obs data
+
+subset = shift_data[
+    (shift_data['data_set'] == 'no_dry_days') &
+    (shift_data['model_type'] == 'OLS')
+].copy()
+
+all_pairs = subset['mean_depth_change'].dropna() * 100
+strong_pairs = subset.loc[
+    subset['in_strong_models'] == 1, 'mean_depth_change'
+].dropna() * 100
+
+fig, ax = plt.subplots(figsize=(6, 5))
+
+bp = ax.boxplot(
+    [all_pairs, strong_pairs],
+    tick_labels=['All Pairs', 'Strong Models'],
+    patch_artist=True,
+    showfliers=False,
+    widths=0.55
+)
+
+# Simple contrast: filled for all pairs, hatched for strong models
+bp['boxes'][0].set_facecolor('#d9d9d9')
+bp['boxes'][0].set_edgecolor('#666666')
+bp['boxes'][1].set_facecolor('white')
+bp['boxes'][1].set_edgecolor('#666666')
+bp['boxes'][1].set_hatch('///')
+
+for med in bp['medians']:
+    med.set_color('#d95f02')
+    med.set_linewidth(1.8)
+
+ax.scatter(
+    [1, 2],
+    [all_pairs.mean(), strong_pairs.mean()],
+    marker='D',
+    color='red',
+    edgecolor='darkred',
+    s=30,
+    zorder=3
+)
+
+ax.axhline(0, color='black', linestyle=':', linewidth=1.5)
+ax.set_ylabel('Mean Depth Change (cm)')
+ax.grid(axis='y', alpha=0.25)
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+
+plt.tight_layout()
+plt.show()
 
 
 # %%

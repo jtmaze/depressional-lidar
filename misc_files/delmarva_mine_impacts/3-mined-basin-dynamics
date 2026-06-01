@@ -39,7 +39,8 @@ gw_results = pd.read_csv(gw_results_path)
 
 area_results = []
 ids = wetland_footprints['wetland_id'].unique()
-
+ids = ['OB-CH']
+print(ids)
 for i in ids:
 
     well_point = well_points[well_points['wetland_id'] == i].copy()
@@ -54,11 +55,11 @@ for i in ids:
     basin = WetlandBasin(
         wetland_id=i,
         source_dem_path=source_dem,
-        footprint=fp,
+        footprint=None,
         well_point_info=well_point,
         transect_method=None,
         transect_n=None,
-        transect_buffer=10
+        transect_buffer=200
     )
 
     timeseries = WellStageTimeseries.from_csv(

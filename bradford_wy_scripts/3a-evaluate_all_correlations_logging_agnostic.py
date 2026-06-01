@@ -95,7 +95,7 @@ correlation_df = pd.DataFrame(correlations)
 
 correlation_df['depth_range'] = correlation_df['max_depth'] - correlation_df['min_depth']
 
-correlation_df.to_csv(out_path, index=False)
+#correlation_df.to_csv(out_path, index=False)
 
 # %% 5.0 Biplot for depth range vs correlation
 

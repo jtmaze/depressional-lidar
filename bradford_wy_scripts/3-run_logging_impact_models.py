@@ -18,16 +18,14 @@ from bradford_wy_scripts.functions.wetland_logging_functions import (
 
 min_depth_search_radius = 25 # Only used if censoring low water table values. 
 lai_buffer = 150
-data_set = 'wtd_above0_25'
+data_set = 'no_dry_days'
 
 stage_path = "D:/depressional_lidar/data/bradford/in_data/stage_data/bradford_daily_well_depth_Winter2025.csv"
-source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_veg.tif'
+source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_USGS.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-footprints_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_basins_assigned_wetland_ids_KG.shp'
 
-wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer}m_all_wells.csv'
+wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer}m_wetland_basins.csv'
 wetland_pairs = pd.read_csv(wetland_pairs_path)
-
 
 # %% 2.0 Load the stage data and well coordinates
 
@@ -258,7 +256,7 @@ residual_results = []
 data_limited_pairs = []
 
 # View plots for random pairs of logged and reference wetlands
-rando_plot_idxs = np.random.choice(len(wetland_pairs), size=50, replace=False)
+#}rando_plot_idxs = np.random.choice(len(wetland_pairs), size=50, replace=False)
 
 for index, row in wetland_pairs.iterrows():
     pair_results = process_wetland_pair(
@@ -267,7 +265,7 @@ for index, row in wetland_pairs.iterrows():
         plot=False,
         data_set=data_set,
         keep_below_obs=False,
-        depth_censor=True,
+        depth_censor=False,
         # Optional params for depth censoring
         well_point=well_point,
         source_dem_path=source_dem_path,
@@ -292,11 +290,11 @@ data_limited_pairs_df = pd.DataFrame(data_limited_pairs)
 
 out_dir = "D:/depressional_lidar/data/bradford/out_data/"
 
-shift_path = out_dir + f'/modeled_logging_stages/shift_results_LAI{lai_buffer}m_domain_{data_set}.csv'
-distributions_path = out_dir + f'/modeled_logging_stages/hypothetical_distributions_LAI{lai_buffer}m_domain_{data_set}.csv'
-residuals_path = out_dir + f'/model_info/residuals_LAI{lai_buffer}m_domain_{data_set}.csv'
-models_path = out_dir + f'/model_info/model_estimates_LAI{lai_buffer}m_domain_{data_set}.csv'
-data_limited_path = out_dir + f'/model_info/data_limitted_pairs_LAI{lai_buffer}m_domain_{data_set}.csv'
+shift_path = out_dir + f'/modeled_logging_stages/shift_results_wetlandLAI{lai_buffer}m_domain_{data_set}.csv'
+distributions_path = out_dir + f'/modeled_logging_stages/hypothetical_distributions_wetlandLAI{lai_buffer}m_domain_{data_set}.csv'
+residuals_path = out_dir + f'/model_info/residuals_wetlandLAI{lai_buffer}m_domain_{data_set}.csv'
+models_path = out_dir + f'/model_info/model_estimates_wetlandLAI{lai_buffer}m_domain_{data_set}.csv'
+data_limited_path = out_dir + f'/model_info/data_limitted_pairs_wetlandLAI{lai_buffer}m_domain_{data_set}.csv'
 
 shift_results_df.to_csv(shift_path, index=False)
 distribution_results_df.to_csv(distributions_path, index=False)

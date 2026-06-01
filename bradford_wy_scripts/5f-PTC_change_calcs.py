@@ -10,17 +10,18 @@ data_set = 'no_dry_days'
 
 data_dir = 'D:/depressional_lidar/data/bradford/'
 
-distributions_path = f'{data_dir}/out_data/modeled_logging_stages/hypothetical_distributions_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
-strong_wetland_pairs_path = f'{data_dir}/out_data/strong_ols_models_{lai_buffer_dist}m_domain_{data_set}.csv'
+distributions_path = f'{data_dir}/out_data/modeled_logging_stages/hypothetical_distributions_wetlandLAI{lai_buffer_dist}m_domain_{data_set}.csv'
+strong_wetland_pairs_path = f'{data_dir}/out_data/strong_ols_models_wetland{lai_buffer_dist}m_domain_{data_set}.csv'
 connectivity_key_path = f'{data_dir}/bradford_wetland_connect_logging_key.xlsx'
-est_spills_path = f'{data_dir}/out_data/bradford_estimated_basin_spills.csv'
-agg_shift_data_path = f'{data_dir}/out_data/modeled_logging_stages/shift_results_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
+est_spills_path = f'{data_dir}/out_data/bradford_estimated_basin_spills_no_smooth.csv'
+agg_shift_data_path = f'{data_dir}/out_data/modeled_logging_stages/shift_results_wetlandLAI{lai_buffer_dist}m_domain_{data_set}.csv'
 
 
 # %% 2.0 Read data and filter for strong models
 
 spills = pd.read_csv(est_spills_path)
 distributions = pd.read_csv(distributions_path)
+distributions = distributions[distributions['log_id'] != '9_332']
 connect = pd.read_excel(connectivity_key_path)
 n_bottomed = pd.read_csv(agg_shift_data_path)
 n_bottomed = n_bottomed[['log_id', 'ref_id', 'total_obs', 'n_bottomed_out']]
@@ -93,10 +94,10 @@ for i in distributions['log_id'].unique():
         pre_depth_with_dry = swap_dry_days(pre_adj, not_modeled_pct)
         post_depth_with_dry = swap_dry_days(post_adj, not_modeled_pct)
 
-        pre_ptc = sum(pre_adj > spill_depth_adj) / len(pre_adj) * 100
+        pre_ptc = sum(pre_depth_with_dry > spill_depth_adj) / len(pre_adj) * 100
         print(pre_ptc)
 
-        post_ptc = sum(post_adj > spill_depth_adj) / len(post_adj) * 100
+        post_ptc = sum(post_depth_with_dry > spill_depth_adj) / len(post_adj) * 100
         print(post_ptc)
 
         d_ptc = post_ptc - pre_ptc
@@ -129,9 +130,9 @@ print(ptc_summary)
 # %% 4.0 Visualize the pre versus post percent time connected
 
 connectivity_config = {
-    'first order': {'color': 'green', 'label': 'Outlet Connected'},
-    'giw': {'color': 'blue', 'label': 'Unconnected'}, 
-    'flow-through': {'color': 'red', 'label': 'Flow-through Connected'}
+    'first order': {'color': '#6C5B7B', 'label': 'Ditch connected', 'marker': 's'},
+    'giw': {'color': '#1B7F79', 'label': 'Unconnected', 'marker': '^'},
+    'flow-through': {'color': '#C46A1A', 'label': 'Flow-through connected', 'marker': 'X'}
 }
 
 conn_order = ['first order', 'giw', 'flow-through']
@@ -174,9 +175,10 @@ ax.bar(
 )
 
 ax.set_xticks(x)
-ax.set_xticklabels(plot_df['log_id'], rotation=65, ha='right', fontsize=10)
-ax.set_xlabel('log_id', fontsize=12)
-ax.set_ylabel('Percent Time Connected (%)', fontsize=12)
+ax.set_xticklabels(plot_df['log_id'], rotation=65, ha='right')
+ax.set_xlabel('log_id', fontsize=14)
+ax.set_ylabel('Percent Time Connected (%)', fontsize=14)
+ax.tick_params(axis='both', which='major', labelsize=13)
 ax.set_title('Pre vs Post Percent Time Connected by Wetland', fontsize=14, fontweight='bold')
 ax.grid(True, axis='y', alpha=0.3)
 
@@ -208,10 +210,12 @@ conn_summary = ptc_summary.groupby('connect', observed=True).agg(
     pre_ptc=('pre_ptc', 'mean'),
     pre_sd=('pre_ptc', 'std'),
     post_ptc=('post_ptc', 'mean'),
-    post_sd=('post_ptc', 'std')
+    post_sd=('post_ptc', 'std'),
+    n_wetlands=('pre_ptc', 'size')
 ).reset_index()
 
-conn_summary['connect'] = pd.Categorical(conn_summary['connect'], categories=conn_order, ordered=True)
+chunk5_conn_order = ['giw', 'first order', 'flow-through']
+conn_summary['connect'] = pd.Categorical(conn_summary['connect'], categories=chunk5_conn_order, ordered=True)
 conn_summary = conn_summary.sort_values('connect').reset_index(drop=True)
 conn_summary[['pre_sd', 'post_sd']] = conn_summary[['pre_sd', 'post_sd']].fillna(0)
 
@@ -221,7 +225,16 @@ bar_width = 0.34
 conn_colors = [connectivity_config.get(c, {'color': '#888888'})['color'] for c in conn_summary['connect']]
 conn_labels = [connectivity_config.get(c, {'label': str(c)})['label'] for c in conn_summary['connect']]
 
-fig, ax = plt.subplots(1, 1, figsize=(9, 6.5))
+fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+
+for row in conn_summary.itertuples(index=False):
+    print(
+        f"{row.connect}: n={row.n_wetlands}, "
+        f"pre={row.pre_ptc:.2f} +/- {row.pre_sd:.2f}, "
+        f"post={row.post_ptc:.2f} +/- {row.post_sd:.2f}, "
+        f"diff={(row.post_ptc - row.pre_ptc):.2f}, "
+        f"rel_change={((row.post_ptc - row.pre_ptc)/row.pre_ptc):.2f}, "
+    )
 
 # Match chunk 4 aesthetics: solid pre bars and white hatched post bars.
 ax.bar(
@@ -248,24 +261,71 @@ ax.bar(
 )
 
 ax.set_xticks(x)
-ax.set_xticklabels(conn_labels, fontsize=11)
-ax.set_xlabel('Connectivity Class', fontsize=12)
-ax.set_ylabel('Percent Time Connected (%)', fontsize=12)
-ax.set_title('Pre vs Post Percent Time Connected by Connectivity', fontsize=14, fontweight='bold')
+ax.set_xticklabels(conn_labels)
+ax.set_ylabel('Percent Time Connected (%)', fontsize=16)
+ax.tick_params(axis='both', which='major', labelsize=15)
 ax.grid(True, axis='y', alpha=0.3)
 
-connect_handles = [
-    Patch(facecolor=cfg['color'], edgecolor='black', label=cfg['label'])
-    for cfg in connectivity_config.values()
-]
+# connect_handles = [
+#     Patch(facecolor=cfg['color'], edgecolor='black', label=cfg['label'])
+#     for cfg in connectivity_config.values()
+# ]
 hatch_handles = [
     Patch(facecolor='lightgray', edgecolor='black', label='Pre PTC'),
     Patch(facecolor='white', edgecolor='black', hatch='///', label='Post PTC')
 ]
 
-ax.legend(handles=connect_handles + hatch_handles, fontsize=10, ncol=3, loc='upper right', frameon=True)
+ax.legend(handles=hatch_handles, fontsize=18, ncol=1, loc='upper right', frameon=True)
 
 plt.tight_layout()
 plt.show()
+
+# %% 6.0 Run an ANOVA
+
+from scipy import stats
+
+
+def _normalize_connectivity(series: pd.Series) -> pd.Series:
+    return (
+        series.astype(str)
+        .str.strip()
+        .str.lower()
+        .str.replace('_', ' ', regex=False)
+    )
+
+
+def run_two_group_anova(
+    df: pd.DataFrame,
+    group_col: str = 'connect',
+    baseline_col: str = 'pre_ptc',
+    diff_col: str = 'd_ptc',
+    group_a: str = 'giw',
+    group_b: str = 'first order'
+):
+    work = df.copy()
+    work['_group_norm'] = _normalize_connectivity(work[group_col])
+
+    group_a = group_a.replace('_', ' ').lower()
+    group_b = group_b.replace('_', ' ').lower()
+
+    subset = work[work['_group_norm'].isin([group_a, group_b])].copy()
+
+    a_base = subset.loc[subset['_group_norm'] == group_a, baseline_col].dropna().to_numpy()
+    b_base = subset.loc[subset['_group_norm'] == group_b, baseline_col].dropna().to_numpy()
+
+    a_diff = subset.loc[subset['_group_norm'] == group_a, diff_col].dropna().to_numpy()
+    b_diff = subset.loc[subset['_group_norm'] == group_b, diff_col].dropna().to_numpy()
+
+    f_base, p_base = stats.f_oneway(a_base, b_base)
+    f_diff, p_diff = stats.f_oneway(a_diff, b_diff)
+
+    print('ANOVA: giw vs first order (flow-through excluded)')
+    print(f"baseline ({baseline_col}) n_giw={len(a_base)}, n_first_order={len(b_base)}, F={f_base:.4f}, p={p_base:.4g}")
+    print(f"diff ({diff_col}) n_giw={len(a_diff)}, n_first_order={len(b_diff)}, F={f_diff:.4f}, p={p_diff:.4g}")
+
+
+run_two_group_anova(ptc_summary, group_col='connect')
+
+
 
 # %%

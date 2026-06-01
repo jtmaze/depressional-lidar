@@ -319,7 +319,7 @@ class WetlandBasin:
 
         return DeepestPoint(elevation=min_val, location=pt)
 
-    def get_smoothed_dem(self, sigma: float = 5.0) -> SmoothedDEM:
+    def get_smoothed_dem(self, sigma: float = 3.0) -> SmoothedDEM:
         """
         Apply Gaussian smoothing to the clipped DEM.
         NaN cells are temporarily filled with the local nanmean so the
@@ -454,7 +454,7 @@ class WetlandBasin:
         outlet cell, with no artificial gradient added inside the depression.
         """
 
-        clipped_smoothed = self.smoothed_dem
+        clipped_smoothed = self.clipped_dem #NOTE: unclipped
         dem_data = clipped_smoothed.dem.copy()
         nan_mask = np.isnan(dem_data)
 
@@ -521,7 +521,7 @@ class WetlandBasin:
         """
         fill = self.local_fill
         depth = fill.fill_depth.copy()
-        raw_dem = self.smoothed_dem.dem
+        raw_dem = self.clipped_dem.dem #NOTE
 
         rows, cols = depth.shape
         scores = np.full_like(depth, np.nan)

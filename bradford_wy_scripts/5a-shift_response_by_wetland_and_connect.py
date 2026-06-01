@@ -13,9 +13,9 @@ from statsmodels.stats.multicomp import pairwise_tukeyhsd
 lai_buffer_dist = 150
 data_set = 'no_dry_days'
 data_dir = "D:/depressional_lidar/data/bradford/"
-shift_path = data_dir + f'/out_data/modeled_logging_stages/shift_results_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
+shift_path = data_dir + f'/out_data/modeled_logging_stages/shift_results_wetlandLAI{lai_buffer_dist}m_domain_{data_set}.csv'
 connectivity_key_path = data_dir + '/bradford_wetland_connect_logging_key.xlsx'
-strong_pairs_path = data_dir + f'out_data/strong_ols_models_{lai_buffer_dist}m_domain_{data_set}.csv'
+strong_pairs_path = data_dir + f'out_data/strong_ols_models_wetland{lai_buffer_dist}m_domain_{data_set}.csv'
 
 shift_data = pd.read_csv(shift_path)
 connect_data = pd.read_excel(connectivity_key_path)

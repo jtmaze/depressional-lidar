@@ -12,8 +12,8 @@ from bradford_wy_scripts.functions.lai_vis_functions import read_concatonate_lai
 
 buffer_dist = 150
 
-lai_dir = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/well_buffer_{buffer_dist}m_nomasking/'
-lai_method = f'well_buffer_{buffer_dist}m_nomasking'
+lai_dir = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/basin_buffer_{buffer_dist}m_maskedwetland/'
+lai_method = f'basin_buffer_{buffer_dist}m_nomasking'
 upper_bound = 5.6
 lower_bound = 0.5
 
@@ -65,6 +65,7 @@ for i in candidate_ids:
         visualize_lai(lai[lai['date'] >= start_date], wetland_id=i, show=True)
     else:
         print(f"Assigning {i} as a logging ID ||| Theil-Sen slope = {slope:.2f} LAI/yr")
+        visualize_lai(lai[lai['date'] >= start_date], wetland_id=i, show=True)
         lai['wetland_id'] = i
         log_ids.append(i)
         log_dfs.append(lai)
@@ -74,15 +75,14 @@ log = pd.concat(log_dfs)
 
 print(len(log_ids))
 print(len(ref_ids))
-
+print(log_ids)
 
 # %% 3.0 Visually estimate the logging dates
 
 """
 NOTE: This used this to estimate logging dates based on LAI timeseries. 
 After getting an estimate, we verified the logging date using Planet Imagery.
-
-
+"""
 
 aggregate_ref = ref.groupby('date')['roll_yr'].mean().reset_index()
 aggregate_ref.rename(columns={'roll_yr': 'roll_yr_ref'}, inplace=True)
@@ -125,20 +125,35 @@ log_ids_dict = {
     '6_300': '2024-02-01',
 
     # Only at 250m
-    '9_609': '2023-10-01'
+    '9_609': '2023-10-01',
+
+    '5a_582': '2023-05-01',
+    '6_629': '2020-02-01',
+    '3_21': '2023-02-01',
+    '9_332': '2020-02-01',
+
+    ###
+    '5_560': '2022-02-01',
+    '14_616': '2022-02-01',
+    '6a_17': '2024-04-01',
+    '14_15': '2023-02-01',
+    '5_321': '2024-02-01',
+    '5a_550': '2024-05-01'
 
 
 }
 
 for i in log_ids:
 
-    temp = log[log['well_id'] == i]
+    temp = log[log['wetland_id'] == i]
     temp = temp.merge(aggregate_ref,
                       on='date',
                       how='outer')
 
     temp['log_diff_1yr'] = temp['roll_yr'] - temp['roll_yr_ref']
     temp = temp[temp['date'] >= start_date]
+
+    print(i)
     
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
     
@@ -182,8 +197,6 @@ for i in log_ids:
     plt.show()
 
 print('done')
-
-"""
 
 # %% 4.0 Determine if logged wetlands were sufficiently instrumented prior to harvest
 
@@ -305,14 +318,16 @@ for ref_id in ref_ids:
 combinations_df = pd.DataFrame(combinations_list)
 print(len(combinations_df))
 
-bad_log_ids = [
+bad_wetland_ids = [
     '3_173', # The wetland itself was logged. 
+    #'9_332', # Well broken NOTE not sure whether to delete
     '3_244', # The wetland was logged and the well was snapped in the process
     '13_263', # well position is not stable. 
     '15_516' # The well positoin moved and there's inadequate post-harvest data. 
 ]
 
-combinations_df = combinations_df[~combinations_df['logged_id'].isin(bad_log_ids)]
+combinations_df = combinations_df[~combinations_df['logged_id'].isin(bad_wetland_ids)]
+combinations_df = combinations_df[~combinations_df['reference_id'].isin(bad_wetland_ids)]
 print(len(combinations_df))
 print(len(combinations_df['logged_id'].unique()))
 print(len(combinations_df['reference_id'].unique()))
@@ -325,7 +340,7 @@ print(len(combinations_df['reference_id'].unique()))
 # %% 6.0 Write the output
 
 combinations_df.to_csv(
-    f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{buffer_dist}m_all_wells.csv',
+    f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{buffer_dist}m_wetland_basins.csv',
     index=False
 )
 

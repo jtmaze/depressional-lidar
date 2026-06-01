@@ -1,23 +1,24 @@
 # %% 1.0 Libraries and file paths
+
 """
-NOTE: I need to contemplate a minor issue.
+NOTE: I needed to contemplate a minor issue.
 The number of unique wells dramatically decreases at low and high spill depths. 
 For example at -1.5m below, the spill depth there might only be a few logged wetlands with data.
 How can I ensure the upper and lower bounds of the Q-Q plot aren't warped by data from a single well?
-Maybe truncate the curves whenever less than three wells are represented?
+Maybe truncate the curves whenever less than three are represented?
 """
+
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
 
 lai_buffer_dist = 150
 data_set = 'no_dry_days'
 
 data_dir = "D:/depressional_lidar/data/bradford/"
-distributions_path = f'{data_dir}/out_data/modeled_logging_stages/hypothetical_distributions_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
-strong_wetland_pairs_path = f'{data_dir}/out_data/strong_ols_models_{lai_buffer_dist}m_domain_{data_set}.csv'
+distributions_path = f'{data_dir}/out_data/modeled_logging_stages/hypothetical_distributions_wetlandLAI{lai_buffer_dist}m_domain_{data_set}.csv'
+strong_wetland_pairs_path = f'{data_dir}/out_data/strong_ols_models_wetland{lai_buffer_dist}m_domain_{data_set}.csv'
 connectivity_key_path = data_dir + '/bradford_wetland_connect_logging_key.xlsx'
 est_spills_path = data_dir + '/out_data/bradford_estimated_basin_spills.csv'
 
@@ -26,6 +27,8 @@ est_spills_path = data_dir + '/out_data/bradford_estimated_basin_spills.csv'
 spills = pd.read_csv(est_spills_path)
 distributions = pd.read_csv(distributions_path)
 connect = pd.read_excel(connectivity_key_path)
+
+distributions = distributions[distributions['log_id'] != '9_332']
 
 # Only keep strong models
 strong_pairs = pd.read_csv(strong_wetland_pairs_path)
@@ -146,14 +149,18 @@ print(f"Quantile difference at pre = -0.5m: {diff_all[idx_neg05]:.3f} m  "
 print(f"Quantile difference at pre =  0.0m: {diff_all[idx_spill]:.3f} m  "
       f"(pre={pre_q_all[idx_spill]:.3f}, post={post_q_all[idx_spill]:.3f})")
 
-
 # %% 5.0 Q-Q plot aggregated by connectivity class
 
 connectivity_config = {
-    'first order': {'color': '#6C5B7B', 'label': 'Ditch connected', 'marker': 's'},
+    'first order': {'color': '#6C5B7B', 'label': 'Ditch Connected', 'marker': 's'},
     'giw': {'color': '#1B7F79', 'label': 'Unconnected', 'marker': '^'}, 
     'flow-through': {'color': '#C46A1A', 'label': 'Flow-through connected', 'marker': 'X'}
 }
+
+# Draw order controls overlap (last drawn is on top).
+draw_order = ['flow-through', 'first order', 'giw']
+# Legend order shown to reader.
+legend_conn_order = ['giw', 'first order', 'flow-through']
 
 
 fig, ax = plt.subplots(1, 1, figsize=(9, 8))
@@ -169,18 +176,20 @@ dist_filtered = distributions_clean[
 pre_data = dist_filtered['pre_adj'].dropna()
 post_data = dist_filtered['post_adj'].dropna()
 
-n_quantiles = 1000
+n_quantiles = 100
 quantiles = np.linspace(0, 1, n_quantiles)
 
 pre_quantiles = np.quantile(pre_data, quantiles)
 post_quantiles = np.quantile(post_data, quantiles)
 
 # Plot connectivity-class aggregate quantiles
-for conn_class, config in connectivity_config.items():
+for conn_class in draw_order:
+    config = connectivity_config[conn_class]
     class_df = dist_filtered[dist_filtered['connectivity'] == conn_class]
     class_df = class_df.dropna(subset=['pre_adj', 'post_adj'])
 
-    pre_q = (np.quantile(class_df['pre_adj'], quantiles)) * 100
+
+    pre_q = np.quantile(class_df['pre_adj'], quantiles) * 100
     post_q = np.quantile(class_df['post_adj'], quantiles) * 100
 
     diff = post_q - pre_q
@@ -194,25 +203,29 @@ for conn_class, config in connectivity_config.items():
     print(f"Quantile difference at pre =  0.0m: {diff[idx_spill]:.3f} m  "
         f"(pre={pre_q[idx_spill]:.3f}, post={post_q[idx_spill]:.3f})")
 
-    ax.scatter(pre_q, post_q, alpha=1, s=10,
-                    color=config['color'], label=config['label'])
+    ax.scatter(pre_q, post_q, alpha=1, s=30,
+                    color=config['color'], label=config['label'], zorder=4)
 
 ax.plot([pre_quantiles.min() * 100, pre_quantiles.max() * 100],
              [pre_quantiles.min() * 100, pre_quantiles.max() * 100],
-             'r--', linewidth=2, label='1:1 line', color='black')
+             'r--', linewidth=2, label='1:1 line', color='black', zorder=2)
 ax.set_xlabel('h$_{L,\\ pre}$ (cm)', fontsize=axis_label_fs)
 ax.set_ylabel('h$_{L,\\ post}$ (cm)', fontsize=axis_label_fs)
-ax.axvline(0, color='red', linestyle='-', linewidth=4, label='Spill Depth', alpha=0.7)
+ax.axvline(0, color='red', linestyle='-', linewidth=4, label='Spill Depth', alpha=0.7, zorder=1)
 ax.grid(True, alpha=0.3)
 ax.tick_params(axis='both', labelsize=tick_label_fs)
 ax.set_aspect('equal', adjustable='box')
-ax.set_xlim(-100, 75)
-ax.set_ylim(-100, 75)
+ax.set_xlim(-100, 70)
+ax.set_ylim(-100, 70)
 
 handles, labels = ax.get_legend_handles_labels()
+label_to_handle = {label: handle for handle, label in zip(handles, labels)}
+ordered_labels = [connectivity_config[c]['label'] for c in legend_conn_order]
+ordered_labels += [label for label in labels if label not in ordered_labels]
+ordered_handles = [label_to_handle[label] for label in ordered_labels if label in label_to_handle]
 ax.legend(
-    handles,
-    labels,
+    ordered_handles,
+    ordered_labels,
     loc='upper left',
     fontsize=14,
     frameon=True,

@@ -13,7 +13,7 @@ dem_buffer = 5
 
 source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_USGS.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-footprints_path = 'D:/depressional_lidar/data/bradford/out_data/bradford_well_basins.shp'
+footprints_path = 'D:/depressional_lidar/data/bradford/out_data/bradford_tgt_wetlands.shp'
 wetland_connectivity_path = 'D:/depressional_lidar/data/bradford/bradford_wetland_connect_logging_key.xlsx'
 
 footprints = gpd.read_file(footprints_path)
@@ -49,18 +49,16 @@ for i in wetland_ids:
     Test delineations on rough basin shapes
     """
 
-    # delineated_basin.visualize_shape(
-    #     show_shape=True, 
-    #     show_well=True, 
-    #     show_deepest=True, 
-    #     show_spill=True, 
-    #     show_smoothed_spill=True
-    # )
+    delineated_basin.visualize_shape(
+        show_shape=True, 
+        show_well=True, 
+        show_deepest=True, 
+    )
+
+    delineated_basin.plot_local_fill()
+
     delineated_basin.plot_basin_hypsometry(
         plot_points=True,
-        plot_spill=True, 
-        plot_smoothed_spill=True, 
-        plot_contiguous_spill=True,
     )
 
     well_elev = delineated_basin.well_point.elevation_dem
@@ -68,7 +66,6 @@ for i in wetland_ids:
 
     max_fill_delineated, fill_dem_z = delineated_basin.max_fill_depth()
     max_fill_elev = max_fill_delineated + fill_dem_z
-
 
     elev_cdf = delineated_basin.calculate_hypsometry(method='total_cdf') # returned as a tuple
 
@@ -79,26 +76,10 @@ for i in wetland_ids:
             'elev_bin_center': elev
         })
 
-    # Test simple spill on the undelineated basins
-    # at 150m and 250m
-
-    basin150 = WetlandBasin(
-        wetland_id=i,
-        well_point_info=well_point[well_point['wetland_id'] == i],
-        source_dem_path=source_dem_path, 
-        footprint=None,
-        transect_buffer=150
-    )
-    max_fill150, fill150_dem_z = basin150.max_fill_depth()
-    basin150_min = basin150.deepest_point.elevation
-
-    # Compile the results
-
     r = {
         'wetland_id': i,
         'min_elev': min_elev,
         'well_elev': well_elev,
-
         'max_fill_delineated': max_fill_delineated,
         'max_fill_elev': max_fill_elev,
     }
@@ -109,7 +90,7 @@ for i in wetland_ids:
 
 results_df = pd.DataFrame(results)
 
-results_df.to_csv('D:/depressional_lidar/data/bradford/out_data/bradford_estimated_basin_spills.csv', index=False)
+results_df.to_csv('D:/depressional_lidar/data/bradford/out_data/bradford_estimated_basin_spills_no_smooth.csv', index=False)
 
 # Save hypsometry curves as a flat tidy CSV (one row per bin)
 cdf_df = pd.DataFrame(cdfs)

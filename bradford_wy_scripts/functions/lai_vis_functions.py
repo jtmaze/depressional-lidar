@@ -96,14 +96,8 @@ def visualize_lai(lai_df: pd.DataFrame,
     ax.scatter(lai_df['date'], lai_df['LAI'], 
                color='red', alpha=0.7, s=30, label='LAI')
     
-    ax.plot(lai_df['date'], lai_df['roll5'], 
-            color='blue', linewidth=2, label='5-month')
-    
-    ax.plot(lai_df['date'], lai_df['roll9'], 
-            color='green', linewidth=2, label='9-month')
-    
     ax.plot(lai_df['date'], lai_df['roll_yr'], 
-            color='orange', linewidth=2, label='1-year')
+            color='black', linewidth=2, label='1-year')
     
     # Formatting
     ax.set_title(f"Wetland ID: {wetland_id} - LAI Timeseries {title_suffix}", fontsize=14, fontweight='bold')

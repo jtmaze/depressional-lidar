@@ -11,23 +11,27 @@ if PROJECT_ROOT not in sys.path:
 
 from wetland_utilities.basin_attributes import WetlandBasin
 
-buffer = 150
 data_set = 'no_dry_days'
 lai_buffer_dist = 150
 
 data_dir = "D:/depressional_lidar/data/bradford/"
-source_dem_path = f'{data_dir}/in_data/bradford_DEM_cleaned_veg.tif'
+source_dem_path = f'{data_dir}/in_data/bradford_DEM_cleaned_USGS.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
+wetland_shapes_path = f'{data_dir}/out_data/bradford_tgt_wetlands.shp'
 connectivity_key_path = f'{data_dir}bradford_wetland_connect_logging_key.xlsx'
-distributions_path = f'{data_dir}/out_data/modeled_logging_stages/hypothetical_distributions_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
-strong_wetland_pairs_path = f'{data_dir}/out_data/strong_ols_models_{lai_buffer_dist}m_domain_{data_set}.csv'
-agg_shift_data_path = f'{data_dir}/out_data/modeled_logging_stages/shift_results_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
+distributions_path = f'{data_dir}/out_data/modeled_logging_stages/hypothetical_distributions_wetlandLAI{lai_buffer_dist}m_domain_{data_set}.csv'
+strong_wetland_pairs_path = f'{data_dir}/out_data/strong_ols_models_wetland{lai_buffer_dist}m_domain_{data_set}.csv'
+agg_shift_data_path = f'{data_dir}/out_data/modeled_logging_stages/shift_results_wetlandLAI{lai_buffer_dist}m_domain_{data_set}.csv'
+
 
 # %% 2.0 Read and merge data 
 well_point = (
     gpd.read_file(well_points_path)[['wetland_id', 'type', 'rtk_z', 'geometry']]
     .query("type in ['main_doe_well', 'aux_wetland_well']")
 )
+
+wetland_shapes = gpd.read_file(wetland_shapes_path)
+connect = pd.read_excel(connectivity_key_path)[['wetland_id', 'connectivity']]
 
 distributions = pd.read_csv(distributions_path)
 # Only keep strong models
@@ -65,6 +69,7 @@ plt.show()
 
 unique_log_ids = distributions['log_id'].unique()
 fd_results = []
+hypsometry_data = []
 
 for i in unique_log_ids:
 
@@ -74,8 +79,8 @@ for i in unique_log_ids:
         wetland_id=i,
         well_point_info=well_point[well_point['wetland_id'] == i],
         source_dem_path=source_dem_path,
-        footprint=None,
-        transect_buffer=buffer 
+        footprint=wetland_shapes[wetland_shapes['wetland_id'] == i],
+        transect_buffer=10 
     )
     hyp = basin.calculate_hypsometry(method='total_cdf')
     hypsometry = pd.DataFrame({
@@ -84,6 +89,7 @@ for i in unique_log_ids:
     })
     hypsometry['depth_rel_well'] = hypsometry['elevation'] - basin.well_point.elevation_dem
     hypsometry['rel_area'] = (hypsometry['area'] / hypsometry['area'].max()).round(3)
+    hypsometry_data.append(hypsometry.assign(wetland_id=i))
 
 
     def calc_exceedance_curve(model_well_depths, hypsometry):
@@ -130,9 +136,6 @@ for i in unique_log_ids:
         return swap_depths
 
     log_valid_refs = well_dist['ref_id'].unique()
-
-    # Get the bottomed dry (un-modeled) fraction for the specific pair. 
-
     for r in log_valid_refs:
         
         ref_well_dist = well_dist[well_dist['ref_id'] == r]
@@ -150,6 +153,8 @@ for i in unique_log_ids:
         post_curve['pre_post'] = 'post'
 
         """
+        # Plots used to check work durring developement
+
         # Quick plot to observe depth curves
         plt.figure(figsize=(8, 6))
         plt.plot(pre_curve['probability'], pre_curve['depth'], label='Pre-logging', color='blue')
@@ -183,193 +188,257 @@ for i in unique_log_ids:
 # %% 3.0 Combine results
 
 inundate_freq = pd.concat(fd_results)
+inundate_freq = inundate_freq.merge(
+    connect,
+    left_on='log_id',
+    right_on='wetland_id',
+    how='left'
+)
+hypsometry_data = pd.concat(hypsometry_data, ignore_index=True)
 
-# %% 4.0 Make pre and post curves on a single plot. Combine the pre and post curves for each log_id
+# %% 4.0 Boxplot with points for each logged wetland's inter-decile range in hypsometry
+
+summary_elevations = hypsometry_data.groupby(['wetland_id']).agg(
+    pct10_elev=('elevation', lambda x: np.percentile(x, 10)),
+    pct90_elev=('elevation', lambda x: np.percentile(x, 90))
+).reset_index()
+summary_elevations['interdecile_range'] = summary_elevations['pct90_elev'] - summary_elevations['pct10_elev']
+
+summary_elevations = summary_elevations.merge(connect, on='wetland_id', how='left')
+
+connect_order = ['giw', 'first order', 'flow-through']
+connect_colors = {
+    'giw': '#1B7F79',
+    'first order': '#6C5B7B',
+    'flow-through': '#C46A1A'
+}
+
+idr_data = [
+    summary_elevations.loc[
+        summary_elevations['connectivity'] == conn,
+        'interdecile_range'
+    ].dropna().values
+    for conn in connect_order
+]
+
+fig, ax = plt.subplots(figsize=(8, 6))
+box = ax.boxplot(
+    idr_data,
+    labels=['Unconnected', 'Ditch connected', 'Flow-through connected'],
+    patch_artist=True,
+    widths=0.55,
+    showfliers=False
+)
+
+for patch, conn in zip(box['boxes'], connect_order):
+    patch.set_facecolor(connect_colors[conn])
+    patch.set_alpha(0.65)
+
+for median in box['medians']:
+    median.set_color('black')
+    median.set_linewidth(2)
+
+for idx, conn in enumerate(connect_order, start=1):
+    class_data = summary_elevations.loc[
+        summary_elevations['connectivity'] == conn,
+        ['wetland_id', 'interdecile_range']
+    ].dropna(subset=['interdecile_range'])
+    if len(class_data) == 0:
+        continue
+    x_jitter = np.random.normal(loc=idx, scale=0.05, size=len(class_data))
+    ax.scatter(
+        x_jitter,
+        class_data['interdecile_range'].values,
+        color=connect_colors[conn],
+        edgecolor='white',
+        linewidth=0.6,
+        alpha=0.8,
+        s=45,
+        zorder=3
+    )
+    for x_val, y_val, wetland_id in zip(x_jitter, class_data['interdecile_range'].values, class_data['wetland_id'].values):
+        ax.annotate(
+            str(wetland_id),
+            (x_val, y_val),
+            textcoords='offset points',
+            xytext=(4, 3),
+            fontsize=7,
+            alpha=0.9,
+            zorder=4
+        )
+
+ax.set_ylabel('Hypsometry interdecile range (m)', fontsize=12)
+ax.set_xlabel('Connectivity', fontsize=12)
+ax.grid(axis='y', alpha=0.25)
+plt.tight_layout()
+plt.show()
+
+# Mean and standard deviation for all wetland's interdecile range
+idr_vals = summary_elevations['interdecile_range'].dropna()
+mean_idr = idr_vals.mean()
+std_idr = idr_vals.std()
+print(f"Mean interdecile range: {mean_idr:.4f}")
+print(f"SD interdecile range: {std_idr:.4f}")
+
+# %% %% 5.0 Q-Q plot pre versus post by connectivity
 
 unique_log_ids = strong_pairs['log_id'].unique()
 unique_ref_ids = strong_pairs['ref_id'].unique()
 
-# Define common probability bins for interpolation
-prob_bins = np.linspace(0, 1, 51)
 
-# Aggregate pre-logging curves across all log_ids
-pre_data = inundate_freq[inundate_freq['pre_post'] == 'pre']
-pre_interp = []
-for l in unique_log_ids:
-    for r in unique_ref_ids:
-        data = pre_data[
-            (pre_data['log_id'] == l) & (pre_data['ref_id'] == r)
-        ].sort_values('probability')
-        if data.empty:
-            continue
-        interp_vals = np.interp(prob_bins, data['probability'], data['inundated_fraction'])
-        pre_interp.append(interp_vals)
+def mean_pre_post_curves(df):
+    prob_bins = np.linspace(0.02, 0.98, 49)
+    pre_curves = []
+    post_curves = []
 
-pre_interp = np.array(pre_interp)
-pre_mean = np.mean(pre_interp, axis=0)
-pre_std = np.std(pre_interp, axis=0)
-pre_se = pre_std / np.sqrt(pre_interp.shape[0])
+    for _, pair_data in df.groupby(['log_id', 'ref_id']):
+        pre_data = pair_data[pair_data['pre_post'] == 'pre'].sort_values('probability')
+        post_data = pair_data[pair_data['pre_post'] == 'post'].sort_values('probability')
+        pre_curves.append(np.interp(prob_bins, pre_data['probability'], pre_data['inundated_fraction']))
+        post_curves.append(np.interp(prob_bins, post_data['probability'], post_data['inundated_fraction']))
 
-# Aggregate post-logging curves across all log_ids
-post_data = inundate_freq[inundate_freq['pre_post'] == 'post']
-post_interp = []
-for l in unique_log_ids:
-    for r in unique_ref_ids:
-        data = post_data[
-            (post_data['log_id'] == l) & (post_data['ref_id'] == r)
-        ].sort_values('probability')
-        if data.empty:
-            continue
-        interp_vals = np.interp(prob_bins, data['probability'], data['inundated_fraction'])
-        post_interp.append(interp_vals)
+    pre_mean = np.mean(np.vstack(pre_curves), axis=0)
+    post_mean = np.mean(np.vstack(post_curves), axis=0)
 
-post_interp = np.array(post_interp)
-post_mean = np.mean(post_interp, axis=0)
-post_std = np.std(post_interp, axis=0)
-post_se = post_std / np.sqrt(post_interp.shape[0])
-# %% 5.0 Plot with excedence curves
+    return pd.DataFrame({
+        'probability': prob_bins,
+        'pre_mean': pre_mean,
+        'post_mean': post_mean,
+        'delta': post_mean - pre_mean
+    })
 
-# Color scheme
-post_color = '#E69F00'  # Orange
-pre_color = '#333333'  # Dark gray
+# %% 5.1 Render the plot
+
+connectivity_config = {
+    'first order': {'color': '#6C5B7B', 'label': 'Ditch connected'},
+    'giw': {'color': '#1B7F79', 'label': 'Unconnected'}, 
+    'flow-through': {'color': '#C46A1A', 'label': 'Flow-through connected'}
+}
+
+draw_order = ['flow-through', 'first order', 'giw']
+legend_conn_order = ['giw', 'first order', 'flow-through']
 
 fig, ax = plt.subplots(1, 1, figsize=(10, 10))
 
-# Plot pre-logging mean and standard error lines
-ax.plot(prob_bins, pre_mean * 100, color=pre_color, linewidth=5, label='Pre-logging Mean')
-ax.plot(prob_bins, (pre_mean - pre_se) * 100, color=pre_color, linewidth=2.5, linestyle='--', alpha=0.35, label='Pre-logging ±1 SE')
-ax.plot(prob_bins, (pre_mean + pre_se) * 100, color=pre_color, linewidth=2.5, linestyle='--', alpha=0.35)
+class_handles = {}
 
-# Plot post-logging mean and standard error lines
-ax.plot(prob_bins, post_mean * 100, color=post_color, linewidth=5, label='Post-logging Mean')
-ax.plot(prob_bins, (post_mean - post_se)* 100, color=post_color, linewidth=2.5, linestyle='--', alpha=0.35, label='Post-logging ±1 SE')
-ax.plot(prob_bins, (post_mean + post_se) * 100, color=post_color, linewidth=2.5, linestyle='--', alpha=0.35)
+for connectivity_class in draw_order:
+    cfg = connectivity_config[connectivity_class]
+    class_data = inundate_freq[inundate_freq['connectivity'] == connectivity_class]
 
-ax.scatter(0.5, 2, marker='v', color='maroon', s=500, linewidths=4, label="P=0.5")
-ax.scatter(0.25, 2, marker='v', color='navy', s=500, linewidths=4, facecolors='none', edgecolors='navy', label="P=0.25")
+    # Add one faint curve per logged wetland (averaged across valid reference pairs).
+    for _, wetland_data in class_data.groupby('log_id'):
+        wetland_curves = mean_pre_post_curves(wetland_data)
+        wetland_pre_curve = wetland_curves['pre_mean'].to_numpy()
+        wetland_post_curve = wetland_curves['post_mean'].to_numpy()
+        ax.plot(
+            wetland_pre_curve * 100,
+            wetland_post_curve * 100,
+            color=cfg['color'],
+            linewidth=2,
+            alpha=0.8,
+            zorder=1
+        )
 
-ax.set_xlabel('Exceedance Probability', fontsize=22)
-ax.set_ylabel('Inundated Fraction (%)', fontsize=22)
+    curve_df = mean_pre_post_curves(class_data)
+    pre_curve = curve_df['pre_mean'].to_numpy()
+    post_curve = curve_df['post_mean'].to_numpy()
+    line = ax.plot(
+        pre_curve * 100,
+        post_curve * 100,
+        color=cfg['color'],
+        linewidth=5,
+        marker='o',
+        markersize=15,
+        zorder=3
+    )[0]
+    class_handles[connectivity_class] = line
+
+diag_line = ax.plot([0, 100], [0, 100], 'k--', linewidth=2.5)[0]
+
+legend_handles = [class_handles[c] for c in legend_conn_order]
+legend_labels = [connectivity_config[c]['label'] for c in legend_conn_order]
+legend_handles.append(diag_line)
+legend_labels.append('1:1')
+
+ax.set_xlabel('Pre-logging inundated fraction (%)', fontsize=22)
+ax.set_ylabel('Post-logging inundated fraction (%)', fontsize=22)
 ax.grid(True, alpha=0.3)
-ax.set_xlim(0, 1)
-ax.set_ylim(0, 70)
-ax.legend(fontsize=20)
-
+ax.set_xlim(0, 100)
+ax.set_ylim(0, 100)
+ax.legend(legend_handles, legend_labels, fontsize=20)
 ax.tick_params(axis='both', which='major', labelsize=18)
 
 plt.tight_layout()
 plt.show()
 
-# %% 6.0 Bar showing graph of inundated fraction at P=0.5 and P=0.25
+# %% 6.0 Generate curves for descriptive statistics
 
-# %% 6.1 Extract curve values for bargraphs
+full_q_q = mean_pre_post_curves(inundate_freq)
 
-def get_inundated_at_prob(curve_df, target_prob):
-    """Get the inundated fraction closest to a target exceedance probability"""
-    idx = (curve_df['probability'] - target_prob).abs().idxmin()
-    return curve_df.loc[idx, 'inundated_fraction']
+log_wetland_curves = []
 
-# Extract values at target probabilities for each log_id
-bar_data = []
+for i in unique_log_ids:
+    subset = inundate_freq[inundate_freq['log_id'] == i].copy()
+    log_wetland_curves.append(mean_pre_post_curves(subset).assign(log_id=i))
 
-for log_id in unique_log_ids:
-    log_curves = inundate_freq[inundate_freq['log_id'] == log_id].copy()
-    for ref_id in unique_ref_ids:
-        ref_curves = log_curves[log_curves['ref_id'] == ref_id]
-
-        pre_curve = ref_curves[ref_curves['pre_post'] == 'pre']
-        post_curve = ref_curves[ref_curves['pre_post'] == 'post']
-
-        if len(pre_curve) == 0 or len(post_curve) == 0:
-            continue
-        
-        for p_val in [0.25, 0.5]:
-            pre_val = get_inundated_at_prob(pre_curve, p_val)
-            post_val = get_inundated_at_prob(post_curve, p_val)
-            
-            bar_data.append({
-                'log_id': log_id,
-                'ref_id': ref_id,
-                'probability': p_val,
-                'pre_inundated': pre_val,
-                'post_inundated': post_val
-            })
-
-bar_df = pd.DataFrame(bar_data)
-# Average across reference wetlands for each log_id
-bar_means = bar_df.groupby(['log_id', 'probability']).agg(
-    pre_mean=('pre_inundated', 'mean'),
-    post_mean=('post_inundated', 'mean'),
-    pre_se=('pre_inundated', 'sem'),
-    post_se=('post_inundated', 'sem')
-).reset_index()
-
-bar_means['nominal_diff'] = bar_means['post_mean'] * 100 - bar_means['pre_mean'] * 100
-bar_means['rel_diff'] = (bar_means['nominal_diff'] / (bar_means['pre_mean'] * 100)) * 100
-# %% 6.2 Plot bar graphs
-
-fig, axes = plt.subplots(2, 1, figsize=(8, 10), sharex=True)
-bar_width = 0.35
-
-# Determine common y-limit
-max_val = max(bar_means['pre_mean'].max(), bar_means['post_mean'].max()) * 110
-
-for i, (ax, p_val) in enumerate(zip(axes, [0.25, 0.5])):
-    subset = bar_means[bar_means['probability'] == p_val].sort_values('log_id')
-    x = np.arange(len(subset))
-    
-    ax.bar(x - bar_width/2, subset['pre_mean'] * 100, bar_width,
-           yerr=subset['pre_se'] * 100, capsize=3,
-           color='#333333', alpha=0.85, label='Pre-logging')
-    ax.bar(x + bar_width/2, subset['post_mean'] * 100, bar_width,
-           yerr=subset['post_se'] * 100, capsize=3,
-           color='#E69F00', alpha=0.85, label='Post-logging')
-    
-    ax.set_ylim(0, max_val)
-    ax.set_xticks(x)
-    ax.set_xticklabels(subset['log_id'], rotation=45, ha='right', fontsize=16)
-    ax.set_ylabel(f'Inundated Fraction (%)', fontsize=18)
-    
-    if i == 1:
-        ax.legend(fontsize=16)
-        
-    ax.grid(axis='y', alpha=0.3)
-    ax.tick_params(axis='both', which='major', labelsize=16)
-
-axes[-1].set_xlabel('Logged Wetland ID', fontsize=18, labelpad=10)
-
-plt.tight_layout()
-plt.show()
+log_wetland_curves = pd.concat(log_wetland_curves, ignore_index=True)
 
 
-# %% 7.0 Quick summary stats for manuscript
+# %% 7.0 Print some statistics for general dataset
 
-bar_means['diff'] = bar_means['post_mean'] - bar_means['pre_mean']
-bar_50p = bar_means[bar_means['probability'] == 0.5].copy()
-print(bar_50p['pre_mean'].mean())
-print(bar_50p['post_mean'].mean())
-print(bar_50p['diff'].mean())
+print(full_q_q[full_q_q['probability'] == 0.5])
+
+p50_log_ids = log_wetland_curves.loc[log_wetland_curves['probability'] == 0.5].copy()
+
+p25 = np.percentile(p50_log_ids['delta'], 25)
+p75 = np.percentile(p50_log_ids['delta'], 75)
+print(f"25th percentile of delta: {p25:.4f}")
+print(f"75th percentile of delta: {p75:.4f}")
+print(f"IQR of delta at p=0.5: {p75-p25:.4f}")
+print(f"Mean delta: {p50_log_ids['delta'].mean():.4f}")
+print(f"SD of delta: {p50_log_ids['delta'].std():.4f}")
+
+log_wetland_curves = log_wetland_curves.merge(
+    connect.rename(columns={'wetland_id': 'log_id'}),
+    on='log_id',
+    how='left'
+) 
+
+# %% 8.0 Print statistics for the different wetland connectivity classes
+
+for conn in log_wetland_curves['connectivity'].dropna().unique():
+    subset = log_wetland_curves[
+        (log_wetland_curves['probability'] == 0.5) &
+        (log_wetland_curves['connectivity'] == conn)
+    ]
+    print(
+        f"{conn}: n={len(subset)}, "
+        f"mean pre={subset['pre_mean'].mean():.4f}, "
+        f"mean post={subset['post_mean'].mean():.4f}, "
+        f"mean delta={subset['delta'].mean():.4f}"
+    )
+
+bins = {
+    "wet (p=0.1–0.3)": (0.1, 0.3),
+    "intermediate (p=0.3–0.6)": (0.3, 0.6),
+    "dry (p=0.6–0.9)": (0.6, 0.9)
+}
+
+for conn in log_wetland_curves['connectivity'].dropna().unique():
+    print(f"\nConnectivity: {conn}")
+    print(f"{'Condition':<22} {'pre_mean':>10} {'post_mean':>10} {'delta':>10}")
+    for label, (pmin, pmax) in bins.items():
+        subset = log_wetland_curves[
+            (log_wetland_curves['connectivity'] == conn) &
+            (log_wetland_curves['probability'] >= pmin) &
+            (log_wetland_curves['probability'] < pmax)
+        ]
+        pre = subset['pre_mean'].mean() * 100
+        post = subset['post_mean'].mean() * 100
+        delta = subset['delta'].mean() * 100
+        print(f"{label:<22} {pre:10.0f} {post:10.0f} {delta:10.0f}")
 
 
-print(bar_50p['diff'].quantile(0.25), bar_50p['diff'].quantile(0.75))
-print(bar_50p['diff'].quantile(0.75) - bar_50p['diff'].quantile(0.25))
-
-print(bar_50p['diff'].mean() / bar_50p['post_mean'].mean() * 100)
-# %% 7.1 Group by connectivity and get summary stats
-
-connect_key = pd.read_excel(connectivity_key_path)
-
-bar_50p = bar_50p.merge(
-    connect_key[['wetland_id', 'connectivity']],
-    how='left', 
-    left_on='log_id',
-    right_on='wetland_id'
-)
-
-con50 = bar_50p.groupby('connectivity').agg(
-    con_mean_diff=('nominal_diff', 'mean')
-)
-
-print(con50)
 
 # %%

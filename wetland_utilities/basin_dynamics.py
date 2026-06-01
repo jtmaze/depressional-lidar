@@ -657,10 +657,10 @@ class BasinDynamics:
 
         if show_basin_footprint and self.basin.footprint is not None:
             footprint = self.basin.footprint
-            footprint.boundary.plot(ax=ax, color='red', linewidth=2, alpha=0.8, label='Basin Footprint')
+            footprint.boundary.plot(ax=ax, color='black', linewidth=4.5, alpha=1, label='Basin Footprint')
         elif show_basin_footprint:
             footprint = well_point.buffer(self.basin.transect_buffer)
-            footprint.boundary.plot(ax=ax, color='red', linewidth=2, alpha=0.8, label='Basin Footprint')
+            footprint.boundary.plot(ax=ax, color='black', linewidth=4.5, alpha=1, label='Basin Footprint')
         
         # Show inundation frequency (values from 0-1 representing frequency of being inundated)
         im = show(inundation_percent, ax=ax, cmap=custom_cmap, alpha=1,
@@ -675,7 +675,7 @@ class BasinDynamics:
 
         # Plot well point
         if plot_well:
-            ax.scatter(well_point_x, well_point_y, color='limegreen', 
+            ax.scatter(well_point_x, well_point_y, color='red', 
                     marker='x', s=400, linewidths=7,
                     label=f'Well Location')
 

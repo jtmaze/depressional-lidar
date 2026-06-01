@@ -10,19 +10,20 @@ import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
 
-tgt_id = '9_508'
+tgt_id = '5_510'
 lai_buffer_dist = 150
-inundation_mapping_dist = 250
+
 data_set = 'no_dry_days'
 
 data_dir = data_dir = "D:/depressional_lidar/data/bradford/"
 
-distributions_path = data_dir + f'/out_data/modeled_logging_stages/hypothetical_distributions_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
-wetland_pairs_path = data_dir + f'out_data/strong_ols_models_{lai_buffer_dist}m_domain_{data_set}.csv'
+distributions_path = data_dir + f'/out_data/modeled_logging_stages/hypothetical_distributions_wetlandLAI{lai_buffer_dist}m_domain_{data_set}.csv'
+wetland_pairs_path = data_dir + f'out_data/strong_ols_models_wetland{lai_buffer_dist}m_domain_{data_set}.csv'
 
-source_dem_path = data_dir + '/in_data/bradford_DEM_cleaned_veg.tif'
+source_dem_path = data_dir + '/in_data/bradford_DEM_cleaned_USGS.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-shift_results_path = data_dir + f'/out_data/modeled_logging_stages/shift_results_LAI{lai_buffer_dist}m_domain_{data_set}.csv'
+shift_results_path = data_dir + f'/out_data/modeled_logging_stages/shift_results_wetlandLAI{lai_buffer_dist}m_domain_{data_set}.csv'
+wetland_shapes_path = data_dir + f'/out_data/bradford_tgt_wetlands.shp'
 
 from wetland_utilities.basin_attributes import WetlandBasin
 from wetland_utilities.basin_dynamics import BasinDynamics, WellStageTimeseries
@@ -35,12 +36,15 @@ well_pt = (
 )
 well_pt = well_pt[well_pt['wetland_id'] == tgt_id]
 
+wetland_shape = gpd.read_file(wetland_shapes_path)
+wetland_shape = wetland_shape[wetland_shape['wetland_id'] == tgt_id]
+
 basin = WetlandBasin(
     wetland_id=tgt_id,
     source_dem_path=source_dem_path,
-    footprint=None,
+    footprint=wetland_shape,
     well_point_info=well_pt,
-    transect_buffer=inundation_mapping_dist
+    transect_buffer=75
 )
 
 # %% 3.0 Figure out the proportion of days the well was bottomed out
@@ -119,9 +123,10 @@ pre_dynamics = BasinDynamics(
 )
 pre_dynamics.map_inundation_stacks(
     inundation_frequency=None,
-    show_basin_footprint=False,
+    show_basin_footprint=True,
     cbar_min=0,
-    cbar_max=75
+    cbar_max=100,
+    plot_well=False
 )
 
 post_ts = WellStageTimeseries(
@@ -136,9 +141,10 @@ post_dynamics = BasinDynamics(
 )
 post_dynamics.map_inundation_stacks(
     inundation_frequency=None,
-    show_basin_footprint=False,
+    show_basin_footprint=True,
     cbar_min=0,
-    cbar_max=75
+    cbar_max=100,
+    plot_well=False
 )                                
 # %% 4.0 Make Nominal and Relative Inundation Change Map
 
@@ -192,3 +198,4 @@ plt.tight_layout()
 plt.show()
 
 """
+# %%

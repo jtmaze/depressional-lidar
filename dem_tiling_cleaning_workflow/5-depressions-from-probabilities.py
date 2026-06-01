@@ -8,15 +8,12 @@ from shapely.geometry import shape
 import scipy.ndimage as ndi
 from shapely.geometry import Polygon, MultiPolygon
 
-
 site = 'bradford'
 data_dir = f'D:/depressional_lidar/data/{site}'
 
 depression_prob_threshold = 0.3
-seed_thresh = 50       # minimum area in square meters of binary seeds
-ditch_half_width = 5   # erosion radius in meters; ~half the typical ditch width
-ditch_width_thresh = 5.0  # secondary mean-width filter (catches any ditches not severed by erosion)
-hole_fill = 50 # Removes any islands up-to 50 square meters
+seed_thresh = 100       # minimum area in square meters of binary seeds
+ditch_half_width = 5   # erosion radius in meters; > half the typical ditch width
 concavity_thresh = 10 # Fills concave chunks in basin shapes up to X meters
 final_min_area = 1000 # The final minimum area of written depressions
 
@@ -33,8 +30,6 @@ with rio.open(src_path) as src:
     pixel_size = abs(transform.a)  # CRS is always projected meters
     pixel_area = pixel_size ** 2
     print(f'Pixel size: {pixel_size:.4f} m')
-
-# %%
 
 # Threshold depression probabilities to binary mask
 mask = (prob >= depression_prob_threshold).astype(np.uint8)
@@ -65,19 +60,14 @@ gdf = gpd.GeoDataFrame(polys, crs=crs)
 
 # %% 3.0 Compute shape metrics and apply filters
 
-gdf['area_m2']   = gdf.geometry.area
+gdf['area_m2'] = gdf.geometry.area
 gdf['perimeter'] = gdf.geometry.length
 gdf['mean_width'] = 2 * gdf['area_m2'] / gdf['perimeter']
-gdf['compact']    = (4 * np.pi * gdf['area_m2']) / (gdf['perimeter'] ** 2)
+gdf['compact'] = (4 * np.pi * gdf['area_m2']) / (gdf['perimeter'] ** 2)
 
 # Filter 1: minimum area seed_area
 gdf = gdf[gdf['area_m2'] >= seed_thresh].copy()
 print(f'{len(gdf)} polygons after seed area filter (>= {seed_thresh} m²)')
-
-# Filter 2: ditch remnants — eroded ditches that weren't fully collapsed
-is_ditch = gdf['mean_width'] < ditch_width_thresh
-gdf = gdf[~is_ditch].copy()
-print(f'{len(gdf)} polygons after ditch filter (mean_width < {ditch_width_thresh} m)')
 
 # --- Buffer back out by the erosion radius to restore original footprints ---
 # Two depressions closer than 2 * ditch_half_width may overlap after buffering.
@@ -89,25 +79,12 @@ print(f'{len(gdf)} polygons after buffer + dissolve')
 
 # %% 4.0 Correct/simplify the morphologies
 
-def remove_holes(geom, min_hole_area=None):
-    """Remove interior rings (holes) from a polygon.
-    If min_hole_area is None, removes ALL holes.
-    Otherwise, only removes holes smaller than the threshold.
-    """
-    if geom.geom_type == 'Polygon':
-        kept = [r for r in geom.interiors if Polygon(r).area >= min_hole_area]
-        return Polygon(geom.exterior, kept)
-    elif geom.geom_type == 'MultiPolygon':
-        return MultiPolygon([remove_holes(p, min_hole_area) for p in geom.geoms])
-    return geom
-
 def morphological_close(geom, distance=10):
     """Buffer outward then inward to fill concavities."""
     return geom.buffer(distance).buffer(-distance)
 
 gdf['geometry'] = (
     gdf['geometry']
-    .apply(lambda g: remove_holes(g, min_hole_area=hole_fill))   # drop small islands
     .apply(lambda g: morphological_close(g, distance=concavity_thresh))  # fill concavities
 )
 
@@ -129,4 +106,4 @@ gdf.to_file(out_path)
 print(f'Wrote {len(gdf)} basins to {out_path}')
 
 
-# %%
+q# %%

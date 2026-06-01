@@ -20,10 +20,10 @@ stage_path = "D:/depressional_lidar/data/bradford/in_data/stage_data/bradford_da
 pairs_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_150m_all_wells.csv'
 distributions_path = 'D:/depressional_lidar/data/bradford//out_data/modeled_logging_stages/hypothetical_distributions_LAI150m_domain_no_dry_days.csv'
 spills_path = 'D:/depressional_lidar/data/bradford/out_data/bradford_estimated_basin_spills.csv'
-lai_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/well_buffer_150m_nomasking/'
+lai_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/basin_buffer_150m_maskedwetland/'
 
-tgt_log = '9_508'
-tgt_ref = '9_609'
+tgt_log = ''
+tgt_ref = ''
 
 stage_data = pd.read_csv(stage_path)
 stage_data['day'] = pd.to_datetime(stage_data['date'])
