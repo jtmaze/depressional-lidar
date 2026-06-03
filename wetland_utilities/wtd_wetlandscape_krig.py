@@ -35,9 +35,9 @@ class WellArray:
 
     def _filter_timeseries(self) -> pd.DataFrame:
         ts = self.well_ts.copy()
-        ts['date'] = pd.to_datetime(ts['date'])
-        begin = pd.to_datetime(self.begin)
-        end = pd.to_datetime(self.end)
+        ts['date'] = pd.to_datetime(ts['date'], utc=True, format='mixed').dt.normalize()
+        begin = pd.to_datetime(self.begin, utc=True).normalize()
+        end = pd.to_datetime(self.end, utc=True).normalize()
 
         ts = ts[~ts['well_depth_m'].isna()]
 

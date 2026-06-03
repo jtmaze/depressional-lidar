@@ -15,8 +15,11 @@ from wetland_utilities.wtd_wetlandscape_krig import WellArray, WTDSurface
 well_ts_path = "D:/depressional_lidar/data/bradford/in_data/stage_data/bradford_daily_well_depth_Winter2025.csv"
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 
-# %% 2.0 Read data
+gauges_points_path = 'D:/depressional_lidar/data/bradford/in_data/ancillary_data/dummy_stream_gauges.shp'
+gauges_ts_path = 'D:/depressional_lidar/data/bradford/in_data/ancillary_data/sam_howley_streams.csv'
 
+# %% 2.0 Read data
+# %% 2.1 Read the well points and timeseries
 well_ts = pd.read_csv(well_ts_path)
 
 well_points = (
@@ -28,11 +31,37 @@ basin_13_ids = ['13_263', '13_267', '13_271', '13_410', '13_274', 'Donor_wetland
 well_points = well_points[~well_points['wetland_id'].isin(basin_13_ids)]
 print(len(well_points))
 
-boundary = well_points.geometry.union_all().convex_hull.buffer(500)
+# %% 2.2 Read the stream gauge points and timeseries
+
+stream_gauges = gpd.read_file(gauges_points_path)
+stream_gauges = stream_gauges.rename(
+    columns={
+        'gauge_id': 'wetland_id',
+    }
+)
+stream_gauges.to_crs(well_points.crs, inplace=True)
+print(stream_gauges)
+gauge_ts = pd.DataFrame({
+    'wetland_id': stream_gauges['wetland_id'].to_numpy(),
+    'date': '2023-07-01',
+    'well_depth_m': 0.0,
+    'flag': 0,
+})
+
+# %% 2.3 Combine stream gauge and wetland well datasets for kriging
+
+full_points = pd.concat([stream_gauges, well_points], axis=0)
+full_ts = pd.concat([gauge_ts, well_ts], axis=0)
+
+boundary = full_points.geometry.union_all().convex_hull.buffer(500)
+
+# %% 2.4 Visualize all of the wells on the map
 
 # Quickly visualize the wells
 fig, ax = plt.subplots()
 well_points.plot(ax=ax, color='red', markersize=20)
+stream_gauges.plot(ax=ax, color='orange', markersize=20)
+
 gpd.GeoSeries([boundary]).plot(ax=ax, facecolor='none', edgecolor='blue')
 plt.show()
 
@@ -59,7 +88,7 @@ wtd_surface_med = WTDSurface(
 )
 
 # wtd_surface_med_gauss.plot_masked_result(sigma_threshold=1.0)
-wtd_surface_med.plot_masked_result(sigma_threshold=1.25)
+wtd_surface_med.plot_masked_result(sigma_threshold=2)
 
 lags = wtd_surface_med.okr_result['lags']
 weights = wtd_surface_med.okr_result['weights']
@@ -130,44 +159,49 @@ print(wells_df)
 
 wetland_ids = wells_df['wetland_id']
 
-out_dir = r"D:/depressional_lidar/data/bradford/out_data/well_wse_interpolations"
+out_dir = f"D:/depressional_lidar/data/bradford/out_data/well_wse_interpolations"
+file_suffix = f"optimized_model"
 
-# %% 6.1  Write excel 
+# %% 6.1 Simple raster of median surface
+
+wtd_surface_med.write_masked_tif(
+    out_path=f'{out_dir}/interpolated_median_WSE_{file_suffix}.tif',
+    sigma_threshold=2.5,
+    crs='EPSG:26917'
+)
+
+# %% 6.2  Write excel 
  
 weights_df = pd.DataFrame(weights, columns=wetland_ids)
-out_path = f"{out_dir}/kriging_results_fixed.xlsx"
+# out_path = f"{out_dir}/kriging_weights_{file_suffix}.xlsx"
 
-with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
-    weights_df.to_excel(writer, sheet_name="weights", index=False)
-    wells_df.to_excel(writer, sheet_name="wells", index=False)
-    coords_df.to_excel(writer, sheet_name="coords", index=False)
+# with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
+#     weights_df.to_excel(writer, sheet_name="weights", index=False)
+#     wells_df.to_excel(writer, sheet_name="wells", index=False)
+#     coords_df.to_excel(writer, sheet_name="coords", index=False)
 
-# %% 5.2. HDF5 
-# with pd.HDFStore(f"{out_dir}/kriging_weights_crude_test.h5", mode="w") as store:
-#     store.put("weights", weights_df, format="fixed")
-#     store.put("grid_coords", pd.DataFrame({"x": x_flat, "y": y_flat}), format="fixed")
+# %% 6.3 HDF5 
 
-# metadata = {
-#     "description": "Ordinary Kriging weights, optimized fitted exponential model",
-#     "weights_shape": list(weights.shape),
-#     "wetland_ids": wetland_ids,
-#     "grid_shape": list(wtd_surface_med._x_grid.shape),
-#     "crs": "EPSG:26917",
-#     "notes": [
-#         "Rows correspond to flattened kriging grid cells in row-major order.",
-#         "Columns correspond to wells in the order listed in well_ids.",
-#     ]
-# }
+with pd.HDFStore(f"{out_dir}/kriging_weights_{file_suffix}.h5", mode="w") as store:
+    store.put("weights", weights_df, format="fixed")
+    store.put("grid_coords", pd.DataFrame({"x": x_flat, "y": y_flat}), format="fixed")
 
-# import json
-# with open(f"{out_dir}/kriging_weights_metadata_crude_test.json", "w") as f:
-#     json.dump(metadata, f, indent=2)
+metadata = {
+    "description": "Ordinary Kriging weights, optimized fitted exponential model",
+    "weights_shape": list(weights.shape),
+    "wetland_ids": wetland_ids.to_list(),
+    "grid_shape": list(wtd_surface_med._x_grid.shape),
+    "crs": "EPSG:26917",
+    "notes": [
+        "Rows correspond to flattened kriging grid cells in row-major order.",
+        "Columns correspond to wells in the order listed in well_ids.",
+    ]
+}
 
-# wtd_surface_med.write_masked_tif(
-#     out_path=f'{out_dir}/interpolated_median_WSE_crude_test.tif',
-#     sigma_threshold=1.25,
-#     crs='EPSG:26917'
-# )
+import json
+with open(f"{out_dir}/kriging_weights_metadata_{file_suffix}.json", "w") as f:
+    json.dump(metadata, f, indent=2)
+
 
 
 # %%
