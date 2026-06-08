@@ -38,8 +38,7 @@ for i in candidate_ids:
 
     lai = read_concatonate_lai(lai_dir, i, lai_method, upper_bound, lower_bound)
     connect = wetland_connectivity_key[wetland_connectivity_key['wetland_id'] == i].iloc[0]['connectivity']
-    print(connect)
-                                                                                         
+                                                   
     # Check for trend with theil-sen slope regression
     ref_check = lai.loc[lai['date'] >= pd.Timestamp(start_date), ['date', 'roll_yr']].dropna()
 
@@ -205,7 +204,7 @@ logged_summary['hydro_sufficient'] = pd.to_datetime(logged_summary['planet_log_d
 
 # %% 4.1 Timeseries plot for roll_yr LAI. Use all well_ids color by log and ref
 
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 14), height_ratios=[4, 1])
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(18, 14), height_ratios=[4, 1])
 
 # Plot individual lines as dashed
 for wid in log_ids:
@@ -283,6 +282,7 @@ ax2.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.show()
 
+
 # %% 5.0 Generate a combination of every logging and reference wetland. 
 
 combinations_list = []
@@ -316,7 +316,6 @@ for ref_id in ref_ids:
         })
 
 combinations_df = pd.DataFrame(combinations_list)
-print(len(combinations_df))
 
 bad_wetland_ids = [
     '3_173', # The wetland itself was logged. 
@@ -326,13 +325,22 @@ bad_wetland_ids = [
     '15_516' # The well positoin moved and there's inadequate post-harvest data. 
 ]
 
-combinations_df = combinations_df[~combinations_df['logged_id'].isin(bad_wetland_ids)]
-combinations_df = combinations_df[~combinations_df['reference_id'].isin(bad_wetland_ids)]
+
 print(len(combinations_df))
 print(len(combinations_df['logged_id'].unique()))
 print(len(combinations_df['reference_id'].unique()))
 
 combinations_df = combinations_df[combinations_df['logged_hydro_sufficient'] == True]
+print(len(combinations_df))
+print(len(combinations_df['logged_id'].unique()))
+print(len(combinations_df['reference_id'].unique()))
+
+combinations_df = combinations_df[~combinations_df['logged_id'].isin(bad_wetland_ids)]
+print(len(combinations_df))
+print(len(combinations_df['logged_id'].unique()))
+print(len(combinations_df['reference_id'].unique()))
+      
+combinations_df = combinations_df[~combinations_df['reference_id'].isin(bad_wetland_ids)]
 print(len(combinations_df))
 print(len(combinations_df['logged_id'].unique()))
 print(len(combinations_df['reference_id'].unique()))

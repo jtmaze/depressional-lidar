@@ -10,10 +10,10 @@ end = '2025-12-31'
 
 data_dir = 'D:/depressional_lidar/data/bradford/'
 bradford_boundary_path = f'{data_dir}/bradford_boundary.shp'
-nwi_wetlands_path = f'{data_dir}/in_data/original_basins/bradford_nwi_polygons.shp'
+wetlands_path = f'{data_dir}/out_data/bradford_wetland_basins_vf_clipped.shp'
 
 bradford_boundary = gpd.read_file(bradford_boundary_path)
-nwi_wetlands = gpd.read_file(nwi_wetlands_path)
+wetlands = gpd.read_file(wetlands_path)
 
 # %% 2.0 Earth Engine Processing Functions
 
@@ -179,9 +179,10 @@ def summarize_lai(image):
 bradford_geom_4326 = bradford_boundary.to_crs('EPSG:4326').geometry.union_all()
 bradford_boundary_ee = ee.Geometry(bradford_geom_4326.__geo_interface__)
 
-nwi_wetlands_4326 = nwi_wetlands.to_crs('EPSG:4326')
-wetland_mask = make_wetlandscape_mask(nwi_wetlands_4326, upland_wetland='wetland')
-upland_mask = make_wetlandscape_mask(nwi_wetlands_4326, upland_wetland='upland')
+wetlands_4326 = wetlands.to_crs('EPSG:4326')
+wetlands_4326['geometry'] = wetlands_4326.simplify(tolerance=0.0001)  # ~10m
+wetland_mask = make_wetlandscape_mask(wetlands_4326, upland_wetland='wetland')
+upland_mask = make_wetlandscape_mask(wetlands_4326, upland_wetland='upland')
 
 ls8_col = make_ls8_collection(
     polygon=bradford_boundary_ee,

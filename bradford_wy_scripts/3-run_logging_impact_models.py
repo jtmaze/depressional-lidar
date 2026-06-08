@@ -2,7 +2,6 @@
 
 import sys
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import geopandas as gpd
 
@@ -26,6 +25,8 @@ well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 
 wetland_pairs_path = f'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_{lai_buffer}m_wetland_basins.csv'
 wetland_pairs = pd.read_csv(wetland_pairs_path)
+
+print(wetland_pairs)
 
 # %% 2.0 Load the stage data and well coordinates
 

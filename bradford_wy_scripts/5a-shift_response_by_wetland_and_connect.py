@@ -18,6 +18,7 @@ connectivity_key_path = data_dir + '/bradford_wetland_connect_logging_key.xlsx'
 strong_pairs_path = data_dir + f'out_data/strong_ols_models_wetland{lai_buffer_dist}m_domain_{data_set}.csv'
 
 shift_data = pd.read_csv(shift_path)
+shift_data = shift_data[shift_data['mean_depth_change'] < 1.0] #NOTE: one outlier
 connect_data = pd.read_excel(connectivity_key_path)
 strong_pairs = pd.read_csv(strong_pairs_path)
 
@@ -45,6 +46,15 @@ shift_data = shift_data.merge(
     right_on=['log_id', 'ref_id', 'log_date'],
     how='inner'
 )
+
+increase_mask = shift_data["mean_depth_change"] > 0
+t_stat, p_val = stats.ttest_1samp(shift_data['mean_depth_change'], 0, nan_policy="omit")
+
+print("Number of pairs with depth increase:", increase_mask.sum())
+print("Mean depth increase:", shift_data['mean_depth_change'].mean())
+print("Standard deviation:", shift_data['mean_depth_change'].std())
+print("p value:", p_val)
+
 plot_data = shift_data[
     (shift_data['model_type'] == 'OLS') &
     (shift_data['data_set'] == data_set)

@@ -454,8 +454,7 @@ class WetlandBasin:
         outlet cell, with no artificial gradient added inside the depression.
         """
 
-        clipped_smoothed = self.clipped_dem #NOTE: unclipped
-        dem_data = clipped_smoothed.dem.copy()
+        dem_data = self.clipped_dem.dem.copy()
         nan_mask = np.isnan(dem_data)
 
         _NODATA = -9999.0
@@ -473,8 +472,8 @@ class WetlandBasin:
         return FilledDEM(
             filled=filled_arr,
             fill_depth=fill_depth,
-            transform=clipped_smoothed.transform,
-            crs=clipped_smoothed.crs,
+            transform=self.clipped_dem.transform,
+            crs=self.clipped_dem.crs,
         )
 
     def well_fill_depth(self) -> float:

@@ -13,7 +13,7 @@ early_path = f'{data_dir}/LAI_composite_2019-06-01_to_2019-12-31.tif'
 late_path = f'{data_dir}/LAI_composite_2025-06-01_to_2025-12-31.tif'
 bradford_boundary_path = 'D:/depressional_lidar/data/bradford/bradford_boundary.shp'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-nwi_wetlands_path = 'D:/depressional_lidar/data/bradford/in_data/original_basins/bradford_nwi_polygons.shp'
+nwi_wetlands_path = 'D:/depressional_lidar/data/bradford/out_data/bradford_wetland_basins_vf_clipped.shp'
 
 
 nwi_wetlands = gpd.read_file(nwi_wetlands_path)
@@ -83,7 +83,7 @@ late_wetland = late_lai[wetland_mask & np.isfinite(late_lai)]
 late_upland = late_lai[(~wetland_mask) & np.isfinite(late_lai)]
 
 # %% 3.0 Make a simple box plot comparing pre and post LAI
-fig, ax = plt.subplots(figsize=(10, 10))
+fig, ax = plt.subplots(figsize=(10, 12))
 
 box_data = [
     early_upland, late_upland,
@@ -127,33 +127,31 @@ for i, patch in enumerate(bp['boxes']):
 # ax.spines['bottom'].set_linewidth(2.5)
 # ax.spines['left'].set_linewidth(2.5)
 
-ax.set_ylabel('LAI', fontsize=28, fontweight='bold')
-ax.tick_params(labelsize=18)
+ax.set_ylabel('LAI', fontsize=30)
+ax.tick_params(labelsize=24)
 
 # Add group labels
 ax.set_xticks([1.5, 3.5])
-ax.set_xticklabels(['Upland', 'Wetland'], fontsize=20, fontweight='bold')
+ax.set_xticklabels(['Upland', 'Wetland'], fontsize=24)
 
 # Customize x-axis for year labels
 ax.set_xticks([1, 2, 3, 4], minor=True)
-ax.xaxis.set_tick_params(which='minor', labelsize=14)
+ax.xaxis.set_tick_params(which='minor', labelsize=20)
 
 # Create custom legend with colors and patterns
 from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 
 legend_elements = [
-    Patch(facecolor=upland_color, edgecolor='black', hatch='///', label='Upland 2019'),
-    Patch(facecolor=upland_color, edgecolor='black', label='Upland 2025'),
-    Patch(facecolor=wetland_color, edgecolor='black', hatch='///', label='Wetland 2019'),
-    Patch(facecolor=wetland_color, edgecolor='black', label='Wetland 2025'),
+    Patch(facecolor=upland_color, edgecolor='black', hatch='///', label='Upland 2025'),
+    Patch(facecolor=upland_color, edgecolor='black', label='Upland 2019'),
+    Patch(facecolor=wetland_color, edgecolor='black', hatch='///', label='Wetland 2025'),
+    Patch(facecolor=wetland_color, edgecolor='black', label='Wetland 2019'),
 ]
 
 ax.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, -0.05), 
-          ncol=2, fontsize=16, framealpha=0.9, edgecolor='black')
+          ncol=2, fontsize=23, framealpha=0.9, edgecolor='black')
 
-for label in ax.get_yticklabels():
-    label.set_fontweight('bold')
 
 #plt.tight_layout()
 plt.show()
@@ -188,7 +186,7 @@ norm = TwoSlopeNorm(vmin=-abs_lim, vcenter=0.0, vmax=abs_lim)
 height, width = lai_change.shape
 left, bottom, right, top = rio.transform.array_bounds(height, width, early_transform)
 
-fig, ax = plt.subplots(figsize=(10, 16), facecolor='#ffffff')
+fig, ax = plt.subplots(figsize=(10, 20), facecolor='#ffffff')
 ax.set_facecolor('#ffffff')
 
 

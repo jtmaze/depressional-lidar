@@ -237,15 +237,15 @@ def plot_correlations_from_model(
         pre_df[x_series_name],
         pre_df[y_series_name], 
         color= '#333333',
-        label='Pre-logging',
+        #label='Pre-logging',
         alpha=0.6,
         s=40
     )
     ax.scatter(
         post_df[x_series_name],
         post_df[y_series_name], 
-        color='#E69F00',
-        label='Post-logging',
+        color='red',
+        #label='Post-logging',
         alpha=0.6,
         s=40
     )
@@ -259,7 +259,7 @@ def plot_correlations_from_model(
             '#333333', linewidth=2, linestyle='--',
             label=f'Pre Model Fit')
     ax.plot(x_smooth, post_slope * x_smooth + post_intercept, 
-            '#E69F00', linewidth=2, linestyle='--',
+            'red', linewidth=2, linestyle='--',
             label=f'Post Model Fit')
     
     # Add significance indicators

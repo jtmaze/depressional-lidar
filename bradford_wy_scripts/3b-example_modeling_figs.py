@@ -22,8 +22,8 @@ distributions_path = 'D:/depressional_lidar/data/bradford//out_data/modeled_logg
 spills_path = 'D:/depressional_lidar/data/bradford/out_data/bradford_estimated_basin_spills.csv'
 lai_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/basin_buffer_150m_maskedwetland/'
 
-tgt_log = ''
-tgt_ref = ''
+tgt_log = '9_508'
+tgt_ref = '9_609'
 
 stage_data = pd.read_csv(stage_path)
 stage_data['day'] = pd.to_datetime(stage_data['date'])
@@ -74,12 +74,13 @@ log_post = log_plot[log_plot['day'] >= log_date_dt]
 # Panel 1: Depth
 ax_depth.scatter(ref_plot['day'], ref_plot['depth'], color='blue', s=25, alpha=0.75, label='Reference', zorder=2)
 ax_depth.scatter(log_pre['day'], log_pre['depth'], color='#333333', s=25, alpha=0.75, label='Logged Pre', zorder=2)
-ax_depth.scatter(log_post['day'], log_post['depth'], color='#E69F00', s=25, alpha=0.75, label='Logged Post', zorder=2)
-ax_depth.axvline(log_date_dt, color='red', linestyle='-', linewidth=2.5, label='Planet logging date', zorder=3)
+ax_depth.scatter(log_post['day'], log_post['depth'], color='red', s=25, alpha=0.75, label='Logged Post', zorder=2)
+ax_depth.axvline(log_date_dt, color='red', linestyle='-', linewidth=4.5, label='Logging Date', zorder=3)
 ax_depth.set_ylabel('Depth (m)', fontsize=20, fontweight='bold')
-ax_depth.tick_params(axis='both', which='major', labelsize=14)
-ax_depth.legend(loc='upper right', fontsize=18, framealpha=1)
-ax_depth.set_ylim(-1, 1.2)
+ax_depth.tick_params(axis='both', which='major', labelsize=16)
+ax_depth.set_yticks(np.linspace(-1.0, 1.0, 5))
+ax_depth.legend(loc='upper left', fontsize=18, framealpha=1)
+ax_depth.set_ylim(-1.1, 1)
 ax_depth.grid(alpha=0.2)
 
 # Panel 2: Rolling LAI
@@ -104,7 +105,7 @@ ax_lai.plot(
     ref_lai_plot['roll_yr'],
     color='blue',
     linewidth=3,
-    label='Reference LAI (12-mo rolling)'
+    #label='Reference LAI (12-mo rolling)'
 )
 ax_lai.scatter(
     log_lai_pre['date'],
@@ -118,7 +119,7 @@ ax_lai.scatter(
 ax_lai.scatter(
     log_lai_post['date'],
     log_lai_post['LAI'],
-    color='#E69F00',
+    color='red',
     s=18,
     alpha=0.5,
     label='Logged LAI post (monthly)',
@@ -134,22 +135,23 @@ ax_lai.plot(
 ax_lai.plot(
     log_lai_post['date'],
     log_lai_post['roll_yr'],
-    color='#E69F00',
+    color='red',
     linewidth=3,
     label='Logged LAI post (12-mo rolling)'
 )
-ax_lai.axvline(log_date_dt, color='red', linestyle='-', linewidth=2.5)
-ax_lai.set_ylabel('LAI', fontsize=20, fontweight='bold')
+ax_lai.axvline(log_date_dt, color='red', linestyle='-', linewidth=4.5)
+ax_lai.set_ylabel('Upland LAI', fontsize=20, fontweight='bold', labelpad=18)
 #ax_lai.set_xlabel('Date', fontsize=20, fontweight='bold')
 ax_lai.tick_params(axis='x', which='major', labelsize=16)
-ax_lai.tick_params(axis='y', which='major', labelsize=14)
-ax_lai.legend(loc='upper right', fontsize=14, framealpha=1)
+ax_lai.tick_params(axis='y', which='major', labelsize=16)
+ax_lai.set_yticks([1.0, 2.0, 3.0, 4.0])
+#ax_lai.legend(loc='upper right', fontsize=14, framealpha=1)
 ax_lai.grid(alpha=0.2)
 
 ax_lai.xaxis.set_major_locator(mdates.YearLocator())
 ax_lai.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
 ax_lai.set_xlim(left=pd.to_datetime('2022-01-01'))
-ax_lai.set_ylim(1, 4.0)
+ax_lai.set_ylim(0, 4.0)
 
 plt.tight_layout()
 plt.show()
@@ -215,12 +217,12 @@ fig, ax = plt.subplots(figsize=(10, 12))
 
 ax.axhline(0, color='red', alpha=1, label='Spill Threshold', linewidth=2.5)
 
-ax.plot(density_pre, depth_grid, color='#333333', linewidth=2, label='Pre-logging')
-ax.plot(density_post, depth_grid, color='#E69F00', linewidth=2, label='Post-logging')
+ax.plot(density_pre, depth_grid, color='#333333', linewidth=2)
+ax.plot(density_post, depth_grid, color='red', linewidth=2)
 
 # Add means
 ax.axhline(pre_data.mean(), color='#333333', linestyle='--', label="Pre Mean Depth", linewidth=2)
-ax.axhline(post_data.mean(), color='#E69F00', linestyle='--', label="Post Mean Depth", linewidth=2)
+ax.axhline(post_data.mean(), color='red', linestyle='--', label="Post Mean Depth", linewidth=2)
 
 #ax.set_xlabel('Density', fontsize=24, fontweight='bold')
 ax.set_ylabel('Depth (m)', fontsize=24, fontweight='bold')

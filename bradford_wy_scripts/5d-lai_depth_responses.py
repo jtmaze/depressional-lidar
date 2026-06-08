@@ -45,7 +45,7 @@ shift_data = shift_data.merge(
     how='inner'
 )
 print(len(shift_data))
-shift_data = shift_data[shift_data['mean_depth_change'] < 1.0]
+#shift_data = shift_data[shift_data['mean_depth_change'] < 1.0]
 #shift_data = shift_data[shift_data['log_id'] != '9_332']
 print(len(shift_data))
 print(len(strong_pairs))

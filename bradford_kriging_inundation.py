@@ -386,20 +386,35 @@ tai = np.where(
 
 fig, ax = plt.subplots(figsize=(10, 10))
 
-# Grey base: cells inside the boundary that are not TAI (always dry or always wet).
-non_tai = np.where(
-    boundary_mask & np.isfinite(dem) & np.isnan(tai),
+# Always-dry cells (inund_freq == 0) → white
+always_dry = np.where(
+    boundary_mask & np.isfinite(dem) & (inund_freq == 0),
     1.0,
     np.nan,
 )
 ax.imshow(
-    non_tai,
-    cmap="Greys",
+    always_dry,
+    cmap=ListedColormap(["white"]),
     vmin=0,
     vmax=1,
     origin="upper",
     extent=extent,
-    alpha=0.4,
+    interpolation="nearest",
+)
+
+# Always-wet cells (inund_freq == 100) → dark grey
+always_wet = np.where(
+    boundary_mask & np.isfinite(dem) & (inund_freq == 100),
+    1.0,
+    np.nan,
+)
+ax.imshow(
+    always_wet,
+    cmap=ListedColormap(["#797979"]),
+    vmin=0,
+    vmax=1,
+    origin="upper",
+    extent=extent,
     interpolation="nearest",
 )
 
@@ -490,11 +505,40 @@ transitions = np.where(boundary_mask & np.isfinite(dem), transitions, np.nan)
 
 fig, ax = plt.subplots(figsize=(10, 10))
 
-trans_im = ax.imshow(
+# Consistently dry (inund_freq == 0) → white
+ax.imshow(
+    np.where(boundary_mask & np.isfinite(dem) & (inund_freq == 0), 1.0, np.nan),
+    cmap=ListedColormap(["white"]),
+    vmin=0,
+    vmax=1,
+    origin="upper",
+    extent=extent,
+    interpolation="nearest",
+)
+
+# Consistently inundated (inund_freq == 100) → dark grey
+ax.imshow(
+    np.where(boundary_mask & np.isfinite(dem) & (inund_freq == 100), 1.0, np.nan),
+    cmap=ListedColormap(["#797979"]),
+    vmin=0,
+    vmax=1,
+    origin="upper",
+    extent=extent,
+    interpolation="nearest",
+)
+
+# Mask always-dry and always-wet cells so the base layers show through.
+trans_masked = np.where(
+    (inund_freq == 0) | (inund_freq == 100),
+    np.nan,
     transitions,
+)
+
+trans_im = ax.imshow(
+    trans_masked,
     cmap="RdYlBu_r",
     vmin=0,
-    vmax=np.nanpercentile(transitions, 98),
+    vmax=np.nanpercentile(transitions[np.isfinite(transitions)], 98),
     origin="upper",
     extent=extent,
     interpolation="nearest",
@@ -518,7 +562,7 @@ fig.colorbar(
     label="Wet-to-dry transitions (count)",
 )
 
-ax.set_title(f"Wet-to-dry transitions — WY{tgt_wy} ({len(wy_wse)} days)")
+ax.set_title(f"Wet-to-dry transitions — WY{tgt_wy}")
 ax.set_xlabel("Easting")
 ax.set_ylabel("Northing")
 

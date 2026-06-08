@@ -9,7 +9,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from wetland_utilities.basin_attributes import WetlandBasin
-dem_buffer = 5
+dem_buffer = 0
 
 source_dem_path = 'D:/depressional_lidar/data/bradford/in_data/bradford_DEM_cleaned_USGS.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
@@ -90,7 +90,7 @@ for i in wetland_ids:
 
 results_df = pd.DataFrame(results)
 
-results_df.to_csv('D:/depressional_lidar/data/bradford/out_data/bradford_estimated_basin_spills_no_smooth.csv', index=False)
+results_df.to_csv('D:/depressional_lidar/data/bradford/out_data/bradford_estimated_basin_spills.csv', index=False)
 
 # Save hypsometry curves as a flat tidy CSV (one row per bin)
 cdf_df = pd.DataFrame(cdfs)

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 data_dir = "D:/depressional_lidar/data/bradford/"
 
-est_spills_path = f"{data_dir}/out_data/bradford_estimated_basin_spills_no_smooth.csv"
+est_spills_path = f"{data_dir}/out_data/bradford_estimated_basin_spills.csv"
 well_data_path = f"{data_dir}/in_data/stage_data/bradford_daily_well_depth_Winter2025.csv"
 connectivity_path = f"{data_dir}/bradford_wetland_connect_logging_key.xlsx"
 
