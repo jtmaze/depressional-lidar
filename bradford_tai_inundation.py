@@ -13,7 +13,7 @@ from matplotlib.colors import LinearSegmentedColormap, ListedColormap, to_rgba
 
 data_dir = "D:/depressional_lidar/data/bradford"
 
-krig_res_path = f"{data_dir}/out_data/well_wse_interpolations/kriging_weights_optimized_model.h5"
+krig_res_path = f"{data_dir}/out_data/well_wse_interpolations/kriging_weights_optimized_model_dummy_gauges.h5"
 well_ts_path = f"{data_dir}/in_data/stage_data/bradford_well_data_long_gapfilled.csv"
 well_points_path = "D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp"
 dem_path = f"{data_dir}/in_data/bradford_DEM_cleaned_USGS.tif"
@@ -21,7 +21,7 @@ dem_path = f"{data_dir}/in_data/bradford_DEM_cleaned_USGS.tif"
 target_dem_resolution_m = 10
 
 dates_to_plot = [
-    "2023-10-01",
+    "2023-02-01",
     "2024-04-15",
     "2024-06-20",
 ]
@@ -60,6 +60,58 @@ well_ts = well_ts[["date", "wetland_id", "well_depth_m"]]
 well_ts["date"] = pd.to_datetime(well_ts["date"]).dt.normalize()
 well_ts["wetland_id"] = well_ts["wetland_id"].astype(str)
 
+# %%
+with rasterio.open(dem_path) as src:
+    src_h, src_w = src.height, src.width
+    src_res = abs(src.transform.a)
+
+    scale = src_res / target_dem_resolution_m
+    out_h = max(1, int(np.ceil(src_h * scale)))
+    out_w = max(1, int(np.ceil(src_w * scale)))
+
+    dem = src.read(
+        1,
+        out_shape=(out_h, out_w),
+        resampling=Resampling.average
+    ).astype(np.float32)
+
+    dem_transform = src.transform * src.transform.scale(src_w / out_w, src_h / out_h)
+    dem_crs = src.crs
+
+    if src.nodata is not None:
+        dem[dem == src.nodata] = np.nan
+
+print(f"DEM shape at {target_dem_resolution_m} m: {dem.shape}")
+
+# %% 3.1 Make a dummy_ts for simulated conditioning points
+
+# IDs required by the kriging weights but missing from observed well_ts
+weight_ids = pd.Index(weights.columns.astype(str))
+ts_ids = pd.Index(well_ts["wetland_id"].astype(str).unique())
+missing_ids = weight_ids.difference(ts_ids)
+
+print(f"Missing IDs in well_ts (will be filled with zeros): {list(missing_ids)}")
+
+# Build a zero-depth timeseries across the same date span as well_ts
+date_index = (
+    well_ts["date"]
+    .dropna()
+    .drop_duplicates()
+    .sort_values()
+)
+
+dummy_ts = pd.MultiIndex.from_product(
+    [date_index, missing_ids],
+    names=["date", "wetland_id"]
+).to_frame(index=False)
+
+dummy_ts["well_depth_m"] = 0.0
+
+# Append to well_ts
+well_ts = pd.concat([well_ts, dummy_ts], ignore_index=True)
+
+# %% 3.2 Read the well points
+
 dates_to_plot = pd.to_datetime(dates_to_plot).normalize()
 
 well_points = (
@@ -74,6 +126,28 @@ basin_13_ids = [
 
 well_points = well_points[~well_points["wetland_id"].isin(basin_13_ids)]
 well_points["wetland_id"] = well_points["wetland_id"].astype(str)
+
+boundary = well_points.geometry.union_all().buffer(500).buffer(1000).buffer(-1000)
+boundary = gpd.GeoSeries([boundary], crs=well_points.crs).to_crs(dem_crs).iloc[0]
+
+boundary_mask = geometry_mask(
+    [boundary],
+    out_shape=dem.shape,
+    transform=dem_transform,
+    invert=True,
+)
+
+conditioning_pts = gpd.read_file('D:/depressional_lidar/data/bradford/in_data/ancillary_data/dummy_stream_gauges.shp')
+print(conditioning_pts)
+conditioning_pts = conditioning_pts.rename(
+    columns={
+        'gauge_id': 'wetland_id',
+    }
+)
+conditioning_pts.to_crs(crs=well_points.crs, inplace=True)
+
+
+well_points = pd.concat([conditioning_pts, well_points], axis=0)
 
 # %% Plot the average timeseries for all wells
 
@@ -109,40 +183,27 @@ plt.show()
 
 # %% 4.0 Read DEM downsampled to target resolution
 
-with rasterio.open(dem_path) as src:
-    src_h, src_w = src.height, src.width
-    src_res = abs(src.transform.a)
+# with rasterio.open(dem_path) as src:
+#     src_h, src_w = src.height, src.width
+#     src_res = abs(src.transform.a)
 
-    scale = src_res / target_dem_resolution_m
-    out_h = max(1, int(np.ceil(src_h * scale)))
-    out_w = max(1, int(np.ceil(src_w * scale)))
+#     scale = src_res / target_dem_resolution_m
+#     out_h = max(1, int(np.ceil(src_h * scale)))
+#     out_w = max(1, int(np.ceil(src_w * scale)))
 
-    dem = src.read(
-        1,
-        out_shape=(out_h, out_w),
-        resampling=Resampling.average
-    ).astype(np.float32)
+#     dem = src.read(
+#         1,
+#         out_shape=(out_h, out_w),
+#         resampling=Resampling.average
+#     ).astype(np.float32)
 
-    dem_transform = src.transform * src.transform.scale(src_w / out_w, src_h / out_h)
-    dem_crs = src.crs
+#     dem_transform = src.transform * src.transform.scale(src_w / out_w, src_h / out_h)
+#     dem_crs = src.crs
 
-    if src.nodata is not None:
-        dem[dem == src.nodata] = np.nan
+#     if src.nodata is not None:
+#         dem[dem == src.nodata] = np.nan
 
-print(f"DEM shape at {target_dem_resolution_m} m: {dem.shape}")
-
-
-# %% 5.0 Build boundary mask
-
-boundary = well_points.geometry.union_all().buffer(500).buffer(1000).buffer(-1000)
-boundary = gpd.GeoSeries([boundary], crs=well_points.crs).to_crs(dem_crs).iloc[0]
-
-boundary_mask = geometry_mask(
-    [boundary],
-    out_shape=dem.shape,
-    transform=dem_transform,
-    invert=True,
-)
+# print(f"DEM shape at {target_dem_resolution_m} m: {dem.shape}")
 
 
 # %% 6.0 Prepare WSE table

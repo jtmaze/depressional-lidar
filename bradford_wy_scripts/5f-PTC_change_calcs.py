@@ -13,7 +13,7 @@ data_dir = 'D:/depressional_lidar/data/bradford/'
 distributions_path = f'{data_dir}/out_data/modeled_logging_stages/hypothetical_distributions_wetlandLAI{lai_buffer_dist}m_domain_{data_set}.csv'
 strong_wetland_pairs_path = f'{data_dir}/out_data/strong_ols_models_wetland{lai_buffer_dist}m_domain_{data_set}.csv'
 connectivity_key_path = f'{data_dir}/bradford_wetland_connect_logging_key.xlsx'
-est_spills_path = f'{data_dir}/out_data/bradford_estimated_basin_spills_no_smooth.csv'
+est_spills_path = f'{data_dir}/out_data/bradford_estimated_basin_spills.csv'
 agg_shift_data_path = f'{data_dir}/out_data/modeled_logging_stages/shift_results_wetlandLAI{lai_buffer_dist}m_domain_{data_set}.csv'
 
 
@@ -131,7 +131,7 @@ print(ptc_summary)
 
 connectivity_config = {
     'first order': {'color': '#6C5B7B', 'label': 'Ditch connected', 'marker': 's'},
-    'giw': {'color': '#1B7F79', 'label': 'Unconnected', 'marker': '^'},
+    'giw': {'color': '#1B7F79', 'label': 'Unditched', 'marker': '^'},
     'flow-through': {'color': '#C46A1A', 'label': 'Flow-through connected', 'marker': 'X'}
 }
 
@@ -275,7 +275,7 @@ hatch_handles = [
     Patch(facecolor='white', edgecolor='black', hatch='///', label='Post PTC')
 ]
 
-ax.legend(handles=hatch_handles, fontsize=18, ncol=1, loc='upper right', frameon=True)
+ax.legend(handles=hatch_handles, fontsize=18, ncol=1, loc='upper left', frameon=True)
 
 plt.tight_layout()
 plt.show()

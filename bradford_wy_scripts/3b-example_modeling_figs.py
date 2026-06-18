@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from matplotlib.ticker import MaxNLocator
 from scipy.stats import gaussian_kde
 
 from bradford_wy_scripts.functions.wetland_logging_functions import (
@@ -18,12 +19,12 @@ from bradford_wy_scripts.functions.lai_vis_functions import read_concatonate_lai
 
 stage_path = "D:/depressional_lidar/data/bradford/in_data/stage_data/bradford_daily_well_depth_Winter2025.csv"
 pairs_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/log_ref_pairs_150m_all_wells.csv'
-distributions_path = 'D:/depressional_lidar/data/bradford//out_data/modeled_logging_stages/hypothetical_distributions_LAI150m_domain_no_dry_days.csv'
+distributions_path = 'D:/depressional_lidar/data/bradford//out_data/modeled_logging_stages/hypothetical_distributions_wetlandLAI150m_domain_no_dry_days.csv'
 spills_path = 'D:/depressional_lidar/data/bradford/out_data/bradford_estimated_basin_spills.csv'
 lai_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/basin_buffer_150m_maskedwetland/'
 
 tgt_log = '9_508'
-tgt_ref = '9_609'
+tgt_ref = '6a_17'
 
 stage_data = pd.read_csv(stage_path)
 stage_data['day'] = pd.to_datetime(stage_data['date'])
@@ -57,9 +58,13 @@ log_ts['depth'] = log_ts['well_depth_m'] + log_spill['well_to_spill'].iloc[0] # 
 
 # %% 3.0 Quick timeseries plot
 
+reference_color ="#2166AC"
+post_color = "#B2182B"
+pre_color = "#4D4D4D"
+
 fig, (ax_depth, ax_lai) = plt.subplots(
     2, 1,
-    figsize=(9, 11),
+    figsize=(9, 14),
     sharex=True,
     gridspec_kw={'height_ratios': [2, 1]}
 )
@@ -72,10 +77,11 @@ log_pre = log_plot[log_plot['day'] < log_date_dt]
 log_post = log_plot[log_plot['day'] >= log_date_dt]
 
 # Panel 1: Depth
-ax_depth.scatter(ref_plot['day'], ref_plot['depth'], color='blue', s=25, alpha=0.75, label='Reference', zorder=2)
-ax_depth.scatter(log_pre['day'], log_pre['depth'], color='#333333', s=25, alpha=0.75, label='Logged Pre', zorder=2)
-ax_depth.scatter(log_post['day'], log_post['depth'], color='red', s=25, alpha=0.75, label='Logged Post', zorder=2)
-ax_depth.axvline(log_date_dt, color='red', linestyle='-', linewidth=4.5, label='Logging Date', zorder=3)
+ax_depth.scatter(ref_plot['day'], ref_plot['depth'], color=reference_color, s=25, alpha=0.75, label='Reference', zorder=2)
+ax_depth.scatter(log_pre['day'], log_pre['depth'], color=pre_color, s=25, alpha=0.75, label='Logged Pre', zorder=2)
+ax_depth.scatter(log_post['day'], log_post['depth'], color=post_color, s=25, alpha=0.75, label='Logged Post', zorder=2)
+ax_depth.axvline(log_date_dt, color=post_color, linestyle='-', linewidth=4.5, label='Logging Date', zorder=3)
+ax_depth.axhline(0, color='grey', alpha=0.5, label='Spill Threshold', linewidth=8)
 ax_depth.set_ylabel('Depth (m)', fontsize=20, fontweight='bold')
 ax_depth.tick_params(axis='both', which='major', labelsize=16)
 ax_depth.set_yticks(np.linspace(-1.0, 1.0, 5))
@@ -94,8 +100,8 @@ log_lai_post = log_lai_plot[log_lai_plot['date'] >= log_date_dt]
 ax_lai.scatter(
     ref_lai_plot['date'],
     ref_lai_plot['LAI'],
-    color='blue',
-    s=18,
+    color=reference_color,
+    s=25,
     alpha=0.5,
     label='Reference LAI (monthly)',
     zorder=1
@@ -103,15 +109,15 @@ ax_lai.scatter(
 ax_lai.plot(
     ref_lai_plot['date'],
     ref_lai_plot['roll_yr'],
-    color='blue',
+    color=reference_color,
     linewidth=3,
     #label='Reference LAI (12-mo rolling)'
 )
 ax_lai.scatter(
     log_lai_pre['date'],
     log_lai_pre['LAI'],
-    color='#333333',
-    s=18,
+    color=pre_color,
+    s=25,
     alpha=0.5,
     label='Logged LAI pre (monthly)',
     zorder=1
@@ -119,8 +125,8 @@ ax_lai.scatter(
 ax_lai.scatter(
     log_lai_post['date'],
     log_lai_post['LAI'],
-    color='red',
-    s=18,
+    color=post_color,
+    s=25,
     alpha=0.5,
     label='Logged LAI post (monthly)',
     zorder=1
@@ -128,18 +134,18 @@ ax_lai.scatter(
 ax_lai.plot(
     log_lai_pre['date'],
     log_lai_pre['roll_yr'],
-    color='#333333',
+    color=pre_color,
     linewidth=3,
     label='Logged LAI pre (12-mo rolling)'
 )
 ax_lai.plot(
     log_lai_post['date'],
     log_lai_post['roll_yr'],
-    color='red',
+    color=post_color,
     linewidth=3,
     label='Logged LAI post (12-mo rolling)'
 )
-ax_lai.axvline(log_date_dt, color='red', linestyle='-', linewidth=4.5)
+ax_lai.axvline(log_date_dt, color=post_color, linestyle='-', linewidth=4.5)
 ax_lai.set_ylabel('Upland LAI', fontsize=20, fontweight='bold', labelpad=18)
 #ax_lai.set_xlabel('Date', fontsize=20, fontweight='bold')
 ax_lai.tick_params(axis='x', which='major', labelsize=16)
@@ -213,22 +219,23 @@ kde_post = gaussian_kde(post_data)
 density_pre = kde_pre(depth_grid) #* 100
 density_post = kde_post(depth_grid) #* 100
 
-fig, ax = plt.subplots(figsize=(10, 12))
+fig, ax = plt.subplots(figsize=(12, 12))
 
-ax.axhline(0, color='red', alpha=1, label='Spill Threshold', linewidth=2.5)
+ax.axhline(0, color='grey', alpha=0.5, label='Spill Threshold', linewidth=8)
 
-ax.plot(density_pre, depth_grid, color='#333333', linewidth=2)
-ax.plot(density_post, depth_grid, color='red', linewidth=2)
+ax.plot(density_pre, depth_grid, color=pre_color, linewidth=2.5)
+ax.plot(density_post, depth_grid, color=post_color, linewidth=2.5)
 
 # Add means
-ax.axhline(pre_data.mean(), color='#333333', linestyle='--', label="Pre Mean Depth", linewidth=2)
-ax.axhline(post_data.mean(), color='red', linestyle='--', label="Post Mean Depth", linewidth=2)
+ax.axhline(pre_data.mean(), color=pre_color, linestyle=':', label="Pre Mean Depth", linewidth=4)
+ax.axhline(post_data.mean(), color=post_color, linestyle=':', label="Post Mean Depth", linewidth=4)
 
 #ax.set_xlabel('Density', fontsize=24, fontweight='bold')
-ax.set_ylabel('Depth (m)', fontsize=24, fontweight='bold')
+ax.set_ylabel('Modeled Depths (m)', fontsize=24, fontweight='bold')
 ax.set_xticks([])
-ax.tick_params(axis='both', which='major', labelsize=16)
-ax.legend(frameon=False, fontsize=24)
+ax.yaxis.set_major_locator(MaxNLocator(nbins=4))
+ax.tick_params(axis='both', which='major', labelsize=20)
+ax.legend(fontsize=24, loc="upper left", framealpha=1)
 
 plt.tight_layout()
 plt.show()

@@ -10,7 +10,7 @@ import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
 
-tgt_id = '15_268'
+tgt_id = '3_23'
 lai_buffer_dist = 150
 
 data_set = 'no_dry_days'
@@ -44,7 +44,7 @@ basin = WetlandBasin(
     source_dem_path=source_dem_path,
     footprint=wetland_shape,
     well_point_info=well_pt,
-    transect_buffer=120
+    transect_buffer=70
 )
 
 # %% 3.0 Figure out the proportion of days the well was bottomed out

@@ -311,7 +311,7 @@ def mean_pre_post_curves(df):
 
 connectivity_config = {
     'first order': {'color': '#6C5B7B', 'label': 'Ditch connected'},
-    'giw': {'color': '#1B7F79', 'label': 'Unconnected'}, 
+    'giw': {'color': '#1B7F79', 'label': 'Unditched'}, 
     'flow-through': {'color': '#C46A1A', 'label': 'Flow-through connected'}
 }
 
@@ -354,7 +354,7 @@ for connectivity_class in draw_order:
     )[0]
     class_handles[connectivity_class] = line
 
-diag_line = ax.plot([0, 100], [0, 100], 'k--', linewidth=2.5)[0]
+diag_line = ax.plot([0, 100], [0, 100], 'k--', linewidth=7.5, zorder=4)[0]
 
 legend_handles = [class_handles[c] for c in legend_conn_order]
 legend_labels = [connectivity_config[c]['label'] for c in legend_conn_order]

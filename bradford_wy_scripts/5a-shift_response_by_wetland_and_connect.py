@@ -170,6 +170,8 @@ print(q25)
 q75 = log_id_summary.quantile(.75)
 print(q75)
 
+print(log_id_summary.sort_values())
+
 # %% 3.3 Boxplot showing depth_shifts by ref_id
 
 plot_data_sorted_ref = plot_data.sort_values('ref_connectivity_cat', ascending=False)

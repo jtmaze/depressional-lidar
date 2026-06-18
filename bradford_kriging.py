@@ -16,7 +16,8 @@ well_ts_path = "D:/depressional_lidar/data/bradford/in_data/stage_data/bradford_
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 
 gauges_points_path = 'D:/depressional_lidar/data/bradford/in_data/ancillary_data/dummy_stream_gauges.shp'
-gauges_ts_path = 'D:/depressional_lidar/data/bradford/in_data/ancillary_data/sam_howley_streams.csv'
+synthetic_stream_path = 'D:/depressional_lidar/data/bradford/in_data/ancillary_data/synthetic_stream_timeseries.csv'
+boundary_path = 'D:/depressional_lidar/data/bradford/bradford_krig_domain.shp'
 
 # %% 2.0 Read data
 # %% 2.1 Read the well points and timeseries
@@ -36,24 +37,33 @@ print(len(well_points))
 stream_gauges = gpd.read_file(gauges_points_path)
 stream_gauges = stream_gauges.rename(
     columns={
-        'gauge_id': 'wetland_id',
+        'id': 'wetland_id',
     }
 )
 stream_gauges.to_crs(well_points.crs, inplace=True)
-print(stream_gauges)
-gauge_ts = pd.DataFrame({
-    'wetland_id': stream_gauges['wetland_id'].to_numpy(),
-    'date': '2023-07-01',
-    'well_depth_m': 0.0,
-    'flag': 0,
-})
+stream_gauges['wetland_id'] = 'stream_' + stream_gauges['wetland_id'].astype('str')
+
+synthetic_gauges = pd.read_csv(synthetic_stream_path)
+
+gauge_ids = stream_gauges['wetland_id'].unique()
+
+gauge_ts = pd.concat([
+    synthetic_gauges.assign(wetland_id=gid) 
+    for gid in gauge_ids
+], ignore_index=True)
+
+gauge_ts.rename(columns={'depth': 'well_depth_m'}, inplace=True)
+gauge_ts['flag'] = 0 
+
+print(gauge_ts.head(10))
 
 # %% 2.3 Combine stream gauge and wetland well datasets for kriging
 
 full_points = pd.concat([stream_gauges, well_points], axis=0)
+full_points = full_points[['wetland_id', 'z_dem', 'geometry']]
 full_ts = pd.concat([gauge_ts, well_ts], axis=0)
 
-boundary = full_points.geometry.union_all().convex_hull.buffer(500)
+boundary = gpd.read_file(boundary_path)
 
 # %% 2.4 Visualize all of the wells on the map
 
@@ -62,12 +72,12 @@ fig, ax = plt.subplots()
 well_points.plot(ax=ax, color='red', markersize=20)
 stream_gauges.plot(ax=ax, color='orange', markersize=20)
 
-gpd.GeoSeries([boundary]).plot(ax=ax, facecolor='none', edgecolor='blue')
+boundary.geometry.plot(ax=ax, facecolor='none', edgecolor='blue')
 plt.show()
 
 # %% 3.0 Run Kriging on Depth Scenarios
 
-well_array_med = WellArray(
+well_array_variogram_fit = WellArray(
     well_pts=well_points,
     well_ts=well_ts,
     begin='2020-03-01',
@@ -75,22 +85,43 @@ well_array_med = WellArray(
     percentile=50
 )
 
-wtd_surface_med = WTDSurface(
-    well_array=well_array_med,
+wtd_variogram_fit = WTDSurface(
+    well_array=well_array_variogram_fit,
     krig_params={
         'variogram_model': 'exponential',
         'variogram_parameters': None,
         'n_lags': 10,
     },
     coarse_grid_dims=(1_000, 1_000),
-    boundary=boundary,
+    boundary=boundary.geometry,
+    plot_variogram=True
+)
+wtd_variogram_fit.plot_masked_result(sigma_threshold=2.0)
+
+variogram_params = wtd_variogram_fit.okr_result['variogram_model_parameters'].tolist()
+print(variogram_params)
+
+well_array_med = WellArray(
+    well_pts=well_points,
+    well_ts=well_ts,
+    begin='2021-01-01',
+    end='2027-01-01', 
+    percentile=50,
+)
+
+wtd_surface_med = WTDSurface(
+    well_array=well_array_med,
+    krig_params={
+        'variogram_model': 'exponential',
+        'variogram_parameters': variogram_params,
+        'n_lags': 10,
+    },
+    coarse_grid_dims=(1_000, 1_000),
+    boundary=boundary.geometry,
     plot_variogram=True
 )
 
-# wtd_surface_med_gauss.plot_masked_result(sigma_threshold=1.0)
 wtd_surface_med.plot_masked_result(sigma_threshold=2)
-
-lags = wtd_surface_med.okr_result['lags']
 weights = wtd_surface_med.okr_result['weights']
 
 print(wtd_surface_med.okr_result['variogram_model_parameters'])
@@ -160,7 +191,7 @@ print(wells_df)
 wetland_ids = wells_df['wetland_id']
 
 out_dir = f"D:/depressional_lidar/data/bradford/out_data/well_wse_interpolations"
-file_suffix = f"optimized_model"
+file_suffix = f"optimized_model_wetlands_only"
 
 # %% 6.1 Simple raster of median surface
 

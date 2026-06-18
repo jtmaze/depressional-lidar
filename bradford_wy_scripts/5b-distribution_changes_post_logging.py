@@ -8,7 +8,6 @@ How can I ensure the upper and lower bounds of the Q-Q plot aren't warped by dat
 Maybe truncate the curves whenever less than three are represented?
 """
 
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -28,7 +27,7 @@ spills = pd.read_csv(est_spills_path)
 distributions = pd.read_csv(distributions_path)
 connect = pd.read_excel(connectivity_key_path)
 
-distributions = distributions[distributions['log_id'] != '9_332']
+#distributions = distributions[distributions['log_id'] != '9_332']
 
 # Only keep strong models
 strong_pairs = pd.read_csv(strong_wetland_pairs_path)
@@ -153,7 +152,7 @@ print(f"Quantile difference at pre =  0.0m: {diff_all[idx_spill]:.3f} m  "
 
 connectivity_config = {
     'first order': {'color': '#6C5B7B', 'label': 'Ditch Connected', 'marker': 's'},
-    'giw': {'color': '#1B7F79', 'label': 'Unconnected', 'marker': '^'}, 
+    'giw': {'color': '#1B7F79', 'label': 'Unditched', 'marker': '^'}, 
     'flow-through': {'color': '#C46A1A', 'label': 'Flow-through connected', 'marker': 'X'}
 }
 

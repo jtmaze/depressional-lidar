@@ -49,8 +49,6 @@ def read_concatonate_lai(
     # Specify the LAI method
     out_df['method'] = lai_method
 
-    print(out_df.head(10))
-
     out_df = apply_moving_averages(out_df)
     
     return out_df

@@ -44,6 +44,8 @@ shift_data = shift_data.merge(
     right_on=['log_id', 'ref_id', 'log_date'],
     how='inner'
 )
+
+shift_data = shift_data[shift_data['mean_depth_change'] <= 1]
 print(len(shift_data))
 #shift_data = shift_data[shift_data['mean_depth_change'] < 1.0]
 #shift_data = shift_data[shift_data['log_id'] != '9_332']
@@ -115,7 +117,7 @@ for idx, p in wetland_pairs.iterrows():
         upper_bound=5.5,
         lower_bound=0.5
     )
-    logged_lai = logged_lai[logged_lai['date'] >= '2021-01-01']
+    logged_lai = logged_lai[logged_lai['date'] >= '2019-01-01']
 
     ref_id = p['reference_id']
     reference_lai = read_concatonate_lai(
@@ -125,7 +127,7 @@ for idx, p in wetland_pairs.iterrows():
         upper_bound=5.5,
         lower_bound=0.5
     )
-    reference_lai = reference_lai[reference_lai['date'] >= '2021-01-01']
+    reference_lai = reference_lai[reference_lai['date'] >= '2019-01-01']
 
     merged_lai = logged_lai[['date', 'roll_yr']].merge(
         reference_lai[['date', 'roll_yr']],
@@ -209,7 +211,7 @@ connectivity_key = pd.read_excel(connectivity_key_path)
 
 connectivity_config = {
     'first order': {'color': '#6C5B7B', 'label': 'Ditch connected', 'marker': 's'},
-    'giw': {'color': '#1B7F79', 'label': 'Unconnected', 'marker': '^'}, 
+    'giw': {'color': '#1B7F79', 'label': 'Unditched', 'marker': '^'}, 
     'flow-through': {'color': '#C46A1A', 'label': 'Flow-through connected', 'marker': 'X'}
 }
 
@@ -328,6 +330,7 @@ ax_a.set_xticklabels(
 )
 ax_a.axhline(0, color='black', linestyle='--', linewidth=2)
 ax_a.tick_params(axis='y', labelsize=14)
+ax_a.set_ylim(-100, 100)
 
 plt.tight_layout()
 plt.show()
@@ -364,7 +367,7 @@ for j, ref_conn in enumerate(ref_connectivity_order):
         widths=box_width,
         patch_artist=True,
         showfliers=False,
-        boxprops=dict(facecolor=ref_color, edgecolor=ref_color, alpha=0.7, linewidth=1.8),
+        boxprops=dict(facecolor=ref_color, edgecolor=ref_color, alpha=0.9, linewidth=1.8),
         whiskerprops=dict(color=ref_color, linewidth=1.4),
         capprops=dict(color=ref_color, linewidth=1.4),
         medianprops=dict(color='black', linewidth=1.8)
@@ -385,13 +388,13 @@ legend_handles = [
         1,
         facecolor=connectivity_config[ref_conn]['color'],
         edgecolor=connectivity_config[ref_conn]['color'],
-        alpha=0.7,
+        alpha=0.9,
         label=f"Reference: {connectivity_config[ref_conn]['label']}"
     )
     for ref_conn in ref_connectivity_order
 ]
 ax_b.axhline(0, color='grey', linestyle='--', linewidth=2, label='No Depth Change')
-ax_b.legend(handles=legend_handles, loc='upper left', fontsize=16)
+ax_b.legend(handles=legend_handles, loc='lower left', fontsize=16)
 ax_b.tick_params(axis='y', labelsize=14)
 plt.ylim(top=45)
 plt.tight_layout()
@@ -592,14 +595,14 @@ df["roll_within_c"]   = df["roll_within"] - df["roll_within"].mean()
 
 # %% 7.2 Simple logged-only mixed effect model
 
-md = smf.mixedlm(
-    "mean_depth_change ~ roll_log_mean_c * C(log_connected)",
-    data=df,
-    groups="log_id",
-    re_formula="1"
-)
-m = md.fit(reml=False, method="lbfgs")
-print(m.summary())
+# md = smf.mixedlm(
+#     "mean_depth_change ~ roll_log_mean_c * C(log_connected)",
+#     data=df,
+#     groups="log_id",
+#     re_formula="1"
+# )
+# m = md.fit(reml=False, method="lbfgs")
+# print(m.summary())
 
 # %% 7.3 GLM with cluster errors 
 

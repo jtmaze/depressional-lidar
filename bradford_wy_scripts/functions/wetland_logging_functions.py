@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import matplotlib.dates as mdates
+from matplotlib.ticker import MaxNLocator
 
 from wetland_utilities.basin_attributes import WetlandBasin
 
@@ -230,13 +231,13 @@ def plot_correlations_from_model(
     post_r_sq = np.corrcoef(post_df[x_series_name], post_df[y_series_name])[0,1]**2
     
     # Create plot
-    fig, ax = plt.subplots(figsize=(10, 12))
+    fig, ax = plt.subplots(figsize=(10, 10))
     
     # Scatter plots
     ax.scatter(
         pre_df[x_series_name],
         pre_df[y_series_name], 
-        color= '#333333',
+        color= "#4D4D4D",
         #label='Pre-logging',
         alpha=0.6,
         s=40
@@ -244,7 +245,7 @@ def plot_correlations_from_model(
     ax.scatter(
         post_df[x_series_name],
         post_df[y_series_name], 
-        color='red',
+        color="#B2182B",
         #label='Post-logging',
         alpha=0.6,
         s=40
@@ -256,11 +257,14 @@ def plot_correlations_from_model(
     
     # Plot regression lines using model parameters
     ax.plot(x_smooth, pre_slope * x_smooth + pre_intercept, 
-            '#333333', linewidth=2, linestyle='--',
+            "#4D4D4D", linewidth=2, linestyle='--',
             label=f'Pre Model Fit')
     ax.plot(x_smooth, post_slope * x_smooth + post_intercept, 
-            'red', linewidth=2, linestyle='--',
+            "#B2182B", linewidth=2, linestyle='--',
             label=f'Post Model Fit')
+    
+    ax.axhline(0, color='grey', alpha=0.5, label='Spill Threshold', linewidth=8)
+    ax.axvline(0, color='grey', alpha=0.5, linewidth=8)
     
     # Add significance indicators
     p_slope = model_results['tests']['p_slope_diff']
@@ -277,8 +281,10 @@ def plot_correlations_from_model(
     # Formatting
     ax.set_xlabel("Reference Depth (m)", fontsize=24, fontweight='bold')
     ax.set_ylabel("Logged Depth (m)", fontsize=24, fontweight='bold')
+    ax.xaxis.set_major_locator(MaxNLocator(nbins=5))
+    ax.yaxis.set_major_locator(MaxNLocator(nbins=5))
     ax.tick_params(axis='both', which='major', labelsize=18)
-    ax.legend(loc='lower right', fontsize=18, framealpha=1)
+    ax.legend(loc='upper left', fontsize=18, framealpha=1)
     
     plt.tight_layout()
     plt.show()
