@@ -9,16 +9,21 @@ from rasterio.features import geometry_mask
 from rasterio.warp import reproject, Resampling
 from rasterio.transform import from_bounds, array_bounds
 
+
 from matplotlib.colors import LinearSegmentedColormap, ListedColormap, to_rgba
 
 data_dir = "D:/depressional_lidar/data/bradford"
+kriging_method = 'wetlands_only'
 
-krig_res_path = f"{data_dir}/out_data/well_wse_interpolations/kriging_weights_optimized_model_dummy_gauges.h5"
+krig_res_path = f"{data_dir}/out_data/well_wse_interpolations/kriging_weights_optimized_model_{kriging_method}.h5"
 well_ts_path = f"{data_dir}/in_data/stage_data/bradford_well_data_long_gapfilled.csv"
 well_points_path = "D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp"
 dem_path = f"{data_dir}/in_data/bradford_DEM_cleaned_USGS.tif"
+gauges_points_path = 'D:/depressional_lidar/data/bradford/in_data/ancillary_data/dummy_stream_gauges.shp'
+synthetic_stream_path = 'D:/depressional_lidar/data/bradford/in_data/ancillary_data/synthetic_stream_timeseries.csv'
+boundary_path = 'D:/depressional_lidar/data/bradford/bradford_krig_domain.shp'
 
-target_dem_resolution_m = 10
+target_dem_resolution_m = 5
 
 dates_to_plot = [
     "2023-02-01",
@@ -48,7 +53,6 @@ krig_transform = from_bounds(
 # %% 3.0 Read well timeseries and well points
 
 well_ts = pd.read_csv(well_ts_path)
-
 well_ts = well_ts.rename(
     columns={
         "well_id": "wetland_id",
@@ -60,7 +64,30 @@ well_ts = well_ts[["date", "wetland_id", "well_depth_m"]]
 well_ts["date"] = pd.to_datetime(well_ts["date"]).dt.normalize()
 well_ts["wetland_id"] = well_ts["wetland_id"].astype(str)
 
+# %% 4.0 Append synthetic stream gauge timeseries to wetland timeseries if used in kriging
+
+if kriging_method == 'dummy_gauges':
+
+    stream_gauges = gpd.read_file(gauges_points_path)
+
+    stream_gauges['wetland_id'] = 'stream_' + stream_gauges['id'].astype('str')
+    gauge_ids = stream_gauges['wetland_id'].unique()
+    synthetic_gauges = pd.read_csv(synthetic_stream_path)
+    synthetic_gauges['date'] = pd.to_datetime(synthetic_gauges['date'])
+
+    gauge_ts = pd.concat([
+        synthetic_gauges.assign(wetland_id=gid) 
+        for gid in gauge_ids
+    ], ignore_index=True)
+
+    gauge_ts.rename(columns={'depth': 'well_depth_m'}, inplace=True)
+    gauge_ts['flag'] = 0 
+
+    well_ts = pd.concat([well_ts, gauge_ts])
+
+
 # %%
+
 with rasterio.open(dem_path) as src:
     src_h, src_w = src.height, src.width
     src_res = abs(src.transform.a)
@@ -83,33 +110,6 @@ with rasterio.open(dem_path) as src:
 
 print(f"DEM shape at {target_dem_resolution_m} m: {dem.shape}")
 
-# %% 3.1 Make a dummy_ts for simulated conditioning points
-
-# IDs required by the kriging weights but missing from observed well_ts
-weight_ids = pd.Index(weights.columns.astype(str))
-ts_ids = pd.Index(well_ts["wetland_id"].astype(str).unique())
-missing_ids = weight_ids.difference(ts_ids)
-
-print(f"Missing IDs in well_ts (will be filled with zeros): {list(missing_ids)}")
-
-# Build a zero-depth timeseries across the same date span as well_ts
-date_index = (
-    well_ts["date"]
-    .dropna()
-    .drop_duplicates()
-    .sort_values()
-)
-
-dummy_ts = pd.MultiIndex.from_product(
-    [date_index, missing_ids],
-    names=["date", "wetland_id"]
-).to_frame(index=False)
-
-dummy_ts["well_depth_m"] = 0.0
-
-# Append to well_ts
-well_ts = pd.concat([well_ts, dummy_ts], ignore_index=True)
-
 # %% 3.2 Read the well points
 
 dates_to_plot = pd.to_datetime(dates_to_plot).normalize()
@@ -127,27 +127,17 @@ basin_13_ids = [
 well_points = well_points[~well_points["wetland_id"].isin(basin_13_ids)]
 well_points["wetland_id"] = well_points["wetland_id"].astype(str)
 
-boundary = well_points.geometry.union_all().buffer(500).buffer(1000).buffer(-1000)
-boundary = gpd.GeoSeries([boundary], crs=well_points.crs).to_crs(dem_crs).iloc[0]
+boundary = gpd.read_file(boundary_path)
 
 boundary_mask = geometry_mask(
-    [boundary],
+    boundary.geometry,
     out_shape=dem.shape,
     transform=dem_transform,
     invert=True,
 )
 
-conditioning_pts = gpd.read_file('D:/depressional_lidar/data/bradford/in_data/ancillary_data/dummy_stream_gauges.shp')
-print(conditioning_pts)
-conditioning_pts = conditioning_pts.rename(
-    columns={
-        'gauge_id': 'wetland_id',
-    }
-)
-conditioning_pts.to_crs(crs=well_points.crs, inplace=True)
-
-
-well_points = pd.concat([conditioning_pts, well_points], axis=0)
+stream_gauges.to_crs(well_points.crs, inplace=True)
+all_points = gpd.GeoDataFrame(pd.concat([stream_gauges, well_points], axis=0), crs=well_points.crs)
 
 # %% Plot the average timeseries for all wells
 
@@ -181,35 +171,11 @@ ax.legend(frameon=False)
 plt.tight_layout()
 plt.show()
 
-# %% 4.0 Read DEM downsampled to target resolution
-
-# with rasterio.open(dem_path) as src:
-#     src_h, src_w = src.height, src.width
-#     src_res = abs(src.transform.a)
-
-#     scale = src_res / target_dem_resolution_m
-#     out_h = max(1, int(np.ceil(src_h * scale)))
-#     out_w = max(1, int(np.ceil(src_w * scale)))
-
-#     dem = src.read(
-#         1,
-#         out_shape=(out_h, out_w),
-#         resampling=Resampling.average
-#     ).astype(np.float32)
-
-#     dem_transform = src.transform * src.transform.scale(src_w / out_w, src_h / out_h)
-#     dem_crs = src.crs
-
-#     if src.nodata is not None:
-#         dem[dem == src.nodata] = np.nan
-
-# print(f"DEM shape at {target_dem_resolution_m} m: {dem.shape}")
-
 
 # %% 6.0 Prepare WSE table
 
 wse = well_ts.merge(
-    well_points[["wetland_id", "z_dem"]],
+    all_points[["wetland_id", "z_dem"]],
     on="wetland_id",
     how="inner"
 )
@@ -302,12 +268,20 @@ for target_date in dates_to_plot:
         interpolation="nearest",
     )
 
-    ax.plot(*boundary.exterior.xy, color="red", linewidth=2.5, zorder=4)
+    ax.plot(*boundary.geometry.iloc[0].exterior.xy, color="red", linewidth=2.5, zorder=4)
 
     well_points.to_crs(dem_crs).plot(
+    ax=ax,
+    color="red",
+    markersize=40,
+    edgecolor="white",
+    zorder=5,
+)
+
+    stream_gauges.to_crs(dem_crs).plot(
         ax=ax,
-        color="red",
-        markersize=120,
+        color="orange",
+        markersize=40,
         edgecolor="black",
         zorder=5,
     )
@@ -326,7 +300,7 @@ for target_date in dates_to_plot:
     ax.set_xlabel("Easting")
     ax.set_ylabel("Northing")
 
-    minx, miny, maxx, maxy = boundary.bounds
+    minx, miny, maxx, maxy = boundary.total_bounds
     pad = 0.05 * max(maxx - minx, maxy - miny)
 
     ax.set_xlim(minx - pad, maxx + pad)
@@ -403,15 +377,23 @@ freq_im = ax.imshow(
     interpolation="nearest",
 )
 
-ax.plot(*boundary.exterior.xy, color="black", linewidth=2.5, zorder=4)
+ax.plot(*boundary.geometry.iloc[0].exterior.xy, color="black", linewidth=2.5, zorder=4)
 
 well_points.to_crs(dem_crs).plot(
     ax=ax,
     color="red",
-    markersize=120,
-    edgecolor="black",
+    markersize=40,
+    edgecolor="white",
     zorder=5,
 )
+
+# stream_gauges.to_crs(dem_crs).plot(
+#     ax=ax,
+#     color="orange",
+#     markersize=40,
+#     edgecolor="black",
+#     zorder=5,
+# )
 
 fig.colorbar(
     freq_im,
@@ -425,7 +407,7 @@ ax.set_title(f"Inundation frequency — WY{tgt_wy}")
 ax.set_xlabel("Easting")
 ax.set_ylabel("Northing")
 
-minx, miny, maxx, maxy = boundary.bounds
+minx, miny, maxx, maxy = boundary.total_bounds
 pad = 0.05 * max(maxx - minx, maxy - miny)
 
 ax.set_xlim(minx - pad, maxx + pad)
@@ -489,15 +471,23 @@ tai_im = ax.imshow(
     interpolation="nearest",
 )
 
-ax.plot(*boundary.exterior.xy, color="black", linewidth=2.5, zorder=4)
+ax.plot(*boundary.geometry.iloc[0].exterior.xy, color="black", linewidth=2.5, zorder=4)
 
 well_points.to_crs(dem_crs).plot(
     ax=ax,
-    color="black",
-    markersize=120,
+    color="red",
+    markersize=40,
     edgecolor="white",
     zorder=5,
 )
+
+# stream_gauges.to_crs(dem_crs).plot(
+#     ax=ax,
+#     color="orange",
+#     markersize=50,
+#     edgecolor="black",
+#     zorder=5,
+# )
 
 fig.colorbar(
     tai_im,
@@ -511,7 +501,7 @@ ax.set_title(f"Terrestrial-Aquatic Interface — WY{tgt_wy}")
 ax.set_xlabel("Easting")
 ax.set_ylabel("Northing")
 
-minx, miny, maxx, maxy = boundary.bounds
+minx, miny, maxx, maxy = boundary.total_bounds
 pad = 0.05 * max(maxx - minx, maxy - miny)
 
 ax.set_xlim(minx - pad, maxx + pad)
@@ -605,13 +595,22 @@ trans_im = ax.imshow(
     interpolation="nearest",
 )
 
-ax.plot(*boundary.exterior.xy, color="black", linewidth=2.5, zorder=4)
+ax.plot(*boundary.geometry.iloc[0].exterior.xy, color="black", linewidth=2.5, zorder=4)
 
 well_points.to_crs(dem_crs).plot(
     ax=ax,
     color="black",
     markersize=120,
     edgecolor="white",
+    zorder=5,
+)
+
+stream_gauges.to_crs(dem_crs).plot(
+    ax=ax,
+    color="cyan",
+    marker="^",
+    markersize=120,
+    edgecolor="black",
     zorder=5,
 )
 
@@ -627,7 +626,7 @@ ax.set_title(f"Wet-to-dry transitions — WY{tgt_wy}")
 ax.set_xlabel("Easting")
 ax.set_ylabel("Northing")
 
-minx, miny, maxx, maxy = boundary.bounds
+minx, miny, maxx, maxy = boundary.total_bounds
 pad = 0.05 * max(maxx - minx, maxy - miny)
 
 ax.set_xlim(minx - pad, maxx + pad)

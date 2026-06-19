@@ -33,7 +33,7 @@ stage_data.drop(columns=['date'], inplace=True)
 wetland_pairs = pd.read_csv(pairs_path)
 
 spills = pd.read_csv(spills_path)
-spills['well_to_spill'] = spills['well_elev'] - spills['max_fill_elev']
+spills['well_to_spill'] = spills['well_elev'] - spills['max_fill_elev'] - 0.15
 log_spill = spills[spills['wetland_id'] == tgt_log].copy()
 ref_spill = spills[spills['wetland_id'] == tgt_ref].copy()
 

@@ -21,7 +21,7 @@ agg_shift_data_path = f'{data_dir}/out_data/modeled_logging_stages/shift_results
 
 spills = pd.read_csv(est_spills_path)
 distributions = pd.read_csv(distributions_path)
-distributions = distributions[distributions['log_id'] != '9_332']
+#distributions = distributions[distributions['log_id'] != '9_332']
 connect = pd.read_excel(connectivity_key_path)
 n_bottomed = pd.read_csv(agg_shift_data_path)
 n_bottomed = n_bottomed[['log_id', 'ref_id', 'total_obs', 'n_bottomed_out']]
@@ -73,7 +73,7 @@ for i in distributions['log_id'].unique():
     # absolute lowest point, and the lowest point in a filled depression. Most of the time, the lowest basin point has
     # the deepest spill depths, but other cases ditching interferes. 
     spill_lowest_z_abs_lowest = (spill_z - spill_depth) - basin_min_z
-    spill_depth_adj = spill_depth - spill_lowest_z_abs_lowest
+    spill_depth_adj = spill_depth - spill_lowest_z_abs_lowest + 0.1 # NOTE adjusted spill depth due to our tendency to consistently underestimate
 
     wetland_data['pre_adj'] = wetland_data['pre'] + well_to_bottom
     wetland_data['post_adj'] = wetland_data['post'] + well_to_bottom
@@ -280,51 +280,13 @@ ax.legend(handles=hatch_handles, fontsize=18, ncol=1, loc='upper left', frameon=
 plt.tight_layout()
 plt.show()
 
-# %% 6.0 Run an ANOVA
+# %% 6.0 Print more summary stats
 
-from scipy import stats
-
-
-def _normalize_connectivity(series: pd.Series) -> pd.Series:
-    return (
-        series.astype(str)
-        .str.strip()
-        .str.lower()
-        .str.replace('_', ' ', regex=False)
-    )
-
-
-def run_two_group_anova(
-    df: pd.DataFrame,
-    group_col: str = 'connect',
-    baseline_col: str = 'pre_ptc',
-    diff_col: str = 'd_ptc',
-    group_a: str = 'giw',
-    group_b: str = 'first order'
-):
-    work = df.copy()
-    work['_group_norm'] = _normalize_connectivity(work[group_col])
-
-    group_a = group_a.replace('_', ' ').lower()
-    group_b = group_b.replace('_', ' ').lower()
-
-    subset = work[work['_group_norm'].isin([group_a, group_b])].copy()
-
-    a_base = subset.loc[subset['_group_norm'] == group_a, baseline_col].dropna().to_numpy()
-    b_base = subset.loc[subset['_group_norm'] == group_b, baseline_col].dropna().to_numpy()
-
-    a_diff = subset.loc[subset['_group_norm'] == group_a, diff_col].dropna().to_numpy()
-    b_diff = subset.loc[subset['_group_norm'] == group_b, diff_col].dropna().to_numpy()
-
-    f_base, p_base = stats.f_oneway(a_base, b_base)
-    f_diff, p_diff = stats.f_oneway(a_diff, b_diff)
-
-    print('ANOVA: giw vs first order (flow-through excluded)')
-    print(f"baseline ({baseline_col}) n_giw={len(a_base)}, n_first_order={len(b_base)}, F={f_base:.4f}, p={p_base:.4g}")
-    print(f"diff ({diff_col}) n_giw={len(a_diff)}, n_first_order={len(b_diff)}, F={f_diff:.4f}, p={p_diff:.4g}")
-
-
-run_two_group_anova(ptc_summary, group_col='connect')
+print(f"{ptc_summary['d_ptc'].mean():.3f}")
+print(f"{ptc_summary['d_ptc'].std():.3f}")
+print(f"{ptc_summary['d_ptc'].median():.3f}")
+iqr = ptc_summary['d_ptc'].quantile(0.75) - ptc_summary['d_ptc'].quantile(0.25)
+print(f"{iqr:.3f}")
 
 
 
