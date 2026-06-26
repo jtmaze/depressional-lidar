@@ -217,7 +217,7 @@ idr_data = [
     summary_elevations.loc[
         summary_elevations['connectivity'] == conn,
         'interdecile_range'
-    ].dropna().values
+    ].dropna().values * 100
     for conn in connect_order
 ]
 
@@ -243,12 +243,11 @@ for idx, conn in enumerate(connect_order, start=1):
         summary_elevations['connectivity'] == conn,
         ['wetland_id', 'interdecile_range']
     ].dropna(subset=['interdecile_range'])
-    if len(class_data) == 0:
-        continue
+
     x_jitter = np.random.normal(loc=idx, scale=0.05, size=len(class_data))
     ax.scatter(
         x_jitter,
-        class_data['interdecile_range'].values,
+        class_data['interdecile_range'].values * 100,
         color=connect_colors[conn],
         edgecolor='white',
         linewidth=0.6,
@@ -256,7 +255,7 @@ for idx, conn in enumerate(connect_order, start=1):
         s=45,
         zorder=3
     )
-    for x_val, y_val, wetland_id in zip(x_jitter, class_data['interdecile_range'].values, class_data['wetland_id'].values):
+    for x_val, y_val, wetland_id in zip(x_jitter, class_data['interdecile_range'].values * 100, class_data['wetland_id'].values):
         ax.annotate(
             str(wetland_id),
             (x_val, y_val),
@@ -267,18 +266,18 @@ for idx, conn in enumerate(connect_order, start=1):
             zorder=4
         )
 
-ax.set_ylabel('Hypsometry interdecile range (m)', fontsize=12)
+ax.set_ylabel('Hypsometry interdecile range (cm)', fontsize=12)
 ax.set_xlabel('Connectivity', fontsize=12)
 ax.grid(axis='y', alpha=0.25)
 plt.tight_layout()
 plt.show()
 
 # Mean and standard deviation for all wetland's interdecile range
-idr_vals = summary_elevations['interdecile_range'].dropna()
+idr_vals = summary_elevations['interdecile_range'].dropna() * 100
 mean_idr = idr_vals.mean()
 std_idr = idr_vals.std()
-print(f"Mean interdecile range: {mean_idr:.4f}")
-print(f"SD interdecile range: {std_idr:.4f}")
+print(f"Mean interdecile range (cm): {mean_idr:.2f}")
+print(f"SD interdecile range (cm): {std_idr:.2f}")
 
 # %% %% 5.0 Q-Q plot pre versus post by connectivity
 

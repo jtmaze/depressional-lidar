@@ -193,64 +193,91 @@ plt.show()
 
 # %% 4.0 Box Plot to Illustrate Modal Water Depths
 
+connect_order = [
+    ("giw", "Unditched"),
+    ("first order", "Ditch connected"),
+    ("flow-through", "Flow-through connected"),
+]
+
 series = []
-labels = []
+series_labels = []
 colors = []
 hatches = []
+positions = []
 
-for key, cfg in connectivity_config.items():
-    d = plot_df.loc[plot_df["connectivity_key"] == key]
+method_config = [
+    ("modal_depth_delineated", "modal depth", ""),
+    ("delineated_spill_h_min", "geomorphic spill", "////"),
+]
 
-    for col, short_name, hatch in [
-        ("modal_depth_delineated", "modal depth", ""),
-        ("delineated_spill_h_min", "geomorphic spill", "\\\\\\"),
-    ]:
-        vals = d[col].dropna().to_numpy()
+for i, (conn_key, conn_label) in enumerate(connect_order):
+    d = plot_df.loc[plot_df["connectivity_key"] == conn_key]
+    base = i * 3 + 1
+
+    for j, (col, method_label, hatch) in enumerate(method_config):
+        vals = d[col].dropna().to_numpy() * 100
         series.append(vals)
-        labels.append(short_name)
-        colors.append(cfg["color"])
+        series_labels.append(f"{conn_label} | {method_label}")
+        colors.append(connectivity_config[conn_key]["color"])
         hatches.append(hatch)
+        positions.append(base + j)
 
-fig, ax = plt.subplots(figsize=(12, 6))
+fig, ax = plt.subplots(figsize=(8, 6))
 
 bp = ax.boxplot(
     series,
-    tick_labels=labels,
+    positions=positions,
+    widths=0.8,
     patch_artist=True,
-    widths=0.65,
     showfliers=False,
-    showmeans=True,
-    meanprops=dict(marker='X', markerfacecolor='red', markeredgecolor='black', markersize=12),
-    medianprops=dict(color='black', linewidth=1.5),
 )
 
 for box, c, hatch in zip(bp["boxes"], colors, hatches):
     box.set_facecolor(c)
-    box.set_alpha(0.8)
+    box.set_alpha(0.65)
     box.set_edgecolor("black")
     box.set_hatch(hatch)
 
+for median in bp["medians"]:
+    median.set_color("black")
+    median.set_linewidth(2)
+
+for pos, vals, c in zip(positions, series, colors):
+    x_jitter = np.random.normal(loc=pos, scale=0.05, size=len(vals))
+    ax.scatter(
+        x_jitter,
+        vals,
+        color=c,
+        edgecolor="white",
+        linewidth=0.6,
+        alpha=0.8,
+        s=45,
+        zorder=3,
+    )
+
+ax.set_xticks([1.5, 4.5, 7.5])
+ax.set_xticklabels([label for _, label in connect_order])
+ax.set_ylabel("Depth (cm)", fontsize=12)
+ax.grid(axis="y", alpha=0.25)
 
 legend_elements = [
-    Patch(facecolor="gray", alpha=0.8, edgecolor="black", hatch=None, label="modal depth"),
-    Patch(facecolor="none", alpha=0.8, edgecolor="black", hatch="\\\\\\", label="geomorphic spill"),
-    Patch(facecolor="#6C5B7B", alpha=0.8, edgecolor="black", label="Ditch connected"),
-    Patch(facecolor="#1B7F79", alpha=0.8, edgecolor="black", label="Unditched"),
-    Patch(facecolor="#C46A1A", alpha=0.8, edgecolor="black", label="Flow-through connected"),
+    Patch(facecolor="lightgray", alpha=0.65, edgecolor="black", hatch="", label="modal depth"),
+    Patch(facecolor="lightgray", alpha=0.65, edgecolor="black", hatch="////", label="geomorphic spill"),
+    Patch(facecolor="#1B7F79", alpha=0.65, edgecolor="black", label="Unditched"),
+    Patch(facecolor="#6C5B7B", alpha=0.65, edgecolor="black", label="Ditch connected"),
+    Patch(facecolor="#C46A1A", alpha=0.65, edgecolor="black", label="Flow-through connected"),
 ]
-ax.legend(handles=legend_elements, loc="best", fontsize=14)
+ax.legend(handles=legend_elements, loc="best", fontsize=11)
 
-ax.set_ylabel("depth (cm)", fontsize=14)
-ax.grid(axis="y", alpha=0.3)
-ax.tick_params(axis="x", labelrotation=20, labelsize=10)
 plt.tight_layout()
 plt.show()
 
+
 # %% 4.1 Print means and standard deviations associated with the boxplot series
 
-for label, vals in zip(labels, series):
-    mean = np.nanmean(vals) * 100
-    std = np.nanstd(vals, ddof=1) * 100
+for label, vals in zip(series_labels, series):
+    mean = np.nanmean(vals)
+    std = np.nanstd(vals, ddof=1)
     print(f"{label}: mean={mean:.3f}, sd={std:.3f}, n={len(vals)}")
 
 # Ditched diff = 15 cm

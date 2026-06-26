@@ -4,13 +4,12 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-
 data_dir = 'D:/depressional_lidar/data/bradford/'
 
-distributions_path = f'{data_dir}/out_data/modeled_logging_stages/hypothetical_distributions_LAI150m_domain_no_dry_days.csv'
+distributions_path = f'{data_dir}/out_data/modeled_logging_stages/hypothetical_distributions_wetlandLAI150m_domain_no_dry_days.csv'
 connectivity_path = f'{data_dir}/bradford_wetland_connect_logging_key.xlsx'
-spills_path = f'{data_dir}/out_data/bradford_estimated_basin_spills_no_smooth.csv'
-strong_models_path = f'{data_dir}/out_data/strong_ols_models_150m_domain_no_dry_days.csv'
+spills_path = f'{data_dir}/out_data/bradford_estimated_basin_spills.csv'
+strong_models_path = f'{data_dir}/out_data/strong_ols_models_wetland150m_domain_no_dry_days.csv'
 hypsometry_path = f'{data_dir}/out_data/bradford_hypsometry_curves.csv'
 
 # %% 2.0 Read the data
@@ -37,8 +36,8 @@ distributions = distributions.merge(
 # %% 3.0 Find the low elevations for each wetland
 
 summary_elevations = hypsometry_data.groupby(['wetland_id']).agg(
-    pct10_elev=('elev_bin_center', lambda x: np.percentile(x, 10)),
-    pct90_elev=('elev_bin_center', lambda x: np.percentile(x, 90))
+    pct10_elev=('elev_bin_center', lambda x: (np.percentile(x, 10) * 100)),
+    pct90_elev=('elev_bin_center', lambda x: (np.percentile(x, 90) * 100))
 )
 
 spills = spills.merge(summary_elevations, on='wetland_id')
@@ -72,7 +71,7 @@ box_data = [
 fig, ax = plt.subplots(figsize=(8, 6))
 box = ax.boxplot(
     box_data,
-    labels=['Unconnected', 'Ditch connected', 'Flow-through connected'],
+    labels=['Unditched', 'Ditch connected', 'Flow-through connected'],
     patch_artist=True,
     widths=0.55,
     showfliers=False
@@ -91,8 +90,7 @@ for idx, conn in enumerate(connect_order, start=1):
         hypsometry_idr['connectivity'] == conn,
         'interdecile_range'
     ].dropna().values
-    if len(class_idr) == 0:
-        continue
+
     x_jitter = np.random.normal(loc=idx, scale=0.05, size=len(class_idr))
     ax.scatter(
         x_jitter,
@@ -104,8 +102,7 @@ for idx, conn in enumerate(connect_order, start=1):
         s=40
     )
 
-ax.set_ylabel('Hypsometry interdecile range (m)')
-ax.set_xlabel('Connectivity')
+ax.set_ylabel('P90-P10 (cm)')
 ax.grid(axis='y', alpha=0.25)
 plt.tight_layout()
 plt.show()
