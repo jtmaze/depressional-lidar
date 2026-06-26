@@ -15,13 +15,13 @@ from rasterio.transform import from_origin
 
 import geopandas as gpd
 
-target_crs = 'EPSG:26918'
-site_name = 'delmarva'  # bradford or osbs, or delmarva
+target_crs = 'EPSG:26917'
+site_name = 'osbs'  # bradford or osbs, or delmarva
 sub_site_name = 'JL' # delmarva has two sites None for osbs and bradford
 
 # multiple neon flights at OSBS (e.g., sep2016)
 # For delmarva, use USGS_1m, because data is UTM
-lidar_data = 'USGS_1m'  
+lidar_data = 'neon_apr2019'  
 US_SURVEY_FOOT_TO_METER = 0.304800609601219 # FL USGS Lidar data is in feet
 
 os.chdir('D:/depressional_lidar/data/')
@@ -35,7 +35,7 @@ elif site_name == 'osbs' and lidar_data == 'USGS':
     basin_shapes_path = f'./{site_name}/OSBS_boundary.shp'
 
 elif site_name == 'osbs' and 'neon' in lidar_data:
-    dem_tile_paths = glob.glob(f'./{site_name}/in_data/raw_DEM_tiles_fl/{lidar_data}/*DTM.tif')
+    dem_tile_paths = glob.glob(f'./{site_name}/in_data/raw_DEM_tiles/{lidar_data}/*DTM.tif')
     basin_shapes_path = f'./{site_name}/OSBS_boundary.shp'
 
 elif site_name == 'delmarva' and lidar_data == 'USGS_1m':

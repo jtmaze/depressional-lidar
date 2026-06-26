@@ -9,7 +9,7 @@ from rasterio.features import geometry_mask
 from rasterio.warp import reproject, Resampling
 from rasterio.transform import array_bounds
 
-median_result_path = 'D:/depressional_lidar/data/osbs/out_data/well_wse_interpolations/interpolated_median_WSE_optimized_model.tif'
+median_result_path = 'D:/depressional_lidar/data/osbs/out_data/well_wse_interpolations/interpolated_median_WSE_optimized_model_pond_conditioned.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 conditioning_pts_path = 'D:/depressional_lidar/data/osbs/in_data/osbs_kriging_conditioning_pts.shp'
 dem_path = 'D:/depressional_lidar/data/osbs/in_data/osbs_DEM_cleaned_neon_sep2016.tif'

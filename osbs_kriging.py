@@ -23,6 +23,7 @@ pond_conditioning_pts_path = "D:/depressional_lidar/data/osbs/in_data/osbs_krigi
 well_ts = pd.read_csv(well_ts_path)
 print(well_ts.head())
 well_ts = well_ts[['date', 'wetland_id', 'indexed_well_depth_m', 'flag']]
+
 well_ts.rename(
     columns={
         'indexed_well_depth_m': 'well_depth_m'
@@ -58,7 +59,7 @@ ax.plot(daily_avg.index, daily_avg.values,
 #ax.legend()
 ax.set_xlabel('Date')
 ax.set_ylabel('Well Depth (m)')
-ax.set_title('Wetland Well Depths Time Series')
+ax.set_title('Indexed Well Depths Time Series')
 ax.grid(True, alpha=0.3)
 plt.xticks(rotation=45)
 plt.tight_layout()
@@ -84,6 +85,13 @@ plt.show()
 
 pond_points = gpd.read_file(pond_conditioning_pts_path)
 pond_points.to_crs(crs=well_points.crs, inplace=True)
+pond_points = pond_points[['wetland_id', 'apr2023','geometry']]
+print(pond_points)
+pond_points.rename(
+    columns={'apr2023': 'z_dem'},
+    inplace=True
+)
+
 pond_ts = pd.DataFrame({
     'wetland_id': pond_points['wetland_id'].to_numpy(),
     'date': '2023-04-16',

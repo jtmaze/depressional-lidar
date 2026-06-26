@@ -518,14 +518,10 @@ ax.grid(axis='y', alpha=0.25)
 plt.tight_layout()
 plt.show()
 
-# %% 8.0 Single barplot with wetland NEP change grouped by connectivity
-
-# %% 8.0 Single barplot with wetland NEP change grouped by connectivity
 
 # %% 8.0 Single barplot with wetland NEP change grouped by connectivity
 
 summary_df['nep_per_lai_change'] = summary_df['nep_change'] / summary_df['mean_rel_lai']
-summary_df = summary_df[summary_df['log_id'] != '3_21']
 
 conn_change = (
     summary_df

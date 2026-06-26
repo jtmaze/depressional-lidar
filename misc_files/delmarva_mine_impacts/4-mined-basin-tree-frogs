@@ -192,7 +192,7 @@ for i in ids:
 
 # %% 4.0 Plot the area results:
 
-fig, axes = plt.subplots(nrows=4, ncols=2, figsize=(10, 12))
+fig, axes = plt.subplots(nrows=4, ncols=2, figsize=(12, 12))
 axes = axes.flatten() 
 
 area_changes = []
@@ -208,11 +208,12 @@ for idx, result in enumerate(area_results):
     ax.hist((post_ts * sq_m_to_acres).dropna(), bins=30, histtype='step', color='red', 
             linewidth=2, label='Post Inundated Area')
     
-    ax.set_title(f'{wetland_id}')
-    ax.set_xlabel('Inundation Area (acres)')
-    ax.set_ylabel('Observation Days')
+    ax.set_title(f'{wetland_id}', fontsize=14)
+    ax.set_xlabel('Inundation Area (acres)', fontsize=14)
+    ax.set_ylabel('Observation Days', fontsize=14)
     ax.grid(True, linestyle='--', alpha=0.6)
     ax.set_xlim(left=0)
+    ax.tick_params(axis='both', labelsize=12)
 
     post_mean = post_ts.mean() * sq_m_to_acres
     pre_mean = pre_ts.mean() * sq_m_to_acres
@@ -222,8 +223,8 @@ for idx, result in enumerate(area_results):
 
 # Add single legend to figure
 handles, labels = axes[0].get_legend_handles_labels()
-fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=2, fontsize=12, borderaxespad=1.5)
-fig.suptitle(f'Inundated Area Histograms ({life_period_label})', fontsize=16, fontweight='bold')
+fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(0.5, 0.01), ncol=2, fontsize=14, borderaxespad=1.5)
+fig.suptitle(f'Inundated Area Histograms ({life_period_label})', fontsize=18, fontweight='bold')
 
 # Automatically adjust subplots to fit into the figure area cleanly
 plt.tight_layout(rect=[0, 0.06, 1, 0.97])
@@ -236,7 +237,7 @@ change_df[['baseline', 'post_mining', 'diff']] = change_df[['baseline', 'post_mi
 change_df['pct_change'] = np.round((change_df['diff'] / change_df['baseline']) * 100).astype(int)
 
 # %%
-change_df.to_csv(f'D:/depressional_lidar/data/{site}/out_data/example_wetland_mean_areas_{life_period}.csv', index=False)
+#change_df.to_csv(f'D:/depressional_lidar/data/{site}/out_data/example_wetland_mean_areas_{life_period}.csv', index=False)
 
 
 # %%

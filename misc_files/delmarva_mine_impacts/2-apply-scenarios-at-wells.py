@@ -33,7 +33,7 @@ mine_extent = parcel.buffer(-mine_buffer)
 # Papadopulos-Cooper 1967 (105,633 gpd, 20 days): y = -3.933 / (x + 17.35)^0.4473
 # Papadopulos-Cooper 1967 (116,196 gpd, 30 days): y = -5.171 / (x + 16.53)^0.4101
 # Thiem (time-averaged equivalent): y = -1e+06 / (x + 524.1)^1.828
-# Thiem (long-term adjustec values): y = -1e+06 / (x + 512.9)^1.971
+# Thiem (long-term adjusted values): y = -1e+06 / (x + 512.9)^1.971
 
 
 # Extract parameters from each scenario: y = numerator / (x + constant)^exponent
@@ -50,7 +50,7 @@ scenario_labels = {
     'pc_20d': 'Papadopulos-Cooper 1967 (105,633 gpd, 20 days)',
     'pc_30d': 'Papadopulos-Cooper 1967 (116,196 gpd, 30 days)',
     'thiem_avgd': 'Thiem (time-averaged equivalent)',
-    'thiem_lt': 'Thiem (long-term adjustec values)',
+    'thiem_lt': 'Thiem (long-term adjusted values)',
 }
 
 scenarios_df = pd.DataFrame(scenario_params).T
@@ -147,7 +147,7 @@ plt.show()
 
 # %% 6.0 Write the results file and the mine boundar
 
-results.to_csv(results_path, index=False)
+#results.to_csv(results_path, index=False)
 #mine_extent.to_file(mine_extent_path)
 
 # %% 7.0 Apply the same logic to the full set of basins
@@ -185,7 +185,10 @@ summary_df = summary_df.join(mean_draw)
 summary_df = summary_df.drop(columns='geometry')
 
 print(summary_df)
-print(len(summary_df[summary_df['mean_gw_draw_ft'] < -1]))
+num_wetlands_1ft_drawdown = len(summary_df[summary_df['mean_gw_draw_ft'] < -1])
+print(f"\nNumber of wetlands with at least 1 ft drawdown: {num_wetlands_1ft_drawdown}")
+area_1ft_drawdown = summary_df[summary_df['mean_gw_draw_ft'] < -1]['area_m2'].sum() / 4046.86
+print(f"Cumulative area with at least 1 ft drawdown: {area_1ft_drawdown:.2f} acres")
 
 # %% 8.0 Plot of wetland counts as function of pit distance
 
@@ -217,29 +220,22 @@ ax.tick_params(labelsize=13)
 plt.tight_layout()
 plt.show()
 
-# %% 10.0 Make a CDF of impacted wetland area by drawdown threshold
+# %% 10.0 Make a histogram of impacted wetland area by drawdown threshold
 
-# Sort ascending (most negative = most impacted first), cumsum builds from most to least impacted.
-# Result: at x=-2ft (left), only the most severely impacted area; at x=0 (right), all wetland area.
-cdf_df = summary_df[['area_m2', 'mean_gw_draw_ft']].copy()
-cdf_df = cdf_df.sort_values('mean_gw_draw_ft', ascending=True)
-cdf_df['cumulative_area_acres'] = cdf_df['area_m2'].cumsum() / 4046.86
+drawdown_bins = np.arange(summary_df['mean_gw_draw_ft'].min(), 0 + 0.1, step=0.1)
+area_acres = summary_df['area_m2'] / 4046.86
 
 fig, ax = plt.subplots(figsize=(10, 5))
 
-ax.plot(cdf_df['mean_gw_draw_ft'], cdf_df['cumulative_area_acres'],
-        color='steelblue', linewidth=2)
-ax.fill_between(cdf_df['mean_gw_draw_ft'], cdf_df['cumulative_area_acres'],
-                alpha=0.2, color='steelblue')
-
-ax.set_xlim(-2, 0)
-ax.set_ylim(0, None)
+ax.hist(summary_df['mean_gw_draw_ft'], bins=drawdown_bins, weights=area_acres,
+        color='steelblue', edgecolor='white', linewidth=0.5)
 
 ax.set_xlabel('Mean Groundwater Drawdown (ft)', fontsize=15)
-ax.set_ylabel('Cumulative Wetland Area (acres)', fontsize=15)
-ax.set_title('Cumulative Wetland Area by Water Level Loss', fontsize=16)
+ax.set_ylabel('Wetland Area (acres)', fontsize=15)
+ax.set_title('Wetland Area Distribution by Water Level Loss', fontsize=16)
 ax.tick_params(labelsize=13)
 
 plt.tight_layout()
 plt.show()
+
 # %%

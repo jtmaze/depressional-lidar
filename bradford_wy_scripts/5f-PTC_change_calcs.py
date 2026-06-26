@@ -73,7 +73,7 @@ for i in distributions['log_id'].unique():
     # absolute lowest point, and the lowest point in a filled depression. Most of the time, the lowest basin point has
     # the deepest spill depths, but other cases ditching interferes. 
     spill_lowest_z_abs_lowest = (spill_z - spill_depth) - basin_min_z
-    spill_depth_adj = spill_depth - spill_lowest_z_abs_lowest + 0.1 # NOTE adjusted spill depth due to our tendency to consistently underestimate
+    spill_depth_adj = spill_depth - spill_lowest_z_abs_lowest + 0.15 # NOTE adjusted spill depth due to our tendency to consistently underestimate
 
     wetland_data['pre_adj'] = wetland_data['pre'] + well_to_bottom
     wetland_data['post_adj'] = wetland_data['post'] + well_to_bottom
