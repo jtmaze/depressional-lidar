@@ -3,18 +3,20 @@
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+import matplotlib.pyplot as plt
 
 import rasterio as rio
 from rasterio.features import geometry_mask
 from rasterio.transform import from_bounds, array_bounds
-from rasterio.warp import Resampling
+from rasterio.warp import Resampling, reproject
+from matplotlib.colors import TwoSlopeNorm
 
 data_dir = 'D:/depressional_lidar/data/bradford'
 
-tgt_res = 1 # meter
+tgt_res = 3 # meter
 tgt_var = 'wse_m_sd2' # 'wse_m_sd2' of 'wse_m_mean'
 
-krig_res_path = f"{data_dir}/out_data/well_wse_interpolations/kriging_weights_optimized_model_wetlands_only.h5"
+krig_res_path = f"{data_dir}/out_data/well_wse_interpolations/kriging_weights_optimized_model_dummy_gauges.h5"
 well_ts_path = f"{data_dir}/in_data/stage_data/bradford_well_data_long_gapfilled.csv"
 well_points_path = "D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp"
 dem_path = f"{data_dir}/in_data/bradford_DEM_cleaned_USGS.tif"
@@ -144,15 +146,87 @@ wse = sd2_per_id.merge(
 wse["wse_m_mean"] = wse["mean_well_depth_m"] + wse["z_dem"]
 wse['wse_m_sd2'] = wse['mean_plus_2sd_well_depth_m'] + wse['z_dem']
 
-# %%
-
-wse_wide = (
-    wse
-    .pivot_table(columns="wetland_id", values=tgt_var, aggfunc="mean")
+well_wse = (
+    wse.set_index("wetland_id")[tgt_var]
+    .reindex(weights.columns)
 )
+
+print(well_wse)
 
 # %% 7.0 Apply kriging weights and plot water table depth map
 
 left, bottom, right, top = array_bounds(dem.shape[0], dem.shape[1], dem_transform)
 extent = (left, right, bottom, top)
 
+wse_flat = well_wse.to_numpy() @ weights.to_numpy().T
+
+# Reshape to pykrige grid shape.
+# PyKrige grid output is y by x.
+wse_grid = wse_flat.reshape(ny, nx).astype(np.float32)
+
+# Flip so row 0 is north/top for rasterio.
+wse_grid = np.flipud(wse_grid)
+
+# Reproject WSE grid to DEM grid.
+wse_on_dem = np.full(dem.shape, np.nan, dtype=np.float32)
+
+reproject(
+    source=wse_grid,
+    destination=wse_on_dem,
+    src_transform=krig_transform,
+    src_crs=dem_crs,
+    dst_transform=dem_transform,
+    dst_crs=dem_crs,
+    resampling=Resampling.bilinear,
+    dst_nodata=np.nan,
+)
+
+valid = boundary_mask & np.isfinite(dem) & np.isfinite(wse_on_dem)
+wtd_m = np.where(valid, dem - wse_on_dem, np.nan).astype(np.float32)
+
+fig, ax = plt.subplots(figsize=(10, 10))
+im = ax.imshow(
+    wtd_m,
+    cmap="RdBu_r",
+    norm=TwoSlopeNorm(vcenter=0.0, vmin=-1.5, vmax=2.5),
+    origin="upper",
+    extent=extent,
+    interpolation="nearest",
+)
+
+ax.plot(*boundary.geometry.iloc[0].exterior.xy, color="black", linewidth=2.0, zorder=4)
+fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="Water table depth (m; dem - wse)")
+if tgt_var == "wse_m_mean":
+    title = "Mean Values"
+elif tgt_var == "wse_m_sd2":
+    title = "Mean Vals +2SD"
+
+ax.set_title(f"WTD ({title})")
+ax.set_xlabel("Easting")
+ax.set_ylabel("Northing")
+ax.set_aspect("equal")
+
+plt.tight_layout()
+plt.show()
+
+# %% 8.0 Write the output as a geotiff
+
+out_path = out_dir + tgt_var + '.tiff'
+
+with rio.open(
+    out_path,
+    "w",
+    driver="GTiff",
+    height=wtd_m.shape[0],
+    width=wtd_m.shape[1],
+    count=1,
+    dtype="float32",
+    crs=dem_crs,
+    transform=dem_transform,
+    nodata=np.nan,
+) as dst:
+    dst.write(wtd_m, 1)
+
+print(f"Written: {out_path}")
+
+# %%
