@@ -22,6 +22,7 @@ pairs_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI
 distributions_path = 'D:/depressional_lidar/data/bradford//out_data/modeled_logging_stages/hypothetical_distributions_wetlandLAI150m_domain_no_dry_days.csv'
 spills_path = 'D:/depressional_lidar/data/bradford/out_data/bradford_estimated_basin_spills.csv'
 lai_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/basin_buffer_150m_maskedwetland/'
+climate_data_path = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/ERA5LAND_daily_mean.csv'
 
 tgt_log = '9_508'
 tgt_ref = '6a_17'
@@ -44,17 +45,21 @@ log_date = wetland_pairs[
 ref_lai = read_concatonate_lai(lai_path, tgt_ref, '150m_well', 5.6, 0)
 log_lai = read_concatonate_lai(lai_path, tgt_log, '150m_well', 5.6, 0)
 
+era5 = pd.read_csv(climate_data_path)
+era5 = era5[['date_local', 'precip_m']]
+print(era5)
+
 # %% 2.0 Convert depth to spill depth
 
 ref = stage_data[stage_data['wetland_id'] == tgt_ref].copy()
 ref_qaqc = timeseries_qaqc(ref, keep_below_obs=False)
 ref_ts = ref_qaqc['clean_ts']
-ref_ts['depth'] = ref_ts['well_depth_m'] + ref_spill['well_to_spill'].iloc[0] # NOTE: Depth is relative to spill
+ref_ts['depth'] = (ref_ts['well_depth_m'] + ref_spill['well_to_spill'].iloc[0]) * 100 # NOTE: Depth is relative to spill (now in cm)
 
 log = stage_data[stage_data['wetland_id'] == tgt_log].copy()
 log_qaqc = timeseries_qaqc(log, keep_below_obs=False)
 log_ts = log_qaqc['clean_ts']
-log_ts['depth'] = log_ts['well_depth_m'] + log_spill['well_to_spill'].iloc[0] # NOTE: Depth is relative to spill
+log_ts['depth'] = (log_ts['well_depth_m'] + log_spill['well_to_spill'].iloc[0]) * 100 # NOTE: Depth is relative to spill (now in cm)
 
 # %% 3.0 Quick timeseries plot
 
@@ -82,11 +87,11 @@ ax_depth.scatter(log_pre['day'], log_pre['depth'], color=pre_color, s=25, alpha=
 ax_depth.scatter(log_post['day'], log_post['depth'], color=post_color, s=25, alpha=0.75, label='Logged Post', zorder=2)
 ax_depth.axvline(log_date_dt, color=post_color, linestyle='-', linewidth=4.5, label='Logging Date', zorder=3)
 ax_depth.axhline(0, color='grey', alpha=0.5, label='Spill Threshold', linewidth=8)
-ax_depth.set_ylabel('Depth (m)', fontsize=20, fontweight='bold')
+ax_depth.set_ylabel('Water Level (cm)', fontsize=20, fontweight='bold')
 ax_depth.tick_params(axis='both', which='major', labelsize=16)
-ax_depth.set_yticks(np.linspace(-1.0, 1.0, 5))
+ax_depth.set_yticks(np.linspace(-100, 100, 5))
 ax_depth.legend(loc='upper left', fontsize=18, framealpha=1)
-ax_depth.set_ylim(-1.1, 1)
+ax_depth.set_ylim(-125, 75)
 ax_depth.grid(alpha=0.2)
 
 # Panel 2: Rolling LAI
@@ -202,9 +207,9 @@ print(distributions.head(10))
 # %% 5.1 Plot pre/post KDE distributions (depth on y-axis, % of days on x-axis)
 
 pre_data = distributions['pre'].dropna().values
-pre_data = pre_data + log_spill['well_to_spill'].iloc[0]
+pre_data = (pre_data + log_spill['well_to_spill'].iloc[0]) * 100
 post_data = distributions['post'].dropna().values
-post_data = post_data + log_spill['well_to_spill'].iloc[0]
+post_data = (post_data + log_spill['well_to_spill'].iloc[0]) * 100
 
 depth_grid = np.linspace(
     min(pre_data.min(), post_data.min()),
@@ -231,11 +236,11 @@ ax.axhline(pre_data.mean(), color=pre_color, linestyle=':', label="Pre Mean Dept
 ax.axhline(post_data.mean(), color=post_color, linestyle=':', label="Post Mean Depth", linewidth=4)
 
 #ax.set_xlabel('Density', fontsize=24, fontweight='bold')
-ax.set_ylabel('Modeled Depths (m)', fontsize=24, fontweight='bold')
+ax.set_ylabel('Water Levels (cm)', fontsize=24, fontweight='bold')
 ax.set_xticks([])
 ax.yaxis.set_major_locator(MaxNLocator(nbins=4))
 ax.tick_params(axis='both', which='major', labelsize=20)
-ax.legend(fontsize=24, loc="upper left", framealpha=1)
+ax.legend(fontsize=24, loc="upper right", framealpha=1)
 
 plt.tight_layout()
 plt.show()

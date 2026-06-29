@@ -8,14 +8,13 @@ import os
 import time
 
 shapefile_path = "D:/depressional_lidar/data/bradford/bradford_boundary.shp"   
-start_date = "2021-01-01"                       
+start_date = "2019-01-01"                       
 end_date   = "2025-09-10"        
 time_zone = "America/New_York"               
 drive_folder = "GEE_ERA5_EXPORTS"               
 export_scale = 11132             
 
-ee.Authenticate()  
-ee.Initialize()
+ee.Initialize(project='wetland-ditching-prelim')
 
 # %% 2.0 Read the shapefile
 

@@ -279,8 +279,8 @@ def plot_correlations_from_model(
     props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
 
     # Formatting
-    ax.set_xlabel("Reference Depth (m)", fontsize=24, fontweight='bold')
-    ax.set_ylabel("Logged Depth (m)", fontsize=24, fontweight='bold')
+    ax.set_xlabel("Reference (cm)", fontsize=24, fontweight='bold')
+    ax.set_ylabel("Logged (cm)", fontsize=24, fontweight='bold')
     ax.xaxis.set_major_locator(MaxNLocator(nbins=5))
     ax.yaxis.set_major_locator(MaxNLocator(nbins=5))
     ax.tick_params(axis='both', which='major', labelsize=18)
