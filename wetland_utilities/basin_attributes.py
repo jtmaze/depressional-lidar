@@ -508,8 +508,8 @@ class WetlandBasin:
         raw DEM elevation at that location.
 
         Uses the same sliding-window IQR-mean approach as find_deepest_point()
-        to locate the winning cell (highest IQR-mean fill depth across all 5x5
-        windows).  For the winning window the reported values are:
+        to locate the target cell (highest IQR-mean fill depth across all 5x5
+        windows).  For the target window the reported values are:
           - fill_depth_p75 : 75th percentile of fill_depth in the 5x5 window
           - dem_elevation_p25 : 25th percentile of the original DEM in the same
                                 5x5 window (mirrors _get_low_elevation())
@@ -520,7 +520,7 @@ class WetlandBasin:
         """
         fill = self.local_fill
         depth = fill.fill_depth.copy()
-        raw_dem = self.clipped_dem.dem #NOTE
+        raw_dem = self.clipped_dem.dem 
 
         rows, cols = depth.shape
         scores = np.full_like(depth, np.nan)

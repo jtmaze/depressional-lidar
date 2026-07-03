@@ -13,7 +13,7 @@ well_ts_path = f"{data_dir}/in_data/stage_data/osbs_daily_well_depth_Fall2025.cs
 # %% 2.0 Read data
 
 neon_ts = pd.read_csv(neon_ts_path)
-tgt_ids = ['lake_BARC_130', 'lake_SUGG_140'] # 'lake_SUGG_130', 'lake_BARC_140',
+tgt_ids = ['lake_BARC_130', 'lake_SUGG_140', 'lake_BARC_140', 'lake_SUGG_130'] # 'lake_SUGG_130', 'lake_BARC_140',
 
 neon_ts = neon_ts[neon_ts['wetland_id'].isin(tgt_ids)]
 neon_ts['timestamp'] = pd.to_datetime(neon_ts['timestamp'], utc=True)

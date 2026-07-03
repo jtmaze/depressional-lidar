@@ -68,9 +68,7 @@ def calc_lai_composite(collection, polygon):
     return lai_composite
 
 # %% 3.0 Create LAI map
-
 polygon = geemap.geopandas_to_ee(bradford_shapefile).geometry()
-
 # Set date range
 start_date = '2025-06-01'
 end_date = '2025-12-31'

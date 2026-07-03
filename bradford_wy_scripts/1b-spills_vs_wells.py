@@ -87,6 +87,7 @@ modal_df = pd.DataFrame(records).dropna(
 
 print(modal_df['delineated_spill_h_min'].mean())
 print(modal_df['modal_depth_delineated'].mean())
+print(modal_df['modal_depth_delineated'].std())
 # %% 3.0 2x2 panel plot (all wetlands + connectivity classes)
 
 modal_with_connect = modal_df.merge(

@@ -47,7 +47,9 @@ log_lai = read_concatonate_lai(lai_path, tgt_log, '150m_well', 5.6, 0)
 
 era5 = pd.read_csv(climate_data_path)
 era5 = era5[['date_local', 'precip_m']]
-print(era5)
+era5['date_local'] = pd.to_datetime(era5['date_local'])
+monthly_precip = era5.resample('MS', on='date_local')['precip_m'].sum().reset_index()
+monthly_precip['precip_mm'] = monthly_precip['precip_m'] * 1000
 
 # %% 2.0 Convert depth to spill depth
 
@@ -92,7 +94,7 @@ ax_depth.tick_params(axis='both', which='major', labelsize=16)
 ax_depth.set_yticks(np.linspace(-100, 100, 5))
 ax_depth.legend(loc='upper left', fontsize=18, framealpha=1)
 ax_depth.set_ylim(-125, 75)
-ax_depth.grid(alpha=0.2)
+
 
 # Panel 2: Rolling LAI
 ref_lai_plot = ref_lai.copy()
@@ -107,15 +109,22 @@ ax_lai.scatter(
     ref_lai_plot['LAI'],
     color=reference_color,
     s=25,
-    alpha=0.5,
+    alpha=0.8,
     label='Reference LAI (monthly)',
     zorder=1
 )
+# ax_lai.plot(
+#     ref_lai_plot.dropna(subset=['LAI'])['date'],
+#     ref_lai_plot.dropna(subset=['LAI'])['LAI'],
+#     color=reference_color,
+#     linewidth=1.5,
+#     alpha=0.6
+# )
 ax_lai.plot(
-    ref_lai_plot['date'],
-    ref_lai_plot['roll_yr'],
+    ref_lai_plot.dropna(subset=['roll_yr'])['date'],
+    ref_lai_plot.dropna(subset=['roll_yr'])['roll_yr'],
     color=reference_color,
-    linewidth=3,
+    linewidth=5,
     #label='Reference LAI (12-mo rolling)'
 )
 ax_lai.scatter(
@@ -123,31 +132,45 @@ ax_lai.scatter(
     log_lai_pre['LAI'],
     color=pre_color,
     s=25,
-    alpha=0.5,
+    alpha=0.8,
     label='Logged LAI pre (monthly)',
     zorder=1
 )
+# ax_lai.plot(
+#     log_lai_pre[['date', 'LAI']].dropna()['date'],
+#     log_lai_pre[['date', 'LAI']].dropna()['LAI'],
+#     color=pre_color,
+#     linewidth=1,
+#     alpha=0.6
+# )
 ax_lai.scatter(
     log_lai_post['date'],
     log_lai_post['LAI'],
     color=post_color,
     s=25,
-    alpha=0.5,
+    alpha=0.8,
     label='Logged LAI post (monthly)',
     zorder=1
 )
+# ax_lai.plot(
+#     log_lai_post[['date', 'LAI']].dropna()['date'],
+#     log_lai_post[['date', 'LAI']].dropna()['LAI'],
+#     color=post_color,
+#     linewidth=1,
+#     alpha=0.6
+# )
 ax_lai.plot(
     log_lai_pre['date'],
     log_lai_pre['roll_yr'],
     color=pre_color,
-    linewidth=3,
+    linewidth=5,
     label='Logged LAI pre (12-mo rolling)'
 )
 ax_lai.plot(
     log_lai_post['date'],
     log_lai_post['roll_yr'],
     color=post_color,
-    linewidth=3,
+    linewidth=5,
     label='Logged LAI post (12-mo rolling)'
 )
 ax_lai.axvline(log_date_dt, color=post_color, linestyle='-', linewidth=4.5)
@@ -157,7 +180,26 @@ ax_lai.tick_params(axis='x', which='major', labelsize=16)
 ax_lai.tick_params(axis='y', which='major', labelsize=16)
 ax_lai.set_yticks([1.0, 2.0, 3.0, 4.0])
 #ax_lai.legend(loc='upper right', fontsize=14, framealpha=1)
-ax_lai.grid(alpha=0.2)
+
+
+# Dual axis: monthly precip bars (inverted to show below LAI)
+ax_precip = ax_lai.twinx()
+precip_plot = monthly_precip[monthly_precip['date_local'] >= pd.to_datetime('2022-01-01')]
+ax_precip.bar(
+    precip_plot['date_local'],
+    precip_plot['precip_mm'] / 10,
+    width=25,
+    color='steelblue',
+    alpha=0.3,
+    label='Monthly Precip',
+    zorder=0
+)
+ax_precip.tick_params(axis='y', which='major', labelsize=14)
+ax_precip.set_ylim(0, 25)
+
+# Move precip label inside plot space
+# ax_precip.text(0.02, 0.10, 'Precip (cm)', fontsize=14, fontweight='bold', 
+#                bbox=dict(boxstyle='round', facecolor='white', alpha=0.7))
 
 ax_lai.xaxis.set_major_locator(mdates.YearLocator())
 ax_lai.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
@@ -232,11 +274,15 @@ ax.plot(density_pre, depth_grid, color=pre_color, linewidth=2.5)
 ax.plot(density_post, depth_grid, color=post_color, linewidth=2.5)
 
 # Add means
-ax.axhline(pre_data.mean(), color=pre_color, linestyle=':', label="Pre Mean Depth", linewidth=4)
-ax.axhline(post_data.mean(), color=post_color, linestyle=':', label="Post Mean Depth", linewidth=4)
+ax.axhline(pre_data.mean(), color=pre_color, linestyle=':', label="Pre Mean Water Level", linewidth=4)
+ax.axhline(post_data.mean(), color=post_color, linestyle=':', label="Post Mean Water Level", linewidth=4)
 
 #ax.set_xlabel('Density', fontsize=24, fontweight='bold')
-ax.set_ylabel('Water Levels (cm)', fontsize=24, fontweight='bold')
+ax.set_ylabel(
+    '$\mathbf{h}_{\mathbf{L, pre}}$ & $\mathbf{h}_{\mathbf{L, post}}$ (cm)', 
+    fontsize=30, 
+    fontweight='bold'
+)
 ax.set_xticks([])
 ax.yaxis.set_major_locator(MaxNLocator(nbins=4))
 ax.tick_params(axis='both', which='major', labelsize=20)
@@ -245,4 +291,8 @@ ax.legend(fontsize=24, loc="upper right", framealpha=1)
 plt.tight_layout()
 plt.show()
 
+print(post_data.mean() - pre_data.mean())
+
 # %%
+
+

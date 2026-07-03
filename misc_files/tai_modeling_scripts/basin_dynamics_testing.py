@@ -13,9 +13,9 @@ if PROJECT_ROOT not in sys.path:
 from wetland_utilities.basin_attributes import WetlandBasin
 from wetland_utilities.basin_dynamics import WellStageTimeseries, BasinDynamics
 
-site = 'bradford'
-tgt_wetland_id = "14_500"
-buffer_dist = 150
+site = 'osbs'
+tgt_wetland_id = "West Ford"
+buffer_dist = 45
 
 
 if site == 'bradford':

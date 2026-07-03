@@ -14,17 +14,15 @@ distributions_path = f'{data_dir}/out_data/modeled_logging_stages/hypothetical_d
 strong_wetland_pairs_path = f'{data_dir}/out_data/strong_ols_models_wetland{lai_buffer_dist}m_domain_{data_set}.csv'
 connectivity_key_path = f'{data_dir}/bradford_wetland_connect_logging_key.xlsx'
 est_spills_path = f'{data_dir}/out_data/bradford_estimated_basin_spills.csv'
-agg_shift_data_path = f'{data_dir}/out_data/modeled_logging_stages/shift_results_wetlandLAI{lai_buffer_dist}m_domain_{data_set}.csv'
-
+n_bottomed_path = f'{data_dir}/in_data/stage_data/bradford_wells_proportion_dry_days.csv'
 
 # %% 2.0 Read data and filter for strong models
 
 spills = pd.read_csv(est_spills_path)
 distributions = pd.read_csv(distributions_path)
-#distributions = distributions[distributions['log_id'] != '9_332']
 connect = pd.read_excel(connectivity_key_path)
-n_bottomed = pd.read_csv(agg_shift_data_path)
-n_bottomed = n_bottomed[['log_id', 'ref_id', 'total_obs', 'n_bottomed_out']]
+n_bottomed = pd.read_csv(n_bottomed_path)
+n_bottomed = n_bottomed[['wetland_id', 'proportion_flag2']]
 
 # Only keep strong models
 strong_pairs = pd.read_csv(strong_wetland_pairs_path)
@@ -78,15 +76,10 @@ for i in distributions['log_id'].unique():
     wetland_data['pre_adj'] = wetland_data['pre'] + well_to_bottom
     wetland_data['post_adj'] = wetland_data['post'] + well_to_bottom
 
+    not_modeled_pct = (n_bottomed[n_bottomed['wetland_id'] == i].iloc[0]['proportion_flag2']) * 100
+    
+
     for r in wetland_data['ref_id'].unique():
-
-        n_bottomed_out = n_bottomed[
-            (n_bottomed['log_id'] == i) & (n_bottomed['ref_id'] == r)
-        ].copy()
-        total_obs = n_bottomed_out['total_obs'].iloc[0]
-        inval_obs = n_bottomed_out['n_bottomed_out'].iloc[0]
-
-        not_modeled_pct = inval_obs / total_obs * 100
 
         pre_adj = wetland_data[wetland_data['ref_id'] == r]['pre_adj']
         post_adj = wetland_data[wetland_data['ref_id'] == r]['post_adj']
@@ -95,10 +88,8 @@ for i in distributions['log_id'].unique():
         post_depth_with_dry = swap_dry_days(post_adj, not_modeled_pct)
 
         pre_ptc = sum(pre_depth_with_dry > spill_depth_adj) / len(pre_adj) * 100
-        print(pre_ptc)
 
         post_ptc = sum(post_depth_with_dry > spill_depth_adj) / len(post_adj) * 100
-        print(post_ptc)
 
         d_ptc = post_ptc - pre_ptc
 

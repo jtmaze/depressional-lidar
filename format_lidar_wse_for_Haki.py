@@ -50,54 +50,54 @@ ts = (
 
 # %% 3.0 Compare the LiDAR flights to Barco and Sugg timeseries
 
-# neon_daily = (
-#     pd.read_csv(neon_lakes_path)
-#     .query("wetland_id in ['lake_BARC_140','lake_SUGG_140']")
-#     .assign(
-#         timestamp=lambda d: pd.to_datetime(d['timestamp'], utc=True),
-#         date=lambda d: d['timestamp'].dt.tz_convert(None).dt.normalize()
-#     )
-#     .groupby(['date', 'wetland_id'], as_index=False)['wse_m'].mean()
-# )
+neon_daily = (
+    pd.read_csv(neon_lakes_path)
+    .query("wetland_id in ['lake_BARC_140','lake_SUGG_140']")
+    .assign(
+        timestamp=lambda d: pd.to_datetime(d['timestamp'], utc=True),
+        date=lambda d: d['timestamp'].dt.tz_convert(None).dt.normalize()
+    )
+    .groupby(['date', 'wetland_id'], as_index=False)['wse_m'].mean()
+)
 
-# pairs = [
-#     ('lake_barco_pt1', 'lake_BARC_140', 'BARCO'),
-#     ('lake_suggs_pt1', 'lake_SUGG_140', 'SUGGS')
-# ]
+pairs = [
+    ('lake_barco_pt1', 'lake_BARC_140', 'BARCO'),
+    ('lake_suggs_pt1', 'lake_SUGG_140', 'SUGGS')
+]
 
-# plot_df = pd.concat([
-#     ts.loc[ts['wetland_id'].eq(pt), ['date', 'wse_m', 'flag']]
-#       .merge(
-#           neon_daily.loc[neon_daily['wetland_id'].eq(lake), ['date', 'wse_m']],
-#           on='date', suffixes=('_lidar', '_neon')
-#       )
-#       .assign(pair=label, diff_m=lambda d: d['wse_m_lidar'] - d['wse_m_neon'])
-#       [['pair', 'diff_m', 'flag']]
-#     for pt, lake, label in pairs
-# ], ignore_index=True)
+plot_df = pd.concat([
+    ts.loc[ts['wetland_id'].eq(pt), ['date', 'wse_m', 'flag']]
+      .merge(
+          neon_daily.loc[neon_daily['wetland_id'].eq(lake), ['date', 'wse_m']],
+          on='date', suffixes=('_lidar', '_neon')
+      )
+      .assign(pair=label, diff_m=lambda d: d['wse_m_lidar'] - d['wse_m_neon'])
+      [['pair', 'diff_m', 'flag']]
+    for pt, lake, label in pairs
+], ignore_index=True)
 
-# fig, ax = plt.subplots(figsize=(6.2, 3.8))
+fig, ax = plt.subplots(figsize=(6.2, 3.8))
 
-# for flag, color, name in [(0, 'royalblue', 'Good (>2021, flag=0)'), (1, 'crimson', 'Flagged (<2021, flag=1)')]:
-#     d = plot_df[plot_df['flag'].eq(flag)]
-#     ax.scatter(d['pair'], d['diff_m'], s=85, color=color, edgecolors='black', linewidths=0.5, label=name)
+for flag, color, name in [(0, 'royalblue', 'Good (>2021, flag=0)'), (1, 'crimson', 'Flagged (<2021, flag=1)')]:
+    d = plot_df[plot_df['flag'].eq(flag)]
+    ax.scatter(d['pair'], d['diff_m'], s=85, color=color, edgecolors='black', linewidths=0.5, label=name)
 
-# mean_qf = plot_df[plot_df['flag'].eq(0)].groupby('pair')['diff_m'].mean()
-# ax.scatter(
-#     mean_qf.index, mean_qf.values,
-#     marker='D', s=115, color='black', edgecolors='black',
-#     label='Mean (quality filtered > 2021)'
-# )
+mean_qf = plot_df[plot_df['flag'].eq(0)].groupby('pair')['diff_m'].mean()
+ax.scatter(
+    mean_qf.index, mean_qf.values,
+    marker='D', s=115, color='black', edgecolors='black',
+    label='Mean (quality filtered > 2021)'
+)
 
-# ax.axhline(0, color='gray', linestyle='--', linewidth=1)
-# ax.set_ylabel('LiDAR - NEON WSE (m)')
-# ax.set_title('LiDAR vs NEON Differences')
-# ax.grid(True, axis='y', alpha=0.25)
-# ax.margins(x=0.08)
+ax.axhline(0, color='gray', linestyle='--', linewidth=1)
+ax.set_ylabel('LiDAR - NEON WSE (m)')
+ax.set_title('LiDAR vs NEON Differences')
+ax.grid(True, axis='y', alpha=0.25)
+ax.margins(x=0.08)
 
-# ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), frameon=False, borderaxespad=0.0)
-# fig.subplots_adjust(right=0.76)
-# plt.show()
+ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), frameon=False, borderaxespad=0.0)
+fig.subplots_adjust(right=0.76)
+plt.show()
 
 # %% 4.0 Read the wetland well data
 

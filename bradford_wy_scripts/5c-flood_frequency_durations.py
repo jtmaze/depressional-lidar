@@ -23,7 +23,6 @@ distributions_path = f'{data_dir}/out_data/modeled_logging_stages/hypothetical_d
 strong_wetland_pairs_path = f'{data_dir}/out_data/strong_ols_models_wetland{lai_buffer_dist}m_domain_{data_set}.csv'
 agg_shift_data_path = f'{data_dir}/out_data/modeled_logging_stages/shift_results_wetlandLAI{lai_buffer_dist}m_domain_{data_set}.csv'
 
-
 # %% 2.0 Read and merge data 
 well_point = (
     gpd.read_file(well_points_path)[['wetland_id', 'type', 'rtk_z', 'geometry']]
@@ -62,6 +61,7 @@ plt.xlabel('Modeled portion of days (%)')
 plt.ylabel('Pair Count')
 plt.legend(framealpha=0.8)
 plt.grid(alpha=0.25)
+plt.xlim(0, 100)
 plt.tight_layout()
 plt.show()
 
@@ -80,7 +80,7 @@ for i in unique_log_ids:
         well_point_info=well_point[well_point['wetland_id'] == i],
         source_dem_path=source_dem_path,
         footprint=wetland_shapes[wetland_shapes['wetland_id'] == i],
-        transect_buffer=10 
+        transect_buffer=0
     )
     hyp = basin.calculate_hypsometry(method='total_cdf')
     hypsometry = pd.DataFrame({
@@ -125,13 +125,14 @@ for i in unique_log_ids:
     def swap_dry_days(depths, not_modeled_pct):
         """Replace random values with -1.5 based on proportion of dry days"""
         swap_depths = depths.copy().to_numpy()
-        proportion = not_modeled_pct / 100
+        # proportion = not_modeled_pct / 100
 
-        n_to_swap = int(len(depths) * proportion)
+        # n_to_swap = int(len(depths) * proportion)
+        # print(n_to_swap)
 
-        if n_to_swap > 0:
-            swap_idx = np.random.choice(len(depths), size=n_to_swap, replace=False)
-            swap_depths[swap_idx] = -1.5 # NOTE this values is arbitrary, but far below DEM elevations
+        # if n_to_swap > 0:
+        #     swap_idx = np.random.choice(len(depths), size=n_to_swap, replace=False)
+        #     swap_depths[swap_idx] = -1.5 # NOTE this values is arbitrary, but far below DEM elevations
 
         return swap_depths
 
@@ -141,6 +142,7 @@ for i in unique_log_ids:
         ref_well_dist = well_dist[well_dist['ref_id'] == r]
         modeled_pct = ref_well_dist['modeled_pct'].iloc[0]
         not_modeled = 100 - modeled_pct
+        print(not_modeled)
 
         pre_depths = ref_well_dist['pre']
         pre_depths_with_dry = swap_dry_days(pre_depths, not_modeled)
@@ -196,90 +198,8 @@ inundate_freq = inundate_freq.merge(
 )
 hypsometry_data = pd.concat(hypsometry_data, ignore_index=True)
 
-# %% 4.0 Boxplot with points for each logged wetland's inter-decile range in hypsometry
 
-summary_elevations = hypsometry_data.groupby(['wetland_id']).agg(
-    pct10_elev=('elevation', lambda x: np.percentile(x, 10)),
-    pct90_elev=('elevation', lambda x: np.percentile(x, 90))
-).reset_index()
-summary_elevations['interdecile_range'] = summary_elevations['pct90_elev'] - summary_elevations['pct10_elev']
-
-summary_elevations = summary_elevations.merge(connect, on='wetland_id', how='left')
-
-connect_order = ['giw', 'first order', 'flow-through']
-connect_colors = {
-    'giw': '#1B7F79',
-    'first order': '#6C5B7B',
-    'flow-through': '#C46A1A'
-}
-
-idr_data = [
-    summary_elevations.loc[
-        summary_elevations['connectivity'] == conn,
-        'interdecile_range'
-    ].dropna().values * 100
-    for conn in connect_order
-]
-
-fig, ax = plt.subplots(figsize=(8, 6))
-box = ax.boxplot(
-    idr_data,
-    labels=['Unconnected', 'Ditch connected', 'Flow-through connected'],
-    patch_artist=True,
-    widths=0.55,
-    showfliers=False
-)
-
-for patch, conn in zip(box['boxes'], connect_order):
-    patch.set_facecolor(connect_colors[conn])
-    patch.set_alpha(0.65)
-
-for median in box['medians']:
-    median.set_color('black')
-    median.set_linewidth(2)
-
-for idx, conn in enumerate(connect_order, start=1):
-    class_data = summary_elevations.loc[
-        summary_elevations['connectivity'] == conn,
-        ['wetland_id', 'interdecile_range']
-    ].dropna(subset=['interdecile_range'])
-
-    x_jitter = np.random.normal(loc=idx, scale=0.05, size=len(class_data))
-    ax.scatter(
-        x_jitter,
-        class_data['interdecile_range'].values * 100,
-        color=connect_colors[conn],
-        edgecolor='white',
-        linewidth=0.6,
-        alpha=0.8,
-        s=45,
-        zorder=3
-    )
-    for x_val, y_val, wetland_id in zip(x_jitter, class_data['interdecile_range'].values * 100, class_data['wetland_id'].values):
-        ax.annotate(
-            str(wetland_id),
-            (x_val, y_val),
-            textcoords='offset points',
-            xytext=(4, 3),
-            fontsize=7,
-            alpha=0.9,
-            zorder=4
-        )
-
-ax.set_ylabel('Hypsometry interdecile range (cm)', fontsize=12)
-ax.set_xlabel('Connectivity', fontsize=12)
-ax.grid(axis='y', alpha=0.25)
-plt.tight_layout()
-plt.show()
-
-# Mean and standard deviation for all wetland's interdecile range
-idr_vals = summary_elevations['interdecile_range'].dropna() * 100
-mean_idr = idr_vals.mean()
-std_idr = idr_vals.std()
-print(f"Mean interdecile range (cm): {mean_idr:.2f}")
-print(f"SD interdecile range (cm): {std_idr:.2f}")
-
-# %% %% 5.0 Q-Q plot pre versus post by connectivity
+# %% %% 4.0 Q-Q plot pre versus post by connectivity
 
 unique_log_ids = strong_pairs['log_id'].unique()
 unique_ref_ids = strong_pairs['ref_id'].unique()
@@ -306,7 +226,7 @@ def mean_pre_post_curves(df):
         'delta': post_mean - pre_mean
     })
 
-# %% 5.1 Render the plot
+# %% 4.1 Render the plot
 
 connectivity_config = {
     'first order': {'color': '#6C5B7B', 'label': 'Ditch connected'},
@@ -371,7 +291,7 @@ ax.tick_params(axis='both', which='major', labelsize=18)
 plt.tight_layout()
 plt.show()
 
-# %% 6.0 Generate curves for descriptive statistics
+# %% 5.0 Generate curves for descriptive statistics
 
 full_q_q = mean_pre_post_curves(inundate_freq)
 
@@ -384,7 +304,7 @@ for i in unique_log_ids:
 log_wetland_curves = pd.concat(log_wetland_curves, ignore_index=True)
 
 
-# %% 7.0 Print some statistics for general dataset
+# %% 6.0 Print some statistics for general dataset
 
 print(full_q_q[full_q_q['probability'] == 0.5])
 
@@ -404,7 +324,7 @@ log_wetland_curves = log_wetland_curves.merge(
     how='left'
 ) 
 
-# %% 8.0 Print statistics for the different wetland connectivity classes
+# %% 7.0 Print statistics for the different wetland connectivity classes
 
 for conn in log_wetland_curves['connectivity'].dropna().unique():
     subset = log_wetland_curves[

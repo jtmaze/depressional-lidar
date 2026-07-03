@@ -9,7 +9,7 @@ import time
 
 shapefile_path = "D:/depressional_lidar/data/bradford/bradford_boundary.shp"   
 start_date = "2019-01-01"                       
-end_date   = "2025-09-10"        
+end_date   = "2025-12-31"        
 time_zone = "America/New_York"               
 drive_folder = "GEE_ERA5_EXPORTS"               
 export_scale = 11132             
