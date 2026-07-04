@@ -1,5 +1,6 @@
 # %% 1.0 Libraries and file paths
 
+import itertools
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,6 +12,8 @@ est_spills_path = f"{data_dir}/out_data/bradford_estimated_basin_spills.csv"
 well_data_path = f"{data_dir}/in_data/stage_data/bradford_daily_well_depth_Winter2025.csv"
 connectivity_path = f"{data_dir}/bradford_wetland_connect_logging_key.xlsx"
 hypsometry_path = f"{data_dir}/out_data/bradford_hypsometry_curves.csv"
+
+era5_path = f'{data_dir}/in_data/hydro_forcings_and_LAI/ERA5LAND_daily_mean.csv'
 
 est_spills = pd.read_csv(est_spills_path)
 est_spills = est_spills[['wetland_id', 'well_elev']]
@@ -94,7 +97,6 @@ well_data['inundated_area_scaled'] = np.where(
 )
 
 well_data = well_data.drop(columns=['hyps_wse_min', 'hyps_wse_max'])
-print(well_data)
 
 del above_max, below_min
 
@@ -118,7 +120,6 @@ cv_summary['cv_scaled'] = np.where(
 )
 
 cv_summary = cv_summary.merge(connect, on='wetland_id', how='left')
-print(cv_summary.sort_values('cv_scaled', ascending=False))
 
 connectivity_config = {
     "first order": {"color": "#6C5B7B", "label": "Ditch connected"},
@@ -165,7 +166,125 @@ ax.grid(axis='y', alpha=0.25)
 plt.tight_layout()
 plt.show()
 
-# %% 4.0 Plot inundated area scaled timeseries for target wetland IDs
+print(cv_summary['cv_scaled'].mean() * 100)
+print(cv_summary['cv_scaled'].std() * 100)
+
+# %% 4.0 Investigate inundated area and water level correlations
+
+# %% 4.1 Inundated area correlations
+ids = well_data['wetland_id'].unique()
+
+pairs = list(itertools.combinations(ids, 2))
+print(pairs)
+from scipy.stats import pearsonr
+
+correlations = []
+for w1, w2 in pairs:
+    ts1 = (
+        well_data.loc[well_data['wetland_id'] == w1, ['date', 'inundated_area_scaled']]
+        .set_index('date')
+        .rename(columns={'inundated_area_scaled': 'w1'})
+    )
+    ts2 = (
+        well_data.loc[well_data['wetland_id'] == w2, ['date', 'inundated_area_scaled']]
+        .set_index('date')
+        .rename(columns={'inundated_area_scaled': 'w2'})
+    )
+    merged = ts1.join(ts2, how='inner').dropna()
+
+    r, p = pearsonr(merged['w1'], merged['w2'])
+    correlations.append({'w1': w1, 'w2': w2, 'r': r, 'p': p})
+
+corr_df = pd.DataFrame(correlations)
+print(f"Mean Pearson's r:   {corr_df['r'].mean():.3f}")
+print(f"Median Pearson's r: {corr_df['r'].median():.3f}")
+print(corr_df.sort_values('r', ascending=False).to_string())
+
+fig, ax = plt.subplots(figsize=(10, 5))
+mean_r = corr_df['r'].mean()
+ax.hist(corr_df['r'], bins=30, color='gray', edgecolor='black', alpha=0.7)
+ax.axvline(mean_r, color='red', linestyle='--', linewidth=2, label=f"Mean r = {mean_r:.3f}")
+ax.set_xlabel("Pearson's r", fontsize=11)
+ax.set_ylabel('Pair count', fontsize=11)
+ax.grid(alpha=0.25, axis='y')
+ax.legend(frameon=False)
+plt.tight_layout()
+plt.show()
+
+# %% 4.2 Water level correlations
+
+correlations_wse = []
+for w1, w2 in pairs:
+    well_data = well_data[~well_data['flag'].isin([1, 2])]
+    ts1 = (
+        well_data.loc[well_data['wetland_id'] == w1, ['date', 'well_depth_m']]
+        .set_index('date')
+        .rename(columns={'well_depth_m': 'w1'})
+    )
+    ts2 = (
+        well_data.loc[well_data['wetland_id'] == w2, ['date', 'well_depth_m']]
+        .set_index('date')
+        .rename(columns={'well_depth_m': 'w2'})
+    )
+    merged = ts1.join(ts2, how='inner').dropna()
+    r, p = pearsonr(merged['w1'], merged['w2'])
+    correlations_wse.append({'w1': w1, 'w2': w2, 'r': r, 'p': p, 'n': len(merged)})
+
+corr_wse_df = pd.DataFrame(correlations_wse)
+print(f"Mean Pearson's r (WSE):   {corr_wse_df['r'].mean():.3f}")
+print(f"Median Pearson's r (WSE): {corr_wse_df['r'].median():.3f}")
+print(corr_wse_df.sort_values('r', ascending=False).to_string())
+
+fig, ax = plt.subplots(figsize=(10, 5))
+mean_r_wse = corr_wse_df['r'].mean()
+ax.hist(corr_wse_df['r'], bins=30, color='gray', edgecolor='black', alpha=0.7)
+ax.axvline(mean_r_wse, color='red', linestyle='--', linewidth=2, label=f"Mean r = {mean_r_wse:.3f}")
+ax.set_xlabel("Pearson's r", fontsize=11)
+ax.set_ylabel('Pair count', fontsize=11)
+ax.set_title("Water depth correlations between wetlands", fontsize=12, fontweight='bold')
+ax.grid(alpha=0.25, axis='y')
+ax.legend(frameon=False)
+plt.tight_layout()
+plt.show()
+
+# %% 5.0 Compare the mean inundated fraction across water years. 
+
+water_years = {
+    'WY2022': ('2021-10-01', '2022-09-30'),
+    'WY2023': ('2022-10-01', '2023-09-30'),
+    'WY2024': ('2023-10-01', '2024-09-30'),
+    'WY2025': ('2024-10-01', '2025-09-30'),
+}
+era5_data = pd.read_csv(era5_path)
+era5_data = era5_data[['date_local', 'precip_m', 'pet_m']]
+era5_data['date_local'] = pd.to_datetime(era5_data['date_local'])
+
+wy_results = []
+for wy_name, (start_date, end_date) in water_years.items():
+
+    mask = (well_data['date'] >= start_date) & (well_data['date'] <= end_date)
+    wy_data = well_data.loc[mask]
+    mean_inund = wy_data['inundated_area_scaled'].mean()
+
+    era5_mask = (era5_data['date_local'] >= start_date) & (era5_data['date_local'] <= end_date)
+    era5_wy = era5_data.loc[era5_mask]
+    
+    total_precip = era5_wy['precip_m'].sum()
+    total_pet = era5_wy['pet_m'].sum()
+    
+    wy_results.append({
+        'Water Year': wy_name,
+        'Start Date': start_date,
+        'End Date': end_date,
+        'Mean Inundated Fraction': mean_inund,
+        'Total Precip (m)': total_precip,
+        'Total PET (m)': total_pet,
+    })
+
+wy_summary = pd.DataFrame(wy_results)
+print(wy_summary.to_string(index=False))
+
+# %% 5.0 Plot inundated area scaled timeseries for target wetland IDs
 
 # Define target wetland IDs to visualize inundation timeseries
 tgt_ids = ['6_629', '9_609']
@@ -203,7 +322,7 @@ for wid in tgt_ids:
     plt.tight_layout()
     plt.show()
 
-# %% 5.0 Every inundated fraction timeseries colored by connectivity class. 
+# %% 6.0 Every inundated fraction timeseries colored by connectivity class. 
 
 plot_df = (
     well_data[['date', 'wetland_id', 'inundated_area_scaled']]
@@ -247,12 +366,13 @@ for c in connect_order:
 ax.set_ylabel('Inundated fraction (0-1)', fontsize=12)
 ax.set_xlabel('Date', fontsize=12)
 ax.set_ylim(0, 1)
+ax.set_xlim(pd.Timestamp("2021-10-01"), pd.Timestamp("2026-01-01"))
 ax.grid(alpha=0.25)
 fig.autofmt_xdate()
 plt.tight_layout()
 plt.show()
 
-# %% 6.0 Boxplot for proportion of days with over 25% flooded area
+# %% 7.0 Boxplot for proportion of days with over 25% flooded area
 
 flooded_25_summary = (
     well_data.groupby('wetland_id', as_index=False)['inundated_area_scaled']
@@ -318,7 +438,7 @@ plt.tight_layout()
 plt.ylim(0, 100)
 plt.show()
 
-# %% 7.0 Boxplot for mean inundated fraction
+# %% 8.0 Boxplot for mean inundated fraction
 
 mean_inund_summary = (
     well_data.groupby('wetland_id', as_index=False)['inundated_area_scaled']
@@ -384,7 +504,7 @@ plt.tight_layout()
 plt.ylim(0, 100)
 plt.show()
 
-# %% 8.0 Summary stats on mean inundated fractions
+# %% 9.0 Summary stats on mean inundated fractions
 
 stats_rows = []
 for c in connect_order:
@@ -407,7 +527,7 @@ print(summary_stats)
 print(mean_inund_summary['mean_inundated_fraction'].mean())
 print(mean_inund_summary['mean_inundated_fraction'].std())
 
-# %% 8.1 1-way ANOVA on Connectivity for mean inundated fraction
+# %% 9.1 1-way ANOVA on Connectivity for mean inundated fraction
 
 anova_groups = [
     mean_inund_summary.loc[

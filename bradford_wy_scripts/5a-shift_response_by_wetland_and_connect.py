@@ -55,6 +55,13 @@ print("Mean depth increase:", shift_data['mean_depth_change'].mean())
 print("Standard deviation:", shift_data['mean_depth_change'].std())
 print("p value:", p_val)
 
+# Calculate 95% confidence interval for mean depth increase
+mean_depth = shift_data['mean_depth_change'].mean()
+n = shift_data['mean_depth_change'].notna().sum()
+sem = stats.sem(shift_data['mean_depth_change'], nan_policy='omit')
+ci = stats.t.interval(0.95, n-1, loc=mean_depth, scale=sem)
+print(f"95% Confidence Interval: ({ci[0]:.4f}, {ci[1]:.4f})")
+
 plot_data = shift_data[
     (shift_data['model_type'] == 'OLS') &
     (shift_data['data_set'] == data_set)

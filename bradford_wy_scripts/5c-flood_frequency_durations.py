@@ -15,10 +15,14 @@ data_set = 'no_dry_days'
 lai_buffer_dist = 150
 
 data_dir = "D:/depressional_lidar/data/bradford/"
+
 source_dem_path = f'{data_dir}/in_data/bradford_DEM_cleaned_USGS.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 wetland_shapes_path = f'{data_dir}/out_data/bradford_tgt_wetlands.shp'
+
 connectivity_key_path = f'{data_dir}bradford_wetland_connect_logging_key.xlsx'
+well_dry_days_path = f'{data_dir}/in_data/stage_data/bradford_wells_proportion_dry_days.csv'
+
 distributions_path = f'{data_dir}/out_data/modeled_logging_stages/hypothetical_distributions_wetlandLAI{lai_buffer_dist}m_domain_{data_set}.csv'
 strong_wetland_pairs_path = f'{data_dir}/out_data/strong_ols_models_wetland{lai_buffer_dist}m_domain_{data_set}.csv'
 agg_shift_data_path = f'{data_dir}/out_data/modeled_logging_stages/shift_results_wetlandLAI{lai_buffer_dist}m_domain_{data_set}.csv'
@@ -42,30 +46,75 @@ distributions = distributions.merge(
     how='inner'
 )
 
-# For tracking omitted low days
-dry_days = pd.read_csv(agg_shift_data_path)
-dry_days = dry_days[['log_id', 'ref_id', 'total_obs', 'n_bottomed_out', 'initial_domain_days', 'filtered_domain_days']] 
-dry_days['modeled_pct'] = (1 - (dry_days['n_bottomed_out'] / dry_days['total_obs'])) * 100
+# %% 3.0 Inspect dry day counts from models and well data
 
-distributions = distributions.merge(
-    dry_days[['log_id', 'ref_id', 'modeled_pct']],
-    on=['log_id', 'ref_id'],
-    how='inner'
-)
+# dry_days = pd.read_csv(agg_shift_data_path)
+# dry_days = dry_days[['log_id', 'ref_id', 'total_obs', 'n_bottomed_out', 'initial_domain_days', 'filtered_domain_days']] 
+# dry_days['modeled_pct'] = (1 - (dry_days['n_bottomed_out'] / dry_days['total_obs'])) * 100
 
-plt.figure(figsize=(6, 4))
-vals = distributions['modeled_pct'].unique()
-plt.hist(vals, bins=20, color='gray', edgecolor='black', alpha=0.8)
-plt.axvline(vals.mean(), color='red', linestyle='--', linewidth=1.5, label=f'Mean = {vals.mean():.1f}%')
-plt.xlabel('Modeled portion of days (%)')
-plt.ylabel('Pair Count')
-plt.legend(framealpha=0.8)
-plt.grid(alpha=0.25)
-plt.xlim(0, 100)
-plt.tight_layout()
-plt.show()
+# plt.figure(figsize=(6, 4))
+# vals = distributions['modeled_pct'].unique()
+# plt.hist(vals, bins=20, color='gray', edgecolor='black', alpha=0.8)
+# plt.axvline(vals.mean(), color='red', linestyle='--', linewidth=1.5, label=f'Mean = {vals.mean():.1f}%')
+# plt.xlabel('Modeled portion of days (%)')
+# plt.ylabel('Pair Count')
+# plt.legend(framealpha=0.8)
+# plt.grid(alpha=0.25)
+# plt.xlim(0, 100)
+# plt.tight_layout()
+# plt.show()
+
+well_dry_days = pd.read_csv(well_dry_days_path)
 
 # %% 3.0 Calculate the flood frequency curve for each basin
+
+# %% 3.1 Helper functions
+
+def calc_exceedance_curve(model_well_depths, hypsometry):
+
+    hypsometry_sorted = hypsometry.sort_values('depth_rel_well')
+    hyp_depths = hypsometry_sorted['depth_rel_well'].values
+    hyp_areas = hypsometry_sorted['rel_area'].values
+
+    model_well_depths = np.round(model_well_depths, decimals=3)
+    sorted_depths = np.sort(model_well_depths)[::-1]
+    n = len(sorted_depths)
+
+    # Weibull plotting postion rank / (n + 1)
+    probs = np.arange(1, n + 1) / (n + 1)
+
+    inundated_fracs = np.interp(
+        sorted_depths,
+        hyp_depths,
+        hyp_areas,
+        left=0,
+        right=hyp_areas.max()
+    )
+
+    scaled_depths = sorted_depths / (sorted_depths.max() - sorted_depths.min())
+
+    return pd.DataFrame(
+        {'probability': probs,
+            'depth': sorted_depths,
+            'depth_scaled': scaled_depths,
+            'inundated_fraction': inundated_fracs}
+    )
+
+def swap_dry_days(depths, not_modeled_pct):
+    """Replace random values with -1.5 based on proportion of dry days"""
+    swap_depths = depths.copy().to_numpy()
+    proportion = not_modeled_pct / 100
+
+    n_to_swap = int(len(depths) * proportion)
+    print(n_to_swap)
+
+    if n_to_swap > 0:
+        swap_idx = np.random.choice(len(depths), size=n_to_swap, replace=False)
+        swap_depths[swap_idx] = -1.5 # NOTE this values is arbitrary, but far below DEM elevations
+
+    return swap_depths
+
+# %% 3.2 Run the calculations. 
 
 unique_log_ids = distributions['log_id'].unique()
 fd_results = []
@@ -91,58 +140,13 @@ for i in unique_log_ids:
     hypsometry['rel_area'] = (hypsometry['area'] / hypsometry['area'].max()).round(3)
     hypsometry_data.append(hypsometry.assign(wetland_id=i))
 
-
-    def calc_exceedance_curve(model_well_depths, hypsometry):
-
-        hypsometry_sorted = hypsometry.sort_values('depth_rel_well')
-        hyp_depths = hypsometry_sorted['depth_rel_well'].values
-        hyp_areas = hypsometry_sorted['rel_area'].values
-
-        model_well_depths = np.round(model_well_depths, decimals=3)
-        sorted_depths = np.sort(model_well_depths)[::-1]
-        n = len(sorted_depths)
-
-        # Weibull plotting postion rank / (n + 1)
-        probs = np.arange(1, n + 1) / (n + 1)
-
-        inundated_fracs = np.interp(
-            sorted_depths,
-            hyp_depths,
-            hyp_areas,
-            left=0,
-            right=hyp_areas.max()
-        )
-
-        scaled_depths = sorted_depths / (sorted_depths.max() - sorted_depths.min())
-
-        return pd.DataFrame(
-            {'probability': probs,
-             'depth': sorted_depths,
-             'depth_scaled': scaled_depths,
-             'inundated_fraction': inundated_fracs}
-        )
-    
-    def swap_dry_days(depths, not_modeled_pct):
-        """Replace random values with -1.5 based on proportion of dry days"""
-        swap_depths = depths.copy().to_numpy()
-        # proportion = not_modeled_pct / 100
-
-        # n_to_swap = int(len(depths) * proportion)
-        # print(n_to_swap)
-
-        # if n_to_swap > 0:
-        #     swap_idx = np.random.choice(len(depths), size=n_to_swap, replace=False)
-        #     swap_depths[swap_idx] = -1.5 # NOTE this values is arbitrary, but far below DEM elevations
-
-        return swap_depths
+    not_modeled = (well_dry_days[well_dry_days['wetland_id'] == i].iloc[0]['proportion_flag2']) * 100
+    print(not_modeled)
 
     log_valid_refs = well_dist['ref_id'].unique()
     for r in log_valid_refs:
         
         ref_well_dist = well_dist[well_dist['ref_id'] == r]
-        modeled_pct = ref_well_dist['modeled_pct'].iloc[0]
-        not_modeled = 100 - modeled_pct
-        print(not_modeled)
 
         pre_depths = ref_well_dist['pre']
         pre_depths_with_dry = swap_dry_days(pre_depths, not_modeled)
@@ -206,7 +210,7 @@ unique_ref_ids = strong_pairs['ref_id'].unique()
 
 
 def mean_pre_post_curves(df):
-    prob_bins = np.linspace(0.02, 0.98, 49)
+    prob_bins = np.linspace(0.02, 0.98, 49) #NOTE need to teak these
     pre_curves = []
     post_curves = []
 
@@ -302,7 +306,6 @@ for i in unique_log_ids:
     log_wetland_curves.append(mean_pre_post_curves(subset).assign(log_id=i))
 
 log_wetland_curves = pd.concat(log_wetland_curves, ignore_index=True)
-
 
 # %% 6.0 Print some statistics for general dataset
 

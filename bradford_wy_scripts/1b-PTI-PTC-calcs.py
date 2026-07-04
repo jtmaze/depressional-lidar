@@ -177,7 +177,7 @@ print(inundated_summary['proportion_inundated'].mean())
 print(inundated_summary['proportion_inundated'].std())
 # %% 8.0 Calculate PTC for each wetland_id
 
-well_data['connected'] = well_data['wse'] > (well_data['max_fill_elev'] + 0.15)
+well_data['connected'] = well_data['wse'] > (well_data['max_fill_elev'] + 0.15) # NOTE: Adjust spill elevation offset here.
 
 ptc_summary = (
     well_data.groupby(['wetland_id', 'connectivity'])['connected']
@@ -201,7 +201,7 @@ ptc_data = [
     for c in connect_order
 ]
 
-fig, ax = plt.subplots(figsize=(8, 6))
+fig, ax = plt.subplots(figsize=(8, 8))
 box = ax.boxplot(
     ptc_data,
     tick_labels=connect_labels,
@@ -223,11 +223,12 @@ for i, c in enumerate(connect_order, start=1):
     vals = class_data['ptc'].dropna().values * 100
     x = np.random.normal(i, 0.05, size=len(vals))
     ax.scatter(x, vals, color=connectivity_config[c]['color'], edgecolor='white', linewidth=0.6, alpha=0.8, s=45, zorder=3)
-    for x_val, y_val, wid in zip(x, vals, class_data['wetland_id'].dropna().values):
-        ax.annotate(str(wid), (x_val, y_val), textcoords='offset points', xytext=(4, 3), fontsize=7, alpha=0.9, zorder=4)
+    # for x_val, y_val, wid in zip(x, vals, class_data['wetland_id'].dropna().values):
+    #     ax.annotate(str(wid), (x_val, y_val), textcoords='offset points', xytext=(4, 3), fontsize=7, alpha=0.9, zorder=4)
 
-ax.set_ylabel('PTC (%)', fontsize=12)
-ax.set_xlabel('Connectivity', fontsize=12)
+ax.set_ylabel('PTC (%)', fontsize=15)
+ax.tick_params(axis='x', rotation=20, labelsize=15)
+ax.tick_params(axis='y', labelsize=12)
 ax.grid(axis='y', alpha=0.25)
 plt.ylim(0, 100)
 plt.tight_layout()
@@ -250,8 +251,8 @@ for c in connect_order:
 summary_stats = pd.DataFrame(stats_rows)
 print(summary_stats)
 
-print(ptc_summary['ptc'].mean())
-print(ptc_summary['ptc'].std())
+print(f"Mean PTC: {ptc_summary['ptc'].mean() * 100:.1f}%")
+print(f"SD PTC: {ptc_summary['ptc'].std() * 100 :.1f}%")
 
 # %% 11.0 1-way ANOVA on Connectivity for each class
 

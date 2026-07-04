@@ -48,9 +48,9 @@ distributions = distributions.merge(
 # %% 2.1 Adjust the distributions so that well data is relative to spill depth
 
 spills = spills[['wetland_id', 'well_elev', 'max_fill_delineated', 'max_fill_elev']]
-spills['well_to_spill'] = spills['well_elev'] - spills['max_fill_elev']
+spills['well_to_spill'] = spills['well_elev'] - (spills['max_fill_elev'] + 0.15) # NOTE: Added adjustment for the Spill here
 spills = spills[['wetland_id', 'well_to_spill']]
-print(spills)
+
 
 distributions = distributions.merge(
     spills,
@@ -66,41 +66,41 @@ distributions_clean = distributions.copy()
 
 # %% 3.0 Simple histogram
 
-fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+# fig, ax = plt.subplots(1, 1, figsize=(10, 5))
 
-pre_data = distributions_clean['pre_adj']
-post_data = distributions_clean['post_adj']
+# pre_data = distributions_clean['pre_adj']
+# post_data = distributions_clean['post_adj']
 
-# Create histograms with normalized counts (% of days)
+# # Create histograms with normalized counts (% of days)
 
-bins = 50
-bin_edges = np.linspace(-1.5, 1, bins + 1)
+# bins = 50
+# bin_edges = np.linspace(-1.5, 1, bins + 1)
 
-ax.hist(pre_data, bins=bin_edges, alpha=0.8, color='#333333', 
-        edgecolor='black', linewidth=0.5,
-        weights=np.ones(len(pre_data)) / len(pre_data) * 100,
-        label='Pre-logging')
-ax.hist(post_data, bins=bin_edges, alpha=0.8, color='#E69F00',
-        edgecolor='black', linewidth=0.5,
-        weights=np.ones(len(post_data)) / len(post_data) * 100,
-        label='Post-logging')
+# ax.hist(pre_data, bins=bin_edges, alpha=0.8, color='#333333', 
+#         edgecolor='black', linewidth=0.5,
+#         weights=np.ones(len(pre_data)) / len(pre_data) * 100,
+#         label='Pre-logging')
+# ax.hist(post_data, bins=bin_edges, alpha=0.8, color='#E69F00',
+#         edgecolor='black', linewidth=0.5,
+#         weights=np.ones(len(post_data)) / len(post_data) * 100,
+#         label='Post-logging')
 
-ax.axvline(pre_data.mean(), color='#333333', linestyle='--', linewidth=2, 
-           label=f'Pre mean: {pre_data.mean():.2f}m')
-ax.axvline(post_data.mean(), color='#E69F00', linestyle='--', linewidth=2,
-           label=f'Post mean: {post_data.mean():.2f}m')
+# ax.axvline(pre_data.mean(), color='#333333', linestyle='--', linewidth=2, 
+#            label=f'Pre mean: {pre_data.mean():.2f}m')
+# ax.axvline(post_data.mean(), color='#E69F00', linestyle='--', linewidth=2,
+#            label=f'Post mean: {post_data.mean():.2f}m')
 
-# Formatting
-ax.set_title('Aggregate Spill-Adjusted Well Depth Distributions (all ids)', 
-             fontsize=16, fontweight='bold')
-ax.set_xlabel('Depth Relative to Spill [m]', fontsize=14)
-ax.set_ylabel('% of Days', fontsize=14)
-ax.legend(loc='upper left', fontsize=12)
-ax.tick_params(axis='both', labelsize=12)
+# # Formatting
+# ax.set_title('Aggregate Spill-Adjusted Well Depth Distributions (all ids)', 
+#              fontsize=16, fontweight='bold')
+# ax.set_xlabel('Depth Relative to Spill [m]', fontsize=14)
+# ax.set_ylabel('% of Days', fontsize=14)
+# ax.legend(loc='upper left', fontsize=12)
+# ax.tick_params(axis='both', labelsize=12)
 
-plt.tight_layout()
-plt.xlim(-1, 1)
-plt.show()
+# plt.tight_layout()
+# plt.xlim(-1, 1)
+# plt.show()
 
 # %% 4.0 Q-Q plot for all wells independent of connectivity class. 
 
@@ -193,14 +193,14 @@ for conn_class in draw_order:
 
     diff = post_q - pre_q
 
-    idx_neg05 = np.argmin(np.abs(pre_q - (-0.5)))
+    idx_neg05 = np.argmin(np.abs(pre_q - (-50)))
     idx_spill = np.argmin(np.abs(pre_q - 0.0))
 
     print(conn_class)
-    print(f"Quantile difference at pre = -0.5m: {diff[idx_neg05]:.3f} m  "
-        f"(pre={pre_q[idx_neg05]:.3f}, post={post_q[idx_neg05]:.3f})")
-    print(f"Quantile difference at pre =  0.0m: {diff[idx_spill]:.3f} m  "
-        f"(pre={pre_q[idx_spill]:.3f}, post={post_q[idx_spill]:.3f})")
+    print(f"Quantile difference at pre = -0.5m: {diff[idx_neg05]:.3f} cm  "
+        f"(pre={pre_q[idx_neg05]:.3f} cm, post={post_q[idx_neg05]:.3f} cm)")
+    print(f"Quantile difference at pre =  0.0m: {diff[idx_spill]:.3f} cm  "
+        f"(pre={pre_q[idx_spill]:.3f} cm, post={post_q[idx_spill]:.3f} cm)")
 
     ax.scatter(pre_q, post_q, alpha=1, s=30,
                     color=config['color'], label=config['label'], zorder=4)

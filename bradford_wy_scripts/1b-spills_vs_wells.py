@@ -108,12 +108,12 @@ plot_df["connectivity_key"] = plot_df["connectivity"].astype(str).str.strip().st
 
 global_vals = np.concatenate(
     [
-        modal_df["delineated_spill_h_min"].to_numpy(dtype=float),
-        modal_df["modal_depth_delineated"].to_numpy(dtype=float),
+        modal_df["delineated_spill_h_min"].to_numpy(dtype=float) * 100,
+        modal_df["modal_depth_delineated"].to_numpy(dtype=float) * 100,
     ]
 )
 
-lim = (global_vals.min() - 0.05, global_vals.max() + 0.05)
+lim = (global_vals.min() - 5, global_vals.max() + 5)
 
 fig, axes = plt.subplots(2, 2, figsize=(12, 10), sharex=True, sharey=True)
 axes = axes.flatten()
@@ -135,8 +135,8 @@ for ax, (panel_kind, key, cfg) in zip(axes, panel_order):
         color = cfg["color"]
         panel_label = cfg["label"]
 
-    x = class_df["delineated_spill_h_min"].to_numpy(dtype=float)
-    y = class_df["modal_depth_delineated"].to_numpy(dtype=float)
+    x = class_df["delineated_spill_h_min"].to_numpy(dtype=float) * 100
+    y = class_df["modal_depth_delineated"].to_numpy(dtype=float) * 100
 
     ax.scatter(
         x,
@@ -151,15 +151,15 @@ for ax, (panel_kind, key, cfg) in zip(axes, panel_order):
         label=panel_label,
     )
 
-    if panel_kind == "class":
-        for xi, yi, wid in zip(x, y, class_df["wetland_id"].values):
-            ax.annotate(
-                str(wid),
-                (xi, yi),
-                textcoords="offset points",
-                xytext=(4, 4),
-                fontsize=8,
-            )
+    # if panel_kind == "class":
+    #     for xi, yi, wid in zip(x, y, class_df["wetland_id"].values):
+    #         ax.annotate(
+    #             str(wid),
+    #             (xi, yi),
+    #             textcoords="offset points",
+    #             xytext=(4, 4),
+    #             fontsize=8,
+    #         )
 
     mask = np.isfinite(x) & np.isfinite(y)
 
@@ -282,8 +282,8 @@ for label, vals in zip(series_labels, series):
     print(f"{label}: mean={mean:.3f}, sd={std:.3f}, n={len(vals)}")
 
 # Ditched diff = 15 cm
-# Unditched diff = 10 cm
-# Flow-through diff = 19 cm
+# Unditched diff = 11 cm
+# Flow-through diff = 18 cm
 
 # %% 4.2 Run an ANOVA to see if modal water depths and estimated spills are different between classes
 
