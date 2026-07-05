@@ -3,12 +3,12 @@
 import ee 
 import geemap
 import geopandas as gpd
-import pandas as pd
 
-ee.Authenticate()
-ee.Initialize()
+ee.Initialize(project='wetland-ditching-prelim')
 
 bradford_shapefile = gpd.read_file("D:/depressional_lidar/data/bradford/bradford_boundary.shp")
+bradford_shapefile = bradford_shapefile.buffer(2_500)
+print(bradford_shapefile)
 bradford_shapefile = bradford_shapefile.to_crs(epsg=4326)
 
 # %% 2.0 Helper functions for LAI composite maps
@@ -68,9 +68,12 @@ def calc_lai_composite(collection, polygon):
     return lai_composite
 
 # %% 3.0 Create LAI map
-polygon = geemap.geopandas_to_ee(bradford_shapefile).geometry()
+gdf = gpd.GeoDataFrame(geometry=bradford_shapefile, crs=bradford_shapefile.crs)
+gdf = gdf.to_crs(4326)
+
+polygon = geemap.geopandas_to_ee(gdf).geometry()
 # Set date range
-start_date = '2025-06-01'
+start_date = '2025-01-01'
 end_date = '2025-12-31'
 
 ls8_collection = make_ls8_collection(polygon, start_date, end_date)
@@ -90,7 +93,6 @@ lai_vis = {
 }
 
 Map.addLayer(lai_composite, lai_vis, f'LAI ({start_date} to {end_date})')
-Map.add_colorbar(lai_vis, label='Leaf Area Index (LAI)', orientation='vertical', position='right')
 
 Map
 

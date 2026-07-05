@@ -141,7 +141,6 @@ for idx, p in wetland_pairs.iterrows():
     post_mean = merged_lai[merged_lai['date'] > date]['roll_yr_diff'].mean()
 
     roll_diff_change = pre_mean - post_mean
-    print(roll_diff_change)
 
     lai_roll_diffs.append(roll_diff_change)
 
@@ -164,10 +163,21 @@ plot_df = shift_data[
     (shift_data['data_set'] == data_set)
 ].copy()
 
-slope, intercept, r_value, p_value, std_err = stats.linregress(
+res = stats.linregress(
     plot_df['roll_diff_change'], 
     plot_df['mean_depth_change']
 )
+
+slope = res.slope
+intercept = res.intercept
+r_value = res.rvalue
+p_value = res.pvalue
+n = len(plot_df)
+
+intercept_t = intercept / res.intercept_stderr
+intercept_p = 2 * stats.t.sf(np.abs(intercept_t), n - 2)
+
+print(intercept_p)
 
 fig, ax = plt.subplots(figsize=(10, 8))
 
@@ -181,11 +191,6 @@ ax.scatter(
     color='steelblue'
 )
 
-# Add text labels for each point
-# for idx, row in plot_df.iterrows():
-#     ax.text(row['roll_diff_change'], row['mean_depth_change'], 
-#             str(row['log_id']), fontsize=8, alpha=0.7)
-
 x_range = np.linspace(plot_df['roll_diff_change'].min(), plot_df['roll_diff_change'].max(), 100)
 y_pred = slope * x_range + intercept
 ax.plot(x_range, y_pred, 'r--', linewidth=2, 
@@ -193,7 +198,7 @@ ax.plot(x_range, y_pred, 'r--', linewidth=2,
 
 ax.axhline(0, color='gray', linestyle=':', alpha=1)
 ax.axhline(plot_df['mean_depth_change'].mean(), color='blue', linestyle=':', linewidth=2, alpha=0.8, label=f'Mean Stage Increase {plot_df['mean_depth_change'].mean():.2f} [m]')
-
+ax.axvline(plot_df['roll_diff_change'].mean(), color='orange', linestyle=':', linewidth=2, label=f"Mean LAI change {plot_df['roll_diff_change'].mean():.2f}")
 ax.set_xlabel('Relative LAI Decrease (Pre - Post)', fontsize=12)
 ax.set_ylabel('Modeled Stage Increase (Post - Pre) [m]', fontsize=12)
 ax.set_title(f'LAI Loss vs Wetland Depth Change (n={len(strong_pairs)} pairs)', 
@@ -203,7 +208,7 @@ ax.legend(loc='best', fontsize=11)
 plt.tight_layout()
 plt.show()
 
-# %% 4.0 Make the logging and reference interaction plot normalized by LAI
+# %% 4.0 Make boxplot normalized by LAI
 
 # %% 4.1 Data preparation
 
@@ -234,60 +239,13 @@ interaction_stats = shift_data.groupby(['log_connected', 'ref_connected'])['LAI_
     ['mean', 'sem', 'count']
 ).reset_index()
 
-# %% 4.2 Generate plot
-
-# fig, ax = plt.subplots(figsize=(10, 8))
-
-# plot_connectivity_order = ['giw', 'first order', 'flow-through']
-# x_positions = {conn: i for i, conn in enumerate(plot_connectivity_order)}
-
-# for ref_conn in plot_connectivity_order:
-#     subset = interaction_stats[interaction_stats['ref_connected'] == ref_conn]
-#     print(subset)
-
-#     x_vals = [x_positions[log_conn] for log_conn in subset['log_connected']]
-#     y_vals = subset['mean'].values
-#     yerr_vals = subset['sem'].values
-    
-#     sorted_indices = sorted(range(len(x_vals)), key=lambda i: x_vals[i])
-#     x_sorted = [x_vals[i] for i in sorted_indices]
-#     y_sorted = [y_vals[i] for i in sorted_indices]
-#     yerr_sorted = [yerr_vals[i] for i in sorted_indices]
-    
-#     color = connectivity_config[ref_conn]['color']
-#     label = connectivity_config[ref_conn]['label']
-    
-#     ax.errorbar(x_sorted, y_sorted, yerr=yerr_sorted, 
-#                 fmt='o-', color=color, label=f'Reference: {label}',
-#                 capsize=4, capthick=1.5, markersize=8, linewidth=2, alpha=0.5)
-
-# # Means for logged connectivity as black X's
-# logged_marginal_means = shift_data.groupby('log_connected')['LAI_normalized_depth'].agg(['mean', 'sem']).reset_index()
-
-# for i, conn in enumerate(plot_connectivity_order):
-#     if conn in logged_marginal_means['log_connected'].values:
-#         mean_val = logged_marginal_means[logged_marginal_means['log_connected'] == conn]['mean'].iloc[0]
-#         ax.plot(i, mean_val, 'x', color='black', markersize=18, markeredgewidth=3,
-#                label='Logged Mean' if i == 0 else "")
-
-# ax.set_xticks(range(len(plot_connectivity_order)))
-# ax.set_xticklabels([connectivity_config[conn]['label'] for conn in plot_connectivity_order], fontsize=12)
-# ax.set_xlabel("Logged Wetland Connectivity", fontsize=18, labelpad=20)  # small downward offset
-# ax.set_ylabel("Modeled Depth Change (cm increase / LAI decrease)", fontsize=14)
-# ax.tick_params(axis='y', labelsize=12)
-
-# ax.axhline(y=0, color='black', linestyle='--', linewidth=2.5)
-# ax.legend(loc='best', fontsize=12, title_fontsize=14)
-
-# plt.tight_layout()
-# plt.show()
-
 # %% 5.0 Boxplot LAI normalized depth change aggregated by logged connectivity (panel a) and colored by reference connectivity (panel b)
 
 plot_connectivity_order = ['giw', 'first order', 'flow-through']
 ref_connectivity_order = ['giw', 'first order', 'flow-through']
 
 box_df = shift_data.dropna(subset=['log_connected', 'ref_connected', 'LAI_normalized_depth']).copy()
+
 box_df = box_df[
     box_df['log_connected'].isin(plot_connectivity_order)
     & box_df['ref_connected'].isin(ref_connectivity_order)
@@ -330,7 +288,7 @@ ax_a.set_xticklabels(
 )
 ax_a.axhline(0, color='black', linestyle='--', linewidth=2)
 ax_a.tick_params(axis='y', labelsize=14)
-ax_a.set_ylim(-100, 100)
+#ax_a.set_ylim(-100, 100)
 
 plt.tight_layout()
 plt.show()
@@ -347,7 +305,7 @@ offsets = np.linspace(
     n_ref
 )
 
-fig, ax_b = plt.subplots(1, 1, figsize=(10, 8))
+fig, ax_b = plt.subplots(1, 1, figsize=(8, 8))
 
 for j, ref_conn in enumerate(ref_connectivity_order):
     grouped_data = [
@@ -377,7 +335,7 @@ ax_b.set_xticks(centers)
 ax_b.set_xticklabels(
     [connectivity_config[c]['label'] for c in plot_connectivity_order],
     fontsize=16,
-    rotation=0,
+    rotation=20,
 )
 ax_b.set_ylabel('Depth Increase (cm) / LAI Decrease', fontsize=16)
 
@@ -437,115 +395,119 @@ plot_df_conn = shift_data[
     (shift_data['data_set'] == data_set)
 ].copy()
 
-fig, ax = plt.subplots(figsize=(10, 8))
+# fig, ax = plt.subplots(figsize=(10, 8))
 
-for connectivity_level, config in connectivity_config.items():
-    subset = plot_df_conn[plot_df_conn['log_connected'] == connectivity_level].copy()
+# for connectivity_level, config in connectivity_config.items():
+#     subset = plot_df_conn[plot_df_conn['log_connected'] == connectivity_level].copy()
 
-    subset_clean = subset.dropna(subset=['roll_diff_change', 'mean_depth_change', 'log_id'])
+#     subset_clean = subset.dropna(subset=['roll_diff_change', 'mean_depth_change', 'log_id'])
     
-    ax.scatter(
-        subset_clean['roll_diff_change'],
-        subset_clean['mean_depth_change'],
-        alpha=0.5,
-        s=20,
-        edgecolors='black',
-        linewidth=0.5,
-        color=config['color'],
-        marker=config['marker']
-    )
+#     ax.scatter(
+#         subset_clean['roll_diff_change'],
+#         subset_clean['mean_depth_change'],
+#         alpha=0.5,
+#         s=20,
+#         edgecolors='black',
+#         linewidth=0.5,
+#         color=config['color'],
+#         marker=config['marker']
+#     )
 
-    if connectivity_level == 'first order':
-        for _, row in subset_clean.iterrows():
-            ax.annotate(
-                str(row['log_id']),
-                xy=(row['roll_diff_change'], row['mean_depth_change']),
-                xytext=(6, 4),
-                textcoords='offset points',
-                fontsize=9,
-                alpha=0.9,
-                bbox=dict(boxstyle='round,pad=0.1', fc='white', alpha=0.6)
-            )
+#     if connectivity_level == 'first order':
+#         for _, row in subset_clean.iterrows():
+#             ax.annotate(
+#                 str(row['log_id']),
+#                 xy=(row['roll_diff_change'], row['mean_depth_change']),
+#                 xytext=(6, 4),
+#                 textcoords='offset points',
+#                 fontsize=9,
+#                 alpha=0.9,
+#                 bbox=dict(boxstyle='round,pad=0.1', fc='white', alpha=0.6)
+#             )
 
-    x = subset_clean['roll_diff_change']
-    y = subset_clean['mean_depth_change']
+#     x = subset_clean['roll_diff_change']
+#     y = subset_clean['mean_depth_change']
 
-    slope, intercept, r_value, p_value, std_err = stats.linregress(
-        x,
-        y
-    )
+#     slope, intercept, r_value, p_value, std_err = stats.linregress(
+#         x,
+#         y
+#     )
 
-    x_min = subset_clean['roll_diff_change'].min()
-    x_max = subset_clean['roll_diff_change'].max()
+#     x_min = subset_clean['roll_diff_change'].min()
+#     x_max = subset_clean['roll_diff_change'].max()
 
-    x_range = np.linspace(x_min, x_max, 100)
+#     x_range = np.linspace(x_min, x_max, 100)
 
-    y_pred = slope * x_range + intercept
+#     y_pred = slope * x_range + intercept
 
-    ax.plot(x_range, y_pred, '-', linewidth=2, color=config['color'],
-            label=f"{config['label']}")
+#     ax.plot(x_range, y_pred, '-', linewidth=2, color=config['color'],
+#             label=f"{config['label']}")
     
-    n = len(x)
-    dof = n - 2 
-    t_val = t.ppf(0.95, dof) 
+#     n = len(x)
+#     dof = n - 2 
+#     t_val = t.ppf(0.95, dof) 
 
-    x_mean = np.mean(x)
-    sxx = np.sum((x - x_mean)**2)
-    residuals = y - (slope * x + intercept)
-    s_res = np.sqrt(np.sum(residuals**2) / dof)
+#     x_mean = np.mean(x)
+#     sxx = np.sum((x - x_mean)**2)
+#     residuals = y - (slope * x + intercept)
+#     s_res = np.sqrt(np.sum(residuals**2) / dof)
     
-    se = s_res * np.sqrt(1/n + (x_range - x_mean)**2 / sxx)
-    ci = t_val * se
+#     se = s_res * np.sqrt(1/n + (x_range - x_mean)**2 / sxx)
+#     ci = t_val * se
 
-    ax.fill_between(x_range, y_pred - ci, y_pred + ci, 
-                    alpha=0.2, color='grey')
+#     ax.fill_between(x_range, y_pred - ci, y_pred + ci, 
+#                     alpha=0.2, color='grey')
 
-# # Fourth trendline: flow-through excluding outlier log_ids
-# ft_subset = plot_df_conn[
-#     (plot_df_conn['log_connected'] == 'flow-through') &
-#     (~plot_df_conn['log_id'].astype(str).isin(['7_341', '9_77']))
-# ].copy()
-# ft_clean = ft_subset.dropna(subset=['roll_diff_change', 'mean_depth_change', 'log_id'])
+# # # Fourth trendline: flow-through excluding outlier log_ids
+# # ft_subset = plot_df_conn[
+# #     (plot_df_conn['log_connected'] == 'flow-through') &
+# #     (~plot_df_conn['log_id'].astype(str).isin(['7_341', '9_77']))
+# # ].copy()
+# # ft_clean = ft_subset.dropna(subset=['roll_diff_change', 'mean_depth_change', 'log_id'])
 
-# x_ft = ft_clean['roll_diff_change']
-# y_ft = ft_clean['mean_depth_change']
+# # x_ft = ft_clean['roll_diff_change']
+# # y_ft = ft_clean['mean_depth_change']
 
-# slope_ft, intercept_ft, r_ft, p_ft, std_err_ft = stats.linregress(x_ft, y_ft)
+# # slope_ft, intercept_ft, r_ft, p_ft, std_err_ft = stats.linregress(x_ft, y_ft)
 
-# x_range_ft = np.linspace(x_ft.min(), x_ft.max(), 100)
-# y_pred_ft = slope_ft * x_range_ft + intercept_ft
+# # x_range_ft = np.linspace(x_ft.min(), x_ft.max(), 100)
+# # y_pred_ft = slope_ft * x_range_ft + intercept_ft
 
-# ax.plot(x_range_ft, y_pred_ft, '--', linewidth=2, color='darkred',
-#         label=f"flow-through (excl. outliers)")
+# # ax.plot(x_range_ft, y_pred_ft, '--', linewidth=2, color='darkred',
+# #         label=f"flow-through (excl. outliers)")
 
-# n_ft = len(x_ft)
-# dof_ft = n_ft - 2
-# t_val_ft = t.ppf(0.95, dof_ft)
+# # n_ft = len(x_ft)
+# # dof_ft = n_ft - 2
+# # t_val_ft = t.ppf(0.95, dof_ft)
 
-# x_mean_ft = np.mean(x_ft)
-# sxx_ft = np.sum((x_ft - x_mean_ft)**2)
-# residuals_ft = y_ft - (slope_ft * x_ft + intercept_ft)
-# s_res_ft = np.sqrt(np.sum(residuals_ft**2) / dof_ft)
+# # x_mean_ft = np.mean(x_ft)
+# # sxx_ft = np.sum((x_ft - x_mean_ft)**2)
+# # residuals_ft = y_ft - (slope_ft * x_ft + intercept_ft)
+# # s_res_ft = np.sqrt(np.sum(residuals_ft**2) / dof_ft)
 
-# se_ft = s_res_ft * np.sqrt(1/n_ft + (x_range_ft - x_mean_ft)**2 / sxx_ft)
-# ci_ft = t_val_ft * se_ft
+# # se_ft = s_res_ft * np.sqrt(1/n_ft + (x_range_ft - x_mean_ft)**2 / sxx_ft)
+# # ci_ft = t_val_ft * se_ft
 
-# ax.fill_between(x_range_ft, y_pred_ft - ci_ft, y_pred_ft + ci_ft,
-#                 alpha=0.2, color='grey')
+# # ax.fill_between(x_range_ft, y_pred_ft - ci_ft, y_pred_ft + ci_ft,
+# #                 alpha=0.2, color='grey')
 
-# Formatting
-ax.set_xlabel('Relative LAI Decrease (Pre - Post)', fontsize=18)
-ax.set_ylabel('Modeled Depth Change (Post - Pre) [m]', fontsize=18)
-# ax.set_title(f'LAI Loss vs Wetland Depth Change by Connectivity', 
-#             fontsize=20, fontweight='bold')
-ax.tick_params(axis='both', labelsize=14)
-ax.legend(loc='best', fontsize=14, framealpha=0.9)
-ax.grid(True, alpha=0.3)
+# # Formatting
+# ax.set_xlabel('Relative LAI Decrease (Pre - Post)', fontsize=18)
+# ax.set_ylabel('Modeled Depth Change (Post - Pre) [m]', fontsize=18)
+# # ax.set_title(f'LAI Loss vs Wetland Depth Change by Connectivity', 
+# #             fontsize=20, fontweight='bold')
+# ax.tick_params(axis='both', labelsize=14)
+# ax.legend(loc='best', fontsize=14, framealpha=0.9)
+# ax.grid(True, alpha=0.3)
 
-plt.tight_layout()
-plt.show()
+# plt.tight_layout()
+# plt.show()
 
 # %% 6.1 Print the stats for each connectivity class on the regression plot
+plot_df_conn = shift_data[
+    (shift_data['model_type'] == model_type) &
+    (shift_data['data_set'] == data_set)
+].copy()
 
 print(f"\n{'Connectivity':<25} {'n pairs':>5} {'slope':>8} {'intercept':>10} {'R²':>8} {'p-value':>10}")
 print("-" * 70)
@@ -618,7 +580,7 @@ glm_mod = smf.glm(
 
 print(glm_mod.summary())
 
-print(df['roll_diff_change'].mean())
+#print(df['roll_diff_change'].mean())
 
 
 # %% 7.4 Simplest OLS model by log-id

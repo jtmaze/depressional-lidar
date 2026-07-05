@@ -9,8 +9,8 @@ from matplotlib.colors import TwoSlopeNorm
 
 data_dir = 'D:/depressional_lidar/data/bradford/in_data/hydro_forcings_and_LAI/lai_images/'
 
-early_path = f'{data_dir}/LAI_composite_2019-06-01_to_2019-12-31.tif'
-late_path = f'{data_dir}/LAI_composite_2025-06-01_to_2025-12-31.tif'
+early_path = f'{data_dir}/LAI_composite_2019-01-01_to_2019-12-31.tif'
+late_path = f'{data_dir}/LAI_composite_2025-01-01_to_2025-12-31.tif'
 bradford_boundary_path = 'D:/depressional_lidar/data/bradford/bradford_boundary.shp'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 nwi_wetlands_path = 'D:/depressional_lidar/data/bradford/out_data/bradford_wetland_basins_vf_clipped.shp'
@@ -234,6 +234,24 @@ for side in ['top', 'right', 'bottom', 'left']:
 
 plt.show()
 
-# %% LAI Change Timeseries
+# %% 5.0 Write the LAI change map
+
+out_dir = 'D:/depressional_lidar/data/bradford/out_data/LAI_change_map_2019-2025.tiff'
+
+with rio.open(
+    out_dir,
+    'w',
+    driver='GTiff',
+    height=lai_change.shape[0],
+    width=lai_change.shape[1],
+    count=1,
+    dtype=lai_change.dtype,
+    transform=early_transform,
+    crs=early_crs,
+) as dst:
+    dst.write(lai_change, 1)
+
+print(f"LAI change map written to {out_dir}")
 
 
+# %%

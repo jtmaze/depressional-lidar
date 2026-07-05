@@ -12,7 +12,6 @@ ee.Initialize(project='wetland-ditching-prelim')
 wetland_shapes_path = 'D:/depressional_lidar/data/bradford/out_data/bradford_tgt_wetlands.shp'
 
 basin_shapes = gpd.read_file(wetland_shapes_path)
-basin_shapes = basin_shapes[basin_shapes['wetland_id'] == '6_300']
 print(basin_shapes.head())
 
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'

@@ -106,7 +106,6 @@ def swap_dry_days(depths, not_modeled_pct):
     proportion = not_modeled_pct / 100
 
     n_to_swap = int(len(depths) * proportion)
-    print(n_to_swap)
 
     if n_to_swap > 0:
         swap_idx = np.random.choice(len(depths), size=n_to_swap, replace=False)
@@ -141,9 +140,10 @@ for i in unique_log_ids:
     hypsometry_data.append(hypsometry.assign(wetland_id=i))
 
     not_modeled = (well_dry_days[well_dry_days['wetland_id'] == i].iloc[0]['proportion_flag2']) * 100
-    print(not_modeled)
+
 
     log_valid_refs = well_dist['ref_id'].unique()
+
     for r in log_valid_refs:
         
         ref_well_dist = well_dist[well_dist['ref_id'] == r]
@@ -189,7 +189,6 @@ for i in unique_log_ids:
         result['ref_id'] = r
 
         fd_results.append(result)
-        print(f'computed curves log={i} ref={r}')
 
 # %% 3.0 Combine results
 
@@ -210,7 +209,7 @@ unique_ref_ids = strong_pairs['ref_id'].unique()
 
 
 def mean_pre_post_curves(df):
-    prob_bins = np.linspace(0.02, 0.98, 49) #NOTE need to teak these
+    prob_bins = np.linspace(0.02, 0.99, 49) #NOTE need to teak these
     pre_curves = []
     post_curves = []
 
@@ -289,7 +288,7 @@ ax.set_ylabel('Post-logging inundated fraction (%)', fontsize=22)
 ax.grid(True, alpha=0.3)
 ax.set_xlim(0, 100)
 ax.set_ylim(0, 100)
-ax.legend(legend_handles, legend_labels, fontsize=20)
+ax.legend(legend_handles, legend_labels, fontsize=20, framealpha=1)
 ax.tick_params(axis='both', which='major', labelsize=18)
 
 plt.tight_layout()
