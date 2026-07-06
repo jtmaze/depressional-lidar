@@ -8,6 +8,7 @@ if PROJECT_ROOT not in sys.path:
 import pandas as pd
 import geopandas as gpd
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
@@ -28,7 +29,7 @@ model_domain = (-1, 1)
 # Model results paths
 distributions_path = f'{data_dir}/out_data/modeled_logging_stages/hypothetical_distributions_wetlandLAI{lai_buffer_dist}m_domain_{data_set}.csv'
 strong_wetland_pairs_path = f'{data_dir}/out_data/strong_ols_models_wetland{lai_buffer_dist}m_domain_{data_set}.csv'
-agg_shift_data_path = f'{data_dir}/out_data/modeled_logging_stages/shift_results_wetlandLAI{lai_buffer_dist}m_domain_{data_set}.csv'
+dry_days_path = f'{data_dir}/in_data/stage_data/bradford_wells_proportion_dry_days.csv'
 connectivity_key_path = f'{data_dir}/bradford_wetland_connect_logging_key.xlsx'
 wetland_shapes_path = f'{data_dir}/out_data/bradford_tgt_wetlands.shp'
 lai_dir = f'{data_dir}/in_data/hydro_forcings_and_LAI/basin_buffer_{lai_buffer_dist}m_maskedwetland/'
@@ -54,13 +55,13 @@ distributions = distributions.merge(
 )
 
 # For tracking omitted low days
-dry_days = pd.read_csv(agg_shift_data_path)
-dry_days = dry_days[['log_id', 'ref_id', 'total_obs', 'n_bottomed_out']] 
-dry_days['modeled_pct'] = (1 - (dry_days['n_bottomed_out'] / dry_days['total_obs'])) * 100
+dry_days = pd.read_csv(dry_days_path)
+dry_days['modeled_pct'] = (1 - dry_days['proportion_flag2']) * 100
+dry_days['log_id'] = dry_days['wetland_id']
 
 distributions = distributions.merge(
-    dry_days[['log_id', 'ref_id', 'modeled_pct']],
-    on=['log_id', 'ref_id'],
+    dry_days[['log_id', 'modeled_pct']],
+    on=['log_id'],
     how='inner'
 )
 
@@ -87,70 +88,70 @@ def swap_dry_days(depths, not_modeled_pct):
 
         return swap_depths
 
-# def plot_depth_and_nep_maps(pre_depth_map, post_depth_map, pre_nep_map, post_nep_map, clipped_dem, nodata):
-#     """Plot 2x2 grid of pre/post depth and NEP maps."""
-#     # Mask nodata pixels
-#     pre_depth_viz = np.where(clipped_dem == nodata, np.nan, pre_depth_map)
-#     post_depth_viz = np.where(clipped_dem == nodata, np.nan, post_depth_map)
-#     pre_nep_viz = np.where(clipped_dem == nodata, np.nan, pre_nep_map)
-#     post_nep_viz = np.where(clipped_dem == nodata, np.nan, post_nep_map)
+def plot_depth_and_nep_maps(pre_depth_map, post_depth_map, pre_nep_map, post_nep_map, clipped_dem, nodata):
+    """Plot 2x2 grid of pre/post depth and NEP maps."""
+    # Mask nodata pixels
+    pre_depth_viz = np.where(clipped_dem == nodata, np.nan, pre_depth_map)
+    post_depth_viz = np.where(clipped_dem == nodata, np.nan, post_depth_map)
+    pre_nep_viz = np.where(clipped_dem == nodata, np.nan, pre_nep_map)
+    post_nep_viz = np.where(clipped_dem == nodata, np.nan, post_nep_map)
 
-#     # Color limits
-#     depth_vmin = np.nanmin([np.nanmin(pre_depth_viz), np.nanmin(post_depth_viz)])
-#     depth_vmax = np.nanmax([np.nanmax(pre_depth_viz), np.nanmax(post_depth_viz)])
-#     nep_vmin = np.nanmin([np.nanmin(pre_nep_viz), np.nanmin(post_nep_viz)])
-#     nep_vmax = np.nanmax([np.nanmax(pre_nep_viz), np.nanmax(post_nep_viz)])
+    # Color limits
+    depth_vmin = np.nanmin([np.nanmin(pre_depth_viz), np.nanmin(post_depth_viz)])
+    depth_vmax = np.nanmax([np.nanmax(pre_depth_viz), np.nanmax(post_depth_viz)])
+    nep_vmin = np.nanmin([np.nanmin(pre_nep_viz), np.nanmin(post_nep_viz)])
+    nep_vmax = np.nanmax([np.nanmax(pre_nep_viz), np.nanmax(post_nep_viz)])
 
-#     # Custom colormaps
-#     cmap_bwb = mpl.colors.LinearSegmentedColormap.from_list('brown_white_blue', ['saddlebrown', 'white', 'royalblue'])
-#     cmap_bwb.set_bad('lightgrey')
-#     cmap_rd_gr = mpl.colors.LinearSegmentedColormap.from_list('red_green', ['firebrick', 'white', 'forestgreen'])
-#     cmap_rd_gr.set_bad('lightgrey')
+    # Custom colormaps
+    cmap_bwb = mpl.colors.LinearSegmentedColormap.from_list('brown_white_blue', ['saddlebrown', 'white', 'royalblue'])
+    cmap_bwb.set_bad('lightgrey')
+    cmap_rd_gr = mpl.colors.LinearSegmentedColormap.from_list('red_green', ['firebrick', 'white', 'forestgreen'])
+    cmap_rd_gr.set_bad('lightgrey')
 
-#     # Create diverging norm centered at zero for NEP
-#     nep_norm = mpl.colors.TwoSlopeNorm(vmin=nep_vmin, vcenter=0, vmax=nep_vmax)
+    # Create diverging norm centered at zero for NEP
+    nep_norm = mpl.colors.TwoSlopeNorm(vmin=nep_vmin, vcenter=0, vmax=nep_vmax)
 
-#     fig, axes = plt.subplots(2, 2, figsize=(10, 10), sharex=True, sharey=True)
+    fig, axes = plt.subplots(2, 2, figsize=(10, 10), sharex=True, sharey=True)
 
-#     # Top row: Depth maps
-#     im_d0 = axes[0, 0].imshow(pre_depth_viz, cmap=cmap_bwb, vmin=-1, vmax=depth_vmax)
-#     axes[0, 0].set_title('Pre-Logging Depth (m)')
-#     axes[0, 0].set_xticks([])
-#     axes[0, 0].set_yticks([])
-#     for spine in axes[0, 0].spines.values():
-#         spine.set_edgecolor('black')
-#         spine.set_linewidth(3)
+    # Top row: Depth maps
+    im_d0 = axes[0, 0].imshow(pre_depth_viz, cmap=cmap_bwb, vmin=-1, vmax=depth_vmax)
+    axes[0, 0].set_title('Pre-Logging Depth (m)')
+    axes[0, 0].set_xticks([])
+    axes[0, 0].set_yticks([])
+    for spine in axes[0, 0].spines.values():
+        spine.set_edgecolor('black')
+        spine.set_linewidth(3)
 
-#     im_d1 = axes[0, 1].imshow(post_depth_viz, cmap=cmap_bwb, vmin=-1, vmax=depth_vmax)
-#     axes[0, 1].set_title('Post-Logging Depth (m)')
-#     axes[0, 1].set_xticks([])
-#     axes[0, 1].set_yticks([])
-#     for spine in axes[0, 1].spines.values():
-#         spine.set_edgecolor('black')
-#         spine.set_linewidth(3)
+    im_d1 = axes[0, 1].imshow(post_depth_viz, cmap=cmap_bwb, vmin=-1, vmax=depth_vmax)
+    axes[0, 1].set_title('Post-Logging Depth (m)')
+    axes[0, 1].set_xticks([])
+    axes[0, 1].set_yticks([])
+    for spine in axes[0, 1].spines.values():
+        spine.set_edgecolor('black')
+        spine.set_linewidth(3)
 
-#     # Bottom row: NEP maps
-#     im_n0 = axes[1, 0].imshow(pre_nep_viz, cmap=cmap_rd_gr, norm=nep_norm)
-#     axes[1, 0].set_title('Pre-Logging NEP')
-#     axes[1, 0].set_xticks([])
-#     axes[1, 0].set_yticks([])
-#     for spine in axes[1, 0].spines.values():
-#         spine.set_edgecolor('black')
-#         spine.set_linewidth(3)
+    # Bottom row: NEP maps
+    im_n0 = axes[1, 0].imshow(pre_nep_viz, cmap=cmap_rd_gr, norm=nep_norm)
+    axes[1, 0].set_title('Pre-Logging NEP')
+    axes[1, 0].set_xticks([])
+    axes[1, 0].set_yticks([])
+    for spine in axes[1, 0].spines.values():
+        spine.set_edgecolor('black')
+        spine.set_linewidth(3)
 
-#     im_n1 = axes[1, 1].imshow(post_nep_viz, cmap=cmap_rd_gr, norm=nep_norm)
-#     axes[1, 1].set_title('Post-Logging NEP')
-#     axes[1, 1].set_xticks([])
-#     axes[1, 1].set_yticks([])
-#     for spine in axes[1, 1].spines.values():
-#         spine.set_edgecolor('black')
-#         spine.set_linewidth(3)
+    im_n1 = axes[1, 1].imshow(post_nep_viz, cmap=cmap_rd_gr, norm=nep_norm)
+    axes[1, 1].set_title('Post-Logging NEP')
+    axes[1, 1].set_xticks([])
+    axes[1, 1].set_yticks([])
+    for spine in axes[1, 1].spines.values():
+        spine.set_edgecolor('black')
+        spine.set_linewidth(3)
 
-#     # Colorbars
-#     fig.colorbar(im_d1, ax=axes[0, :], orientation='vertical', fraction=0.046, pad=0.04, label='Depth (m)')
-#     fig.colorbar(im_n1, ax=axes[1, :], orientation='vertical', fraction=0.046, pad=0.04, label='NEP (t C ha⁻¹ yr⁻¹)')
+    # Colorbars
+    fig.colorbar(im_d1, ax=axes[0, :], orientation='vertical', fraction=0.046, pad=0.04, label='Depth (m)')
+    fig.colorbar(im_n1, ax=axes[1, :], orientation='vertical', fraction=0.046, pad=0.04, label='NEP (t C ha⁻¹ yr⁻¹)')
 
-#     plt.show()
+    plt.show()
 
 summary_results = []
 individual_results = []
@@ -165,7 +166,7 @@ for i in unique_log_ids:
         pair_dist = distributions[
              (distributions['ref_id'] == j) & (distributions['log_id'] == i)
         ].copy()
-        print(i, j)
+
         if pair_dist.empty:
              continue
         modeled_pct = pair_dist['modeled_pct'].iloc[0]
@@ -185,8 +186,6 @@ for i in unique_log_ids:
         2.0 Extract the relative LAI change for each pair
         """
         log_date = connect_key[connect_key['wetland_id'] == i]['planet_log_date'].iloc[0]
-        print(log_date)
-
 
         logged_lai = read_concatonate_lai(
              lai_dir,
@@ -269,14 +268,14 @@ for i in unique_log_ids:
     pre_nep_map = (pre_depth_map * slope_m) + b
     post_nep_map = (post_depth_map * slope_m) + b
 
-    # plot_depth_and_nep_maps(
-    #     pre_depth_map, 
-    #     post_depth_map, 
-    #     pre_nep_map, 
-    #     post_nep_map, 
-    #     clipped_dem, 
-    #     nodata
-    # )
+    plot_depth_and_nep_maps(
+        pre_depth_map, 
+        post_depth_map, 
+        pre_nep_map, 
+        post_nep_map, 
+        clipped_dem, 
+        nodata
+    )
 
     pre_nep_mean = np.nanmean(pre_nep_map)
     post_nep_mean = np.nanmean(post_nep_map)

@@ -10,7 +10,7 @@ import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
 
-tgt_id = '3_23'
+tgt_id = '9_439'
 lai_buffer_dist = 150
 
 data_set = 'no_dry_days'
@@ -22,7 +22,7 @@ wetland_pairs_path = data_dir + f'out_data/strong_ols_models_wetland{lai_buffer_
 
 source_dem_path = data_dir + '/in_data/bradford_DEM_cleaned_USGS.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
-shift_results_path = data_dir + f'/out_data/modeled_logging_stages/shift_results_wetlandLAI{lai_buffer_dist}m_domain_{data_set}.csv'
+well_dry_days_path = f'{data_dir}/in_data/stage_data/bradford_wells_proportion_dry_days.csv'
 wetland_shapes_path = data_dir + f'/out_data/bradford_tgt_wetlands.shp'
 
 from wetland_utilities.basin_attributes import WetlandBasin
@@ -49,16 +49,9 @@ basin = WetlandBasin(
 
 # %% 3.0 Figure out the proportion of days the well was bottomed out
 
-dry_days = pd.read_csv(shift_results_path)
-dry_days = dry_days[
-    (dry_days['log_id'] == tgt_id) &
-    (dry_days['data_set'] == data_set) &
-    (dry_days['model_type'] == 'OLS') 
-][['log_id', 'ref_id', 'total_obs', 'n_bottomed_out']].copy()
+dry_days = pd.read_csv(well_dry_days_path)
 
-dry_days['dry_proportion'] = (dry_days['n_bottomed_out'] / dry_days['total_obs'])
-
-dry_proportion = dry_days['dry_proportion'].mean()
+not_modeled = (dry_days[dry_days['wetland_id'] == tgt_id].iloc[0]['proportion_flag2'])
 
 
 # %% 3.0 Read the modeled distributions and establish the wetland basin class
@@ -78,7 +71,8 @@ pre_dist = np.random.choice(
 
 # Set proportion of values to account for bottomed out days not in the model
 pre_dist_dry = pre_dist.copy()
-n_dry = int(len(pre_dist_dry) * dry_proportion)
+n_dry = int(len(pre_dist_dry) * not_modeled)
+print(n_dry)
 dry_indices = np.random.choice(len(pre_dist_dry), size=n_dry, replace=False)
 pre_dist_dry[dry_indices] = -2.0
 
@@ -150,7 +144,7 @@ post_dynamics.map_inundation_stacks(
 
 # NOTE: this code isn't working great. May not use. 
 
-"""
+
 # Pre-logging inundation frequency
 pre_stacks = pre_dynamics.calculate_inundation_stacks()
 pre_stack = np.stack(list(pre_stacks.values())).astype(np.float32)
@@ -197,5 +191,5 @@ for ax in axes:
 plt.tight_layout()
 plt.show()
 
-"""
+
 # %%

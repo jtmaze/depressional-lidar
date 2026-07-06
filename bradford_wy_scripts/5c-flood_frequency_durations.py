@@ -113,11 +113,10 @@ def swap_dry_days(depths, not_modeled_pct):
 
     return swap_depths
 
-# %% 3.2 Run the calculations. 
+# %% 3.2 Run the calculations for each model pair's excedence probability
 
 unique_log_ids = distributions['log_id'].unique()
 fd_results = []
-hypsometry_data = []
 
 for i in unique_log_ids:
 
@@ -137,7 +136,7 @@ for i in unique_log_ids:
     })
     hypsometry['depth_rel_well'] = hypsometry['elevation'] - basin.well_point.elevation_dem
     hypsometry['rel_area'] = (hypsometry['area'] / hypsometry['area'].max()).round(3)
-    hypsometry_data.append(hypsometry.assign(wetland_id=i))
+
 
     not_modeled = (well_dry_days[well_dry_days['wetland_id'] == i].iloc[0]['proportion_flag2']) * 100
 
@@ -190,7 +189,7 @@ for i in unique_log_ids:
 
         fd_results.append(result)
 
-# %% 3.0 Combine results
+# %% 3.3 Combine results for each
 
 inundate_freq = pd.concat(fd_results)
 inundate_freq = inundate_freq.merge(
@@ -199,25 +198,37 @@ inundate_freq = inundate_freq.merge(
     right_on='wetland_id',
     how='left'
 )
-hypsometry_data = pd.concat(hypsometry_data, ignore_index=True)
-
 
 # %% %% 4.0 Q-Q plot pre versus post by connectivity
 
 unique_log_ids = strong_pairs['log_id'].unique()
 unique_ref_ids = strong_pairs['ref_id'].unique()
 
-
 def mean_pre_post_curves(df):
-    prob_bins = np.linspace(0.02, 0.99, 49) #NOTE need to teak these
+    prob_bins = np.linspace(0.02, 0.98, 49) #NOTE need to tweak these for plot rendering
     pre_curves = []
     post_curves = []
 
     for _, pair_data in df.groupby(['log_id', 'ref_id']):
+
         pre_data = pair_data[pair_data['pre_post'] == 'pre'].sort_values('probability')
         post_data = pair_data[pair_data['pre_post'] == 'post'].sort_values('probability')
-        pre_curves.append(np.interp(prob_bins, pre_data['probability'], pre_data['inundated_fraction']))
-        post_curves.append(np.interp(prob_bins, post_data['probability'], post_data['inundated_fraction']))
+
+        pre_curves.append(
+            np.interp(
+                prob_bins, 
+                pre_data['probability'], 
+                pre_data['inundated_fraction']
+            )
+        )
+
+        post_curves.append(
+            np.interp(
+                prob_bins,
+                post_data['probability'], 
+                post_data['inundated_fraction']
+            )
+        )
 
     pre_mean = np.mean(np.vstack(pre_curves), axis=0)
     post_mean = np.mean(np.vstack(post_curves), axis=0)
@@ -228,6 +239,35 @@ def mean_pre_post_curves(df):
         'post_mean': post_mean,
         'delta': post_mean - pre_mean
     })
+
+# %% 5.0 Aggregate wetland Q-Q curves and class Q-Q curves
+
+log_wetland_curves = []
+
+for log_id, wetland_data in inundate_freq.groupby('log_id'):
+    curve = mean_pre_post_curves(wetland_data)
+    curve['log_id'] = log_id
+    log_wetland_curves.append(curve)
+
+log_wetland_curves = pd.concat(log_wetland_curves, ignore_index=True)
+
+log_wetland_curves = log_wetland_curves.merge(
+    connect.rename(columns={'wetland_id': 'log_id'}),
+    on='log_id',
+    how='left'
+)
+
+# Then average logged-wetland curves to the connectivity-class level.
+class_curves = (
+    log_wetland_curves
+    .groupby(['connectivity', 'probability'], as_index=False)
+    .agg(
+        pre_mean=('pre_mean', 'mean'),
+        post_mean=('post_mean', 'mean'),
+        delta=('delta', 'mean'),
+        n_wetlands=('log_id', 'nunique')
+    )
+)
 
 # %% 4.1 Render the plot
 
@@ -246,34 +286,37 @@ class_handles = {}
 
 for connectivity_class in draw_order:
     cfg = connectivity_config[connectivity_class]
-    class_data = inundate_freq[inundate_freq['connectivity'] == connectivity_class]
 
-    # Add one faint curve per logged wetland (averaged across valid reference pairs).
-    for _, wetland_data in class_data.groupby('log_id'):
-        wetland_curves = mean_pre_post_curves(wetland_data)
-        wetland_pre_curve = wetland_curves['pre_mean'].to_numpy()
-        wetland_post_curve = wetland_curves['post_mean'].to_numpy()
+    wetland_class_data = log_wetland_curves[
+        log_wetland_curves['connectivity'] == connectivity_class
+    ]
+
+    # Add one faint curve per logged wetland.
+    for _, wetland_curve in wetland_class_data.groupby('log_id'):
         ax.plot(
-            wetland_pre_curve * 100,
-            wetland_post_curve * 100,
+            wetland_curve['pre_mean'] * 100,
+            wetland_curve['post_mean'] * 100,
             color=cfg['color'],
             linewidth=2,
             alpha=0.8,
             zorder=1
         )
 
-    curve_df = mean_pre_post_curves(class_data)
-    pre_curve = curve_df['pre_mean'].to_numpy()
-    post_curve = curve_df['post_mean'].to_numpy()
+    # Add one thick curve per connectivity class.
+    class_curve = class_curves[
+        class_curves['connectivity'] == connectivity_class
+    ].sort_values('probability')
+
     line = ax.plot(
-        pre_curve * 100,
-        post_curve * 100,
+        class_curve['pre_mean'] * 100,
+        class_curve['post_mean'] * 100,
         color=cfg['color'],
         linewidth=5,
         marker='o',
         markersize=15,
         zorder=3
     )[0]
+
     class_handles[connectivity_class] = line
 
 diag_line = ax.plot([0, 100], [0, 100], 'k--', linewidth=7.5, zorder=4)[0]
@@ -285,7 +328,6 @@ legend_labels.append('1:1')
 
 ax.set_xlabel('Pre-logging inundated fraction (%)', fontsize=22)
 ax.set_ylabel('Post-logging inundated fraction (%)', fontsize=22)
-ax.grid(True, alpha=0.3)
 ax.set_xlim(0, 100)
 ax.set_ylim(0, 100)
 ax.legend(legend_handles, legend_labels, fontsize=20, framealpha=1)
@@ -294,19 +336,17 @@ ax.tick_params(axis='both', which='major', labelsize=18)
 plt.tight_layout()
 plt.show()
 
-# %% 5.0 Generate curves for descriptive statistics
-
-full_q_q = mean_pre_post_curves(inundate_freq)
-
-log_wetland_curves = []
-
-for i in unique_log_ids:
-    subset = inundate_freq[inundate_freq['log_id'] == i].copy()
-    log_wetland_curves.append(mean_pre_post_curves(subset).assign(log_id=i))
-
-log_wetland_curves = pd.concat(log_wetland_curves, ignore_index=True)
-
 # %% 6.0 Print some statistics for general dataset
+
+full_q_q = (
+    log_wetland_curves
+    .groupby('probability', as_index=False)
+    .agg(
+        pre_mean=('pre_mean', 'mean'),
+        post_mean=('post_mean', 'mean'),
+        delta=('delta', 'mean')
+    )
+)
 
 print(full_q_q[full_q_q['probability'] == 0.5])
 
@@ -320,11 +360,6 @@ print(f"IQR of delta at p=0.5: {p75-p25:.4f}")
 print(f"Mean delta: {p50_log_ids['delta'].mean():.4f}")
 print(f"SD of delta: {p50_log_ids['delta'].std():.4f}")
 
-log_wetland_curves = log_wetland_curves.merge(
-    connect.rename(columns={'wetland_id': 'log_id'}),
-    on='log_id',
-    how='left'
-) 
 
 # %% 7.0 Print statistics for the different wetland connectivity classes
 

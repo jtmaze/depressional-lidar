@@ -255,7 +255,6 @@ ax.set_xticks(x)
 ax.set_xticklabels(conn_labels)
 ax.set_ylabel('Percent Time Connected (%)', fontsize=16)
 ax.tick_params(axis='both', which='major', labelsize=15)
-ax.grid(True, axis='y', alpha=0.3)
 
 # connect_handles = [
 #     Patch(facecolor=cfg['color'], edgecolor='black', label=cfg['label'])
@@ -269,6 +268,7 @@ hatch_handles = [
 ax.legend(handles=hatch_handles, fontsize=18, ncol=1, loc='upper left', frameon=True)
 
 plt.tight_layout()
+plt.ylim(0, 65)
 plt.show()
 
 # %% 6.0 Print more summary stats
