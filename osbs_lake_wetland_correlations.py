@@ -29,9 +29,9 @@ neon_meta = pd.read_csv(neon_meta_path)
 
 well_ts = pd.read_csv(well_ts_path)
 well_ts = well_ts[well_ts['flag'] != 3]
-well_ts.drop(columns=['well_depth_m'], inplace=True)
+well_ts.drop(columns=['well_depth_m'], inplace=True) #NOTE: Calling 'indexed' well_depth_m the 'well_depth'
 well_ts['date'] = pd.to_datetime(well_ts['date'])
-well_ts = well_ts[well_ts['date'] <= pd.Timestamp('2021-01-01')]
+#well_ts = well_ts[well_ts['date'] <= pd.Timestamp('2021-01-01')]
 well_ts.rename(
     columns={
         'indexed_well_depth_m': 'well_depth_m'
@@ -80,15 +80,6 @@ for wetland_id in well_ts['wetland_id'].dropna().unique():
             'n': len(pair),
             'pearson_r': pearson_r,
         })
-
-        fig, ax = plt.subplots(figsize=(6, 6))
-        ax.scatter(pair['well_depth_m'], pair['wse_m'], s=18, alpha=0.55, color='steelblue', edgecolors='none')
-        ax.set_title(f'{wetland_id} vs {lake_id} (r={pearson_r:.2f}, n={len(pair)})')
-        ax.set_xlabel('Wetland well depth (m)')
-        ax.set_ylabel('NEON lake WSE (m)')
-        ax.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.show()
 
 correlation_df = pd.DataFrame(correlation_results).sort_values(['wetland_id', 'lake_id']).reset_index(drop=True)
 print(correlation_df)
@@ -143,30 +134,47 @@ ax.grid(True, axis='y', alpha=0.25)
 plt.tight_layout()
 plt.show()
 
-# %% 5.0 Plot the distribution of daily lake water levels after 2021 
+# %% 5.0 Simple biplot of lakes versus wetland (average all wetland_ids) timeseries
 
-post_2021 = neon_daily[neon_daily['date'] >= pd.Timestamp('2021-01-01')].copy()
-lake_ids = post_2021['wetland_id'].dropna().unique()
+tgt_lake = 'lake_SUGG_140'  # Options: 'lake_BARC_130', 'lake_BARC_140', 'lake_SUGG_130', 'lake_SUGG_140'
 
-fig, axes = plt.subplots(
-    nrows=len(lake_ids),
-    ncols=1,
-    figsize=(6, 6),
-    sharex=False,
+lidar_dates = pd.to_datetime([
+    '2018-09-28',  # oct2018
+    '2019-04-18',  # apr2019
+    '2021-09-13',  # sep2021
+    '2023-04-28',  # apr2023
+    '2025-05-10',  # may2025
+])
+
+well_ts_avg = well_ts.groupby(['date']).agg(
+    avg_well_depth=('well_depth_m', 'mean')
 )
 
-if len(lake_ids) == 1:
-    axes = [axes]
+lake_data = neon_daily[neon_daily['wetland_id'] == tgt_lake][['date', 'wse_m']].copy()
+biplot_df = well_ts_avg.reset_index().merge(lake_data, on='date', how='inner').dropna(subset=['avg_well_depth', 'wse_m'])
 
-for ax, lake_id in zip(axes, lake_ids):
-    vals = post_2021.loc[post_2021['wetland_id'] == lake_id, 'wse_m'].dropna()
-    ax.hist(vals, bins=30, color='steelblue', alpha=0.85, edgecolor='white')
-    ax.set_title(f'{lake_id} (n={len(vals)})')
-    ax.set_xlabel('Daily mean water surface elevation (m)')
-    ax.set_ylabel('Count')
-    ax.grid(True, axis='y', alpha=0.3)
+lidar_overlay = pd.merge_asof(
+    pd.DataFrame({'date': lidar_dates}).sort_values('date'),
+    biplot_df.sort_values('date'),
+    on='date',
+    direction='nearest',
+    tolerance=pd.Timedelta('10 days')
+).dropna(subset=['avg_well_depth', 'wse_m'])
 
-fig.suptitle('Distribution of NEON daily lake water levels after 2021', y=0.995)
+pearson_r = biplot_df['avg_well_depth'].corr(biplot_df['wse_m'])
+m, b = np.polyfit(biplot_df['avg_well_depth'], biplot_df['wse_m'], 1)
+x_line = np.linspace(biplot_df['avg_well_depth'].min(), biplot_df['avg_well_depth'].max(), 100)
+
+fig, ax = plt.subplots(figsize=(6, 6))
+ax.scatter(biplot_df['avg_well_depth'], biplot_df['wse_m'], s=40, alpha=0.7, color='#2c7fb8', edgecolors='white', linewidths=0.5, zorder=3)
+ax.plot(x_line, m * x_line + b, color='#d62728', linewidth=1.5, label=f'slope={m:.3f}, r={pearson_r:.2f}  (n={len(biplot_df)})')
+if not lidar_overlay.empty:
+    ax.scatter(lidar_overlay['avg_well_depth'], lidar_overlay['wse_m'], s=120, color='orange', edgecolors='black', linewidths=0.8, zorder=5, label='LiDAR flight dates')
+ax.set_xlabel('Avg Well Depth (m)')
+ax.set_ylabel(f'{tgt_lake} WSE (m)')
+ax.set_title(f'{tgt_lake} WSE vs. Mean Wetland Well Depth')
+ax.legend()
+ax.grid(True, alpha=0.25)
 plt.tight_layout()
 plt.show()
 

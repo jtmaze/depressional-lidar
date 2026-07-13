@@ -63,6 +63,8 @@ full_points = pd.concat([stream_gauges, well_points], axis=0)
 full_points = full_points[['wetland_id', 'z_dem', 'geometry']]
 full_ts = pd.concat([gauge_ts, well_ts], axis=0)
 
+#full_ts.to_csv("D:/depressional_lidar/data/bradford/in_data/stage_data/interpolated_well_ts_with_stream_conditioning.csv", index=False)
+
 boundary = gpd.read_file(boundary_path)
 
 # %% 2.4 Visualize all of the wells on the map
@@ -102,8 +104,8 @@ variogram_params = wtd_variogram_fit.okr_result['variogram_model_parameters'].to
 print(variogram_params)
 
 well_array_med = WellArray(
-    well_pts=well_points,
-    well_ts=well_ts,
+    well_pts=full_points,
+    well_ts=full_ts,
     begin='2021-01-01',
     end='2027-01-01', 
     percentile=50,
@@ -190,8 +192,8 @@ print(wells_df)
 
 wetland_ids = wells_df['wetland_id']
 
-out_dir = f"D:/depressional_lidar/data/bradford/out_data/well_wse_interpolations"
-file_suffix = f"optimized_model_wetlands_only"
+out_dir = r'C:\Users\jtmaz\Documents\temp'
+file_suffix = f"optimized_model_stream_conditioning"
 
 # %% 6.1 Simple raster of median surface
 
@@ -204,12 +206,12 @@ wtd_surface_med.write_masked_tif(
 # %% 6.2  Write excel 
  
 weights_df = pd.DataFrame(weights, columns=wetland_ids)
-# out_path = f"{out_dir}/kriging_weights_{file_suffix}.xlsx"
+out_path = f"{out_dir}/kriging_weights_{file_suffix}.xlsx"
 
-# with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
-#     weights_df.to_excel(writer, sheet_name="weights", index=False)
-#     wells_df.to_excel(writer, sheet_name="wells", index=False)
-#     coords_df.to_excel(writer, sheet_name="coords", index=False)
+with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
+    weights_df.to_excel(writer, sheet_name="weights", index=False)
+    wells_df.to_excel(writer, sheet_name="wells", index=False)
+    coords_df.to_excel(writer, sheet_name="coords", index=False)
 
 # %% 6.3 HDF5 
 

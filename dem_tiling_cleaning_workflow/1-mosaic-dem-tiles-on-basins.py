@@ -17,11 +17,11 @@ import geopandas as gpd
 
 target_crs = 'EPSG:26917'
 site_name = 'osbs'  # bradford or osbs, or delmarva
-sub_site_name = 'JL' # delmarva has two sites None for osbs and bradford
+sub_site_name = None # delmarva has two sites None for osbs and bradford
 
 # multiple neon flights at OSBS (e.g., sep2016)
 # For delmarva, use USGS_1m, because data is UTM
-lidar_data = 'neon_apr2019'  
+lidar_data = 'neon_apr2026'  
 US_SURVEY_FOOT_TO_METER = 0.304800609601219 # FL USGS Lidar data is in feet
 
 os.chdir('D:/depressional_lidar/data/')

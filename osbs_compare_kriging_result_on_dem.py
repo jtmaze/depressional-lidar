@@ -12,10 +12,10 @@ from rasterio.transform import array_bounds
 median_result_path = 'D:/depressional_lidar/data/osbs/out_data/well_wse_interpolations/interpolated_median_WSE_optimized_model_pond_conditioned.tif'
 well_points_path = 'D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp'
 conditioning_pts_path = 'D:/depressional_lidar/data/osbs/in_data/osbs_kriging_conditioning_pts.shp'
-dem_path = 'D:/depressional_lidar/data/osbs/in_data/osbs_DEM_cleaned_neon_sep2016.tif'
+dem_path = 'D:/depressional_lidar/data/osbs/in_data/osbs_DEM_cleaned_neon_apr2026.tif'
 boundary_path = 'D:/depressional_lidar/data/osbs/test_krig_domain.shp'
 
-target_dem_resolution_m = 10
+target_dem_resolution_m = 5
 
 # %% 2.0 Read median kriging WSE raster
 

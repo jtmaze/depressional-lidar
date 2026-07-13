@@ -88,8 +88,8 @@ def swap_dry_days(depths, not_modeled_pct):
 
         return swap_depths
 
-def plot_depth_and_nep_maps(pre_depth_map, post_depth_map, pre_nep_map, post_nep_map, clipped_dem, nodata):
-    """Plot 2x2 grid of pre/post depth and NEP maps."""
+def plot_depth_and_nep_maps(pre_depth_map, post_depth_map, pre_nep_map, post_nep_map, clipped_dem, nodata, transform=None, footprint=None):
+    """Plot 2x2 grid of pre/post depth and NEP maps with optional wetland outline."""
     # Mask nodata pixels
     pre_depth_viz = np.where(clipped_dem == nodata, np.nan, pre_depth_map)
     post_depth_viz = np.where(clipped_dem == nodata, np.nan, post_depth_map)
@@ -113,8 +113,19 @@ def plot_depth_and_nep_maps(pre_depth_map, post_depth_map, pre_nep_map, post_nep
 
     fig, axes = plt.subplots(2, 2, figsize=(10, 10), sharex=True, sharey=True)
 
+    # Compute real-world extent from affine transform so imshow and footprint share coordinates
+    if transform is not None:
+        nrows, ncols = clipped_dem.shape
+        xmin = transform.c
+        xmax = transform.c + transform.a * ncols
+        ymax = transform.f
+        ymin = transform.f + transform.e * nrows
+        extent = [xmin, xmax, ymin, ymax]
+    else:
+        extent = None
+
     # Top row: Depth maps
-    im_d0 = axes[0, 0].imshow(pre_depth_viz, cmap=cmap_bwb, vmin=-1, vmax=depth_vmax)
+    im_d0 = axes[0, 0].imshow(pre_depth_viz, cmap=cmap_bwb, vmin=-1, vmax=depth_vmax, extent=extent)
     axes[0, 0].set_title('Pre-Logging Depth (m)')
     axes[0, 0].set_xticks([])
     axes[0, 0].set_yticks([])
@@ -122,7 +133,7 @@ def plot_depth_and_nep_maps(pre_depth_map, post_depth_map, pre_nep_map, post_nep
         spine.set_edgecolor('black')
         spine.set_linewidth(3)
 
-    im_d1 = axes[0, 1].imshow(post_depth_viz, cmap=cmap_bwb, vmin=-1, vmax=depth_vmax)
+    im_d1 = axes[0, 1].imshow(post_depth_viz, cmap=cmap_bwb, vmin=-1, vmax=depth_vmax, extent=extent)
     axes[0, 1].set_title('Post-Logging Depth (m)')
     axes[0, 1].set_xticks([])
     axes[0, 1].set_yticks([])
@@ -131,7 +142,7 @@ def plot_depth_and_nep_maps(pre_depth_map, post_depth_map, pre_nep_map, post_nep
         spine.set_linewidth(3)
 
     # Bottom row: NEP maps
-    im_n0 = axes[1, 0].imshow(pre_nep_viz, cmap=cmap_rd_gr, norm=nep_norm)
+    im_n0 = axes[1, 0].imshow(pre_nep_viz, cmap=cmap_rd_gr, norm=nep_norm, extent=extent)
     axes[1, 0].set_title('Pre-Logging NEP')
     axes[1, 0].set_xticks([])
     axes[1, 0].set_yticks([])
@@ -139,7 +150,7 @@ def plot_depth_and_nep_maps(pre_depth_map, post_depth_map, pre_nep_map, post_nep
         spine.set_edgecolor('black')
         spine.set_linewidth(3)
 
-    im_n1 = axes[1, 1].imshow(post_nep_viz, cmap=cmap_rd_gr, norm=nep_norm)
+    im_n1 = axes[1, 1].imshow(post_nep_viz, cmap=cmap_rd_gr, norm=nep_norm, extent=extent)
     axes[1, 1].set_title('Post-Logging NEP')
     axes[1, 1].set_xticks([])
     axes[1, 1].set_yticks([])
@@ -150,6 +161,10 @@ def plot_depth_and_nep_maps(pre_depth_map, post_depth_map, pre_nep_map, post_nep
     # Colorbars
     fig.colorbar(im_d1, ax=axes[0, :], orientation='vertical', fraction=0.046, pad=0.04, label='Depth (m)')
     fig.colorbar(im_n1, ax=axes[1, :], orientation='vertical', fraction=0.046, pad=0.04, label='NEP (t C ha⁻¹ yr⁻¹)')
+
+    if footprint is not None and not footprint.empty:
+        for ax in axes.flat:
+            footprint.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=2.2, zorder=5)
 
     plt.show()
 
@@ -274,7 +289,9 @@ for i in unique_log_ids:
         pre_nep_map, 
         post_nep_map, 
         clipped_dem, 
-        nodata
+        nodata,
+        transform=log_basin.clipped_dem.transform,
+        footprint=shape
     )
 
     pre_nep_mean = np.nanmean(pre_nep_map)
@@ -311,7 +328,7 @@ fig, ax = plt.subplots(figsize=(10, 6))
 
 connectivity_config = {
     'first order': {'color': '#6C5B7B', 'label': 'Ditch connected'},
-    'giw': {'color': '#1B7F79', 'label': 'Unconnected'},
+    'giw': {'color': '#1B7F79', 'label': 'Unditched'},
     'flow-through': {'color': '#C46A1A', 'label': 'Flow-through connected'}
 }
 
@@ -448,13 +465,14 @@ ax.axhline(y=0, color='black', linestyle='-', linewidth=0.8, alpha=0.5)
 ax.set_ylabel('NEP Mean (t C ha⁻¹ yr⁻¹)', fontsize=18, fontweight='bold')
 ax.set_xticks(x)
 ax.set_xticklabels([
-    "Unconnected",
+    "Unditched",
     "Ditch connected",
     "Flow-through\nconnected"
     ], fontsize=18
 )
 
 ax.tick_params(axis='x', length=0)
+ax.tick_params(axis='y', labelsize=14)
 connect_handles = [
     Patch(facecolor=cfg['color'], edgecolor='black', label=cfg['label'])
     for cfg in connectivity_config.values()
@@ -463,7 +481,7 @@ style_handles = [
     Patch(facecolor='lightgray', edgecolor='black', label='Pre-Logging'),
     Patch(facecolor='white', edgecolor='black', hatch='///', label='Post-Logging')
 ]
-ax.legend(handles=connect_handles + style_handles, framealpha=0.95, fontsize=12, ncol=2)
+ax.legend(handles=connect_handles + style_handles, framealpha=0.95, fontsize=13, ncol=2)
 
 plt.tight_layout()
 plt.show()
@@ -472,6 +490,7 @@ plt.show()
 
 summary_df['nep_change'] = summary_df['post_nep_mean'] - summary_df['pre_nep_mean']
 
+print(summary_df['pre_nep_mean'].mean())
 print(summary_df['nep_change'].mean())
 print(summary_df['nep_change'].quantile([0.25, 0.75]))
 print(summary_df['pre_nep_mean'].mean())
@@ -482,6 +501,29 @@ connectivity_summary = summary_df.groupby('connectivity').agg(
     num_sources_post=('post_nep_mean', lambda x: (x < 0).sum())
 )
 print(connectivity_summary)
+
+# Calculate and print pre and post IQR
+pre_q25 = summary_df['pre_nep_mean'].quantile(0.25)
+pre_q75 = summary_df['pre_nep_mean'].quantile(0.75)
+pre_iqr = pre_q75 - pre_q25
+
+post_q25 = summary_df['post_nep_mean'].quantile(0.25)
+post_q75 = summary_df['post_nep_mean'].quantile(0.75)
+post_iqr = post_q75 - post_q25
+
+print(f"Pre-logging 25th percentile: {pre_q25}")
+print(f"Pre-logging 75th percentile: {pre_q75}")
+print(f"Pre-logging IQR: {pre_iqr}")
+print(f"Post-logging 25th percentile: {post_q25}")
+print(f"Post-logging 75th percentile: {post_q75}")
+print(f"Post-logging IQR: {post_iqr}")
+
+diff_q25 = summary_df['nep_change'].quantile(0.25)
+diff_q75 = summary_df['nep_change'].quantile(0.75)
+diff_iqr = diff_q75 - diff_q25
+print(f"NEP change 25th percentile: {diff_q25}")
+print(f"NEP change 75th percentile: {diff_q75}")
+print(f"NEP change IQR: {diff_iqr}")
 
 
 # %% 8.0 Single barplot with wetland NEP change grouped by connectivity

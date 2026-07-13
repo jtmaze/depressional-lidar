@@ -360,7 +360,6 @@ print(f"IQR of delta at p=0.5: {p75-p25:.4f}")
 print(f"Mean delta: {p50_log_ids['delta'].mean():.4f}")
 print(f"SD of delta: {p50_log_ids['delta'].std():.4f}")
 
-
 # %% 7.0 Print statistics for the different wetland connectivity classes
 
 for conn in log_wetland_curves['connectivity'].dropna().unique():
