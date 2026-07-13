@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 from scipy import stats
 
 data_dir = 'D:/depressional_lidar/data/osbs/'
-
 wells_ts_path = f'{data_dir}/in_data/stage_data/osbs_daily_well_depth_Fall2025.csv'
+imputed_path = f'{data_dir}/in_data/stage_data/osbs_dail_well_depth_gapfilled.csv'
 
 # %% 2.0 Read and format the well data
 
@@ -82,11 +82,19 @@ well_ts_avg = plot_ts.groupby(['date']).agg(
     avg_well_depth=('indexed_well_depth_m', 'mean')
 )
 
-fig, ax = plt.subplots(figsize=(12,4))
-ax.plot(well_ts_avg.index, well_ts_avg['avg_well_depth'], color='black', lw=1.5)
-ax.set_ylabel('well depth (m)')
-ax.set_title('Daily Average Well Depth (OSBS)')
-ax.grid(alpha=0.3)
+well_ts_count = plot_ts.groupby(['date'])['indexed_well_depth_m'].count()
+
+fig, axes = plt.subplots(2, 1, figsize=(12, 6), sharex=True, gridspec_kw={'height_ratios': [3, 1]})
+
+axes[0].plot(well_ts_avg.index, well_ts_avg['avg_well_depth'], color='black', lw=1.5)
+axes[0].set_ylabel('well depth (m)')
+axes[0].set_title('Daily Average Well Depth (OSBS)')
+axes[0].grid(alpha=0.3)
+
+axes[1].plot(well_ts_count.index, well_ts_count.values, color='steelblue', lw=1.2)
+axes[1].set_ylabel('# wells')
+axes[1].grid(alpha=0.3)
+
 fig.tight_layout()
 plt.show()
 
@@ -169,5 +177,15 @@ for i in wetland_ids:
     ax.grid(alpha=0.25)
     fig.tight_layout()
     plt.show()
+
+    imputed_dfs.append(temp)
+
+# %% 7.0 Concatonate the imputed data and write to a file
+
+imputed = pd.concat(imputed_dfs)
+imputed.rename(columns={'predicted_well_depth_m': 'well_depth_m'}, inplace=True)
+imputed = imputed[['date', 'wetland_id', 'well_depth_m']]
+
+imputed.to_csv(imputed_path, index=False)
 
 # %%
