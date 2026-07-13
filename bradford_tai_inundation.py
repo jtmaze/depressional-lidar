@@ -13,17 +13,17 @@ from rasterio.transform import from_bounds, array_bounds
 from matplotlib.colors import LinearSegmentedColormap, ListedColormap, to_rgba
 
 data_dir = "D:/depressional_lidar/data/bradford"
-kriging_method = 'wetlands_only'
+kriging_method = 'stream_conditioning'
 
 krig_res_path = f"{data_dir}/out_data/well_wse_interpolations/kriging_weights_optimized_model_{kriging_method}.h5"
-well_ts_path = f"{data_dir}/in_data/stage_data/bradford_well_data_long_gapfilled.csv"
+well_ts_path = f"{data_dir}/in_data/stage_data/bradford_well_data_gapfilled.csv"
 well_points_path = "D:/depressional_lidar/data/rtk_pts_with_dem_elevations.shp"
 dem_path = f"{data_dir}/in_data/bradford_DEM_cleaned_USGS.tif"
 gauges_points_path = 'D:/depressional_lidar/data/bradford/in_data/ancillary_data/dummy_stream_gauges.shp'
 synthetic_stream_path = 'D:/depressional_lidar/data/bradford/in_data/ancillary_data/synthetic_stream_timeseries.csv'
 boundary_path = 'D:/depressional_lidar/data/bradford/bradford_krig_domain.shp'
 
-target_dem_resolution_m = 5
+target_dem_resolution_m = 10
 
 dates_to_plot = [
     "2023-02-01",
@@ -66,7 +66,7 @@ well_ts["wetland_id"] = well_ts["wetland_id"].astype(str)
 
 # %% 4.0 Append synthetic stream gauge timeseries to wetland timeseries if used in kriging
 
-if kriging_method == 'dummy_gauges':
+if kriging_method == 'stream_conditioning':
 
     stream_gauges = gpd.read_file(gauges_points_path)
 
@@ -85,8 +85,11 @@ if kriging_method == 'dummy_gauges':
 
     well_ts = pd.concat([well_ts, gauge_ts])
 
+else:
+    well_ts = well_ts
 
-# %%
+
+# %% 5.0 Read the DEM into target resolution
 
 with rasterio.open(dem_path) as src:
     src_h, src_w = src.height, src.width

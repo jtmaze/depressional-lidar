@@ -58,10 +58,10 @@ for idx, wetland_id in enumerate(wetland_ids):
         label=str(wetland_id)
     )
 
-ax.set_ylabel('Indexed Well Depth (m)', fontsize=12)
+ax.set_ylabel('Indexed Well Depth (m)', fontsize=16)
 ax.set_title(
     f'Timeseries of OSBS Wells',
-    fontsize=14,
+    fontsize=16,
     fontweight='bold'
 )
 
@@ -69,9 +69,10 @@ ax.legend(
     bbox_to_anchor=(1.02, 1),
     loc='upper left',
     ncol=1,
-    fontsize=14
+    fontsize=16
 )
 
+ax.tick_params(axis='both', labelsize=14)
 ax.grid(True, alpha=0.25)
 fig.tight_layout()
 plt.show()
@@ -87,12 +88,15 @@ well_ts_count = plot_ts.groupby(['date'])['indexed_well_depth_m'].count()
 fig, axes = plt.subplots(2, 1, figsize=(12, 6), sharex=True, gridspec_kw={'height_ratios': [3, 1]})
 
 axes[0].plot(well_ts_avg.index, well_ts_avg['avg_well_depth'], color='black', lw=1.5)
-axes[0].set_ylabel('well depth (m)')
-axes[0].set_title('Daily Average Well Depth (OSBS)')
+axes[0].set_ylabel('well depth (m)', fontsize=15)
+axes[0].set_title('Daily Average Well Depth (OSBS)', fontsize=15)
+axes[0].tick_params(axis='both', labelsize=13)
 axes[0].grid(alpha=0.3)
 
 axes[1].plot(well_ts_count.index, well_ts_count.values, color='steelblue', lw=1.2)
-axes[1].set_ylabel('# wells')
+axes[1].set_ylabel('# wells', fontsize=15)
+axes[1].set_xlabel('Date', fontsize=15)
+axes[1].tick_params(axis='both', labelsize=13)
 axes[1].grid(alpha=0.3)
 
 fig.tight_layout()
@@ -120,9 +124,10 @@ for idx, i in enumerate(wetland_ids):
                s=8, alpha=0.5, color='blue')
     x_line = np.linspace(merged['avg_well_depth'].min(), merged['avg_well_depth'].max(), 100)
     ax.plot(x_line, slope * x_line + intercept, color='k', lw=1.2)
-    ax.set_xlabel('Daily mean depth (m)', fontsize=11)
-    ax.set_ylabel('Well depth (m)', fontsize=11)
-    ax.set_title(f'{i}  |  r={r:.2f}  slope={slope:.2f}', fontsize=11, fontweight='bold')
+    ax.set_xlabel('Daily mean depth (m)', fontsize=14)
+    ax.set_ylabel('Well depth (m)', fontsize=14)
+    ax.set_title(f'{i}  |  r={r:.2f}  slope={slope:.2f}', fontsize=14, fontweight='bold')
+    ax.tick_params(axis='both', labelsize=12)
     ax.grid(alpha=0.25)
     fig.tight_layout()
     plt.show()
@@ -166,14 +171,16 @@ for i in wetland_ids:
     temp['predicted_well_depth_m'] = temp['avg_well_depth'] * m + b
 
     # Plot each well's observed and imputed timeseries
-    fig, ax = plt.subplots(figsize=(14, 8))
+    fig, ax = plt.subplots(figsize=(8, 6))
     ax.plot(temp['date'], temp['predicted_well_depth_m'],
             color='red', lw=1, alpha=0.6, label='Predicted (imputed)')
     ax.plot(temp['date'], temp['indexed_well_depth_m'],
             color='black', lw=1.5, label='Observed')
-    ax.set_ylabel('Well Depth (m)')
-    ax.set_title(f'{i} — Observed vs Imputed Well Depth', fontweight='bold')
-    ax.legend()
+    ax.set_ylabel('Well Depth (m)', fontsize=15)
+    ax.set_xlabel('Date', fontsize=15)
+    ax.set_title(f'{i} — Observed vs Imputed Well Depth', fontsize=15, fontweight='bold')
+    ax.tick_params(axis='both', labelsize=13)
+    ax.legend(fontsize=14)
     ax.grid(alpha=0.25)
     fig.tight_layout()
     plt.show()

@@ -27,19 +27,27 @@ print(gauge_data.head(10))
 
 variable = 'depth'  # Change to 'depth' to plot the other variable
 
-# Create plot
-fig, ax = plt.subplots(figsize=(12, 6))
+# Create plot with two panels
+fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
 
-# Plot each site separately
+# Plot each site separately on top panel
 for site in gauge_data['Site_ID'].unique():
     site_data = gauge_data[gauge_data['Site_ID'] == site].sort_values('Date')
-    ax.plot(site_data['Date'], site_data[variable], linewidth=1, label=site, alpha=0.8)
+    axes[0].plot(site_data['Date'], site_data[variable], linewidth=1, label=site, alpha=0.8)
 
-ax.set_xlabel('Date')
-ax.set_ylabel(variable)
-ax.set_title(f'Time Series of {variable}')
-ax.legend()
-ax.grid(True, alpha=0.3)
+axes[0].set_ylabel(variable)
+axes[0].set_title(f'Time Series of {variable}')
+axes[0].legend()
+axes[0].grid(True, alpha=0.3)
+
+# Plot count of valid gauges per date on bottom panel
+gauge_count = gauge_data.groupby('Date')['Site_ID'].nunique()
+axes[1].plot(gauge_count.index, gauge_count.values, linewidth=1.5, color='steelblue', marker='o', markersize=3)
+axes[1].set_xlabel('Date')
+axes[1].set_ylabel('Number of Valid Gauges')
+axes[1].set_title(f'Count of Valid Gauges per Date')
+axes[1].grid(True, alpha=0.3)
+
 plt.tight_layout()
 plt.show()
 
@@ -60,11 +68,24 @@ ax.plot(daily_avg.index, daily_avg.values, linewidth=2.5, color='orange', alpha=
 #ax.plot(daily_avg_interp.index, daily_avg_interp.values, linewidth=1, color='red', alpha=0.6, label='Interpolated', linestyle='--')
 ax.set_xlabel('Date')
 ax.set_ylabel(f'Daily Average {variable}')
-ax.set_title(f'Daily Average Stream {variable} — Interpolated')
+ax.set_title(f'Daily Average Stream {variable}')
 ax.legend()
 ax.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.show()
+
+# %% 4.1 Boxplot for each gauge site
+
+fig, ax = plt.subplots(figsize=(10, 6))
+gauge_data.boxplot(column=variable, by='Site_ID', ax=ax)
+ax.set_xlabel('Gauge ID')
+ax.set_ylabel(variable)
+ax.set_title(f'Distribution of {variable} by Site')
+plt.suptitle('')  # Remove the automatic title
+plt.tight_layout()
+plt.show()
+
+
 
 # %% 5.0 Write the interpolated stream gauge timeseries to csv
 

@@ -104,8 +104,8 @@ variogram_params = wtd_variogram_fit.okr_result['variogram_model_parameters'].to
 print(variogram_params)
 
 well_array_med = WellArray(
-    well_pts=full_points,
-    well_ts=full_ts,
+    well_pts=well_points,
+    well_ts=well_ts,
     begin='2021-01-01',
     end='2027-01-01', 
     percentile=50,
@@ -193,7 +193,7 @@ print(wells_df)
 wetland_ids = wells_df['wetland_id']
 
 out_dir = r'C:\Users\jtmaz\Documents\temp'
-file_suffix = f"optimized_model_stream_conditioning"
+file_suffix = f"optimized_model_wetlands_only"
 
 # %% 6.1 Simple raster of median surface
 
@@ -208,10 +208,10 @@ wtd_surface_med.write_masked_tif(
 weights_df = pd.DataFrame(weights, columns=wetland_ids)
 out_path = f"{out_dir}/kriging_weights_{file_suffix}.xlsx"
 
-with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
-    weights_df.to_excel(writer, sheet_name="weights", index=False)
-    wells_df.to_excel(writer, sheet_name="wells", index=False)
-    coords_df.to_excel(writer, sheet_name="coords", index=False)
+# with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
+#     weights_df.to_excel(writer, sheet_name="weights", index=False)
+#     wells_df.to_excel(writer, sheet_name="wells", index=False)
+#     coords_df.to_excel(writer, sheet_name="coords", index=False)
 
 # %% 6.3 HDF5 
 
